@@ -1,0 +1,94 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Family Hub",
+        "description": "Name your family. You can add people and calendars afterwards in the settings.",
+        "data": {
+          "family_name": "Family name",
+          "language": "Language",
+          "first_weekday": "First day of the week"
+        }
+      }
+    },
+    "error": {
+      "empty_name": "Enter a name."
+    },
+    "abort": {
+      "single_instance_allowed": "Family Hub is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Family Hub settings",
+        "menu_options": {
+          "add_person": "Add person",
+          "remove_person": "Remove person",
+          "add_category": "Add category",
+          "remove_category": "Remove category",
+          "reminders": "Reminder settings"
+        }
+      },
+      "add_person": {
+        "title": "New person",
+        "data": {
+          "name": "Name",
+          "color": "Colour",
+          "role": "Role",
+          "phone_notify": "Phone notify service (e.g. mobile_app_pixel)",
+          "speaker": "Speaker (media player)",
+          "alexa_notify": "Alexa announce service, e.g. alexa_media_kitchen",
+          "ha_user_id": "Home Assistant user",
+          "all_day_reminder": "Reminder the day before all-day events (HH:MM)",
+          "quiet_start": "Quiet from (HH:MM)",
+          "quiet_end": "Quiet until (HH:MM)"
+        }
+      },
+      "remove_person": {
+        "title": "Remove person",
+        "data": { "person": "Person" }
+      },
+      "add_category": {
+        "title": "New category",
+        "data": { "name": "Name", "color": "Colour" }
+      },
+      "remove_category": {
+        "title": "Remove category",
+        "data": { "category": "Category" }
+      },
+      "reminders": {
+        "title": "Reminder settings",
+        "description": "Defaults for the whole family. Each event can override the offsets.",
+        "data": {
+          "offsets": "Minutes before the start, e.g. 30, 10",
+          "channels": "Channels",
+          "quiet_start": "Quiet from (HH:MM)",
+          "quiet_end": "Quiet until (HH:MM)",
+          "snooze_minutes": "Snooze minutes",
+          "tts_entity": "Speaker voice (TTS entity)",
+          "morning_summary": "Morning summary at (HH:MM, empty = off)",
+          "evening_summary": "Evening summary at (HH:MM, empty = off)",
+          "all_day_reminder": "Reminder the day before all-day events at (HH:MM)"
+        }
+      }
+    },
+    "error": {
+      "empty_name": "Enter a name.",
+      "category_in_use": "This category still has events. Delete them first.",
+      "invalid_time": "Use HH:MM, for example 07:30.",
+      "invalid_offsets": "Use whole minutes separated by commas, for example 30, 10."
+    },
+    "abort": {
+      "no_persons": "There are no persons to remove."
+    }
+  },
+  "selector": {
+    "weekday": {
+      "options": { "monday": "Monday", "sunday": "Sunday" }
+    },
+    "role": {
+      "options": { "adult": "Adult", "child": "Child", "guest": "Guest" }
+    }
+  }
+}

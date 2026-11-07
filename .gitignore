@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.venv314/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+# Test output: screenshots and browser traces are never committed.
+test-results/
+screenshots/
+*.zip

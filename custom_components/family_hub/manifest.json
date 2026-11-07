@@ -1,0 +1,13 @@
+{
+  "domain": "family_hub",
+  "name": "Family Hub",
+  "codeowners": ["@EdisonACDC"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/EdisonACDC/family-hub",
+  "issue_tracker": "https://github.com/EdisonACDC/family-hub/issues",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "requirements": ["ical==14.3.0"],
+  "version": "0.5.0"
+}

@@ -1,0 +1,785 @@
+/* Family Hub tablet UI. Light and dark follow the system or Home Assistant's theme. */
+
+:root {
+  --bg: #F5F6F8;
+  --surface: #FFFFFF;
+  --text: #111827;
+  --muted: #4B5563;
+  --line: #D1D5DB;
+  --accent: #1D4ED8;
+  --accent-text: #FFFFFF;
+  --today: #DBEAFE;
+  --ok: #047857;
+  --bad: #B91C1C;
+  --focus: #F59E0B;
+  --radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F172A;
+    --surface: #1E293B;
+    --text: #F8FAFC;
+    --muted: #CBD5E1;
+    --line: #475569;
+    --accent: #60A5FA;
+    --accent-text: #0B1220;
+    --today: #1E3A5F;
+    --ok: #34D399;
+    --bad: #F87171;
+    --focus: #FBBF24;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0F172A;
+  --surface: #1E293B;
+  --text: #F8FAFC;
+  --muted: #CBD5E1;
+  --line: #475569;
+  --accent: #60A5FA;
+  --accent-text: #0B1220;
+  --today: #1E3A5F;
+  --ok: #34D399;
+  --bad: #F87171;
+  --focus: #FBBF24;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 18px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* The page fills the tablet screen: the week takes all the height left under the top bar. */
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+button, input, select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+[hidden] { display: none !important; }
+
+/* ---- top bar ---- */
+
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.clock { display: flex; flex-direction: column; min-width: 150px; }
+#clock-time { font-size: 40px; font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; }
+#clock-date { color: var(--muted); text-transform: capitalize; }
+
+.weeknav { display: flex; gap: 8px; margin-left: auto; }
+
+.status { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.dot { width: 14px; height: 14px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.dot.ok { background: var(--ok); }
+.dot.bad { background: var(--bad); }
+
+/* ---- buttons ---- */
+
+.btn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 8px 18px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.btn:hover { border-color: var(--accent); }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-icon { font-size: 22px; padding: 8px 14px; }
+
+.fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 44px;
+  line-height: 1;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* ---- filters ---- */
+
+.filters {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px 0;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 2px solid var(--chip, var(--line));
+  background: var(--surface);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.chip.on { background: var(--chip); color: #FFFFFF; }
+.chip:not(.on) { color: var(--muted); }
+.swatch { width: 14px; height: 14px; border-radius: 50%; background: var(--chip); }
+.chip.on .swatch { background: #FFFFFF; }
+
+/* ---- week ---- */
+
+.week {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px 16px 16px;
+}
+
+.day {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.day.today { background: var(--today); border-color: var(--accent); }
+
+.day-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.day-name { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 15px; }
+.day-num { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.event {
+  border-left: 6px solid var(--ev);
+  background: color-mix(in srgb, var(--ev) 12%, transparent);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.ev-time { display: block; font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ev-title { display: block; font-weight: 600; }
+
+.empty-note {
+  margin: 0;
+  padding: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  body { height: auto; min-height: 100vh; }
+  .week { grid-template-columns: 1fr; grid-template-rows: auto; }
+  .day { height: auto; }
+  .weeknav { margin-left: 0; }
+}
+
+/* ---- dialogs ---- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 10;
+}
+
+.dialog {
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 18px;
+  padding: 24px;
+  width: min(640px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.dialog h2 { margin: 0 0 12px; font-size: 26px; }
+
+.dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+.dialog label.check { flex-direction: row; align-items: center; gap: 12px; min-height: 48px; }
+
+.dialog input[type="text"],
+.dialog input:not([type]),
+.dialog input[type="date"],
+.dialog input[type="time"],
+.dialog select {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.dialog input[type="checkbox"] { width: 26px; height: 26px; }
+
+.dialog .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.error { color: var(--bad); font-weight: 600; }
+
+.actions, .reminder-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.reminder { width: min(560px, 100%); text-align: center; }
+.reminder-message { font-size: 24px; margin: 8px 0 20px; }
+.reminder-buttons .btn { flex: 1 1 200px; min-height: 64px; font-size: 20px; }
+
+.wizard-progress { color: var(--muted); margin: 0 0 4px; font-weight: 600; }
+.example { background: var(--bg); border-radius: 10px; padding: 12px; color: var(--muted); }
+.wizard a.btn { display: inline-flex; align-items: center; margin-top: 8px; text-decoration: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dialog { animation: rise 180ms ease-out; }
+}
+
+@keyframes rise {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* setup guide fields */
+.card { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; }
+.card legend { font-weight: 700; padding: 0 6px; }
+.hint { color: var(--muted); margin: 6px 0 10px; }
+#wizard-body { display: flex; flex-direction: column; gap: 4px; }
+#wizard-body select, #wizard-body input[type="color"] { min-height: 48px; }
+#wizard-body input[type="color"] { width: 64px; padding: 4px; }
+.dialog label.check { flex-direction: row; }
+
+/* ---- layouts ---- */
+
+.main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.main .week { flex: 1 1 auto; min-width: 0; }
+
+.upcoming { display: none; }
+
+/* PC: the next fourteen days beside the week */
+@media (min-width: 1200px) {
+  .upcoming {
+    display: block;
+    flex: 0 0 320px;
+    overflow-y: auto;
+    border-left: 1px solid var(--line);
+    background: var(--surface);
+    padding: 12px 16px;
+  }
+  .upcoming h2 { font-size: 22px; margin: 4px 0 12px; }
+  .upcoming h3 { font-size: 17px; margin: 14px 0 6px; text-transform: capitalize; }
+  .upcoming-day .event { margin-bottom: 6px; }
+}
+
+/* Phone: today and tomorrow as one list */
+@media (max-width: 599px) {
+  .topbar { padding: 8px 12px; gap: 8px 12px; }
+  #clock-time { font-size: 30px; }
+  #clock-date { font-size: 15px; }
+  #wizard-start { display: none; }
+  #menu-btn { display: inline-flex; }
+  .status #conn-text { display: none; }
+  .filters { flex-wrap: nowrap; overflow-x: auto; padding: 10px 12px 0; }
+  .chip { flex: 0 0 auto; }
+  .week.agenda {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    overflow-y: auto;
+  }
+  .week.agenda .day { height: auto; min-height: 0; }
+  .fab { width: 72px; height: 72px; right: 16px; bottom: 16px; }
+  .dialog .row { grid-template-columns: 1fr; }
+}
+
+/* ---- lists, menu, external calendars ---- */
+
+
+
+.menu {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.event.external { border-left-style: dashed; }
+
+.todos { width: min(640px, 100%); }
+.todo-list { margin-bottom: 18px; }
+.todo-list h3 { margin: 0 0 6px; font-size: 20px; }
+.todo-row { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+.todo-row input[type="checkbox"] { width: 28px; height: 28px; flex: 0 0 auto; }
+.todo-row span { flex: 1 1 auto; overflow-wrap: break-word; }
+.todo-row span.done { text-decoration: line-through; color: var(--muted); }
+.todo-add { display: flex; gap: 10px; margin-top: 8px; }
+.todo-add input { flex: 1 1 auto; min-height: 48px; padding: 8px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); }
+
+/* ---- shifts ---- */
+
+.shifts { width: min(760px, 100%); }
+.tabs { display: flex; gap: 8px; margin: 6px 0 12px; }
+.tabs [aria-selected="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.month-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.month-title { font-weight: 700; text-transform: capitalize; }
+.month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.month-grid .wd { text-align: center; color: var(--muted); font-weight: 600; font-size: 14px; }
+.day-cell {
+  min-height: 56px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 4px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.day-cell[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
+.dshift { font-size: 12px; overflow-wrap: break-word; hyphens: auto; max-width: 100%; }
+.shift-pick { margin-bottom: 10px; }
+
+/* One compact row per shift model. On a phone the row wraps: name, then times, then calendar. */
+.shift-list { display: flex; flex-direction: column; gap: 6px; }
+.shift-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.shift-row input, .shift-row select { min-width: 0; width: 100%; box-sizing: border-box; }
+.shift-row input[aria-invalid="true"] { border-color: #DC2626; }
+.shift-head span { font-size: 13px; color: var(--muted); font-weight: 600; }
+@media (max-width: 599px) {
+  .shift-head { display: none; }
+  .shift-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .shift-row > :first-child { grid-column: 1 / -1; }
+}
+
+:root {
+  --glass: rgba(255,255,255,.16);
+  --glass-strong: rgba(255,255,255,.24);
+  --glass-line: rgba(255,255,255,.35);
+  --ink: #FFFFFF;
+  --ink-soft: rgba(255,255,255,.72);
+  --accent: #34C759;
+  --radius: 30px;
+  --text: var(--ink); --muted: var(--ink-soft); --surface: var(--glass); --line: var(--glass-line);
+}
+html, body { color: var(--ink); }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", Inter, system-ui, sans-serif;
+  letter-spacing: -0.01em; -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(60% 70% at 85% 10%, #F3E3CF 0%, transparent 60%),
+    radial-gradient(50% 60% at 10% 90%, #B8A48C 0%, transparent 65%),
+    radial-gradient(40% 50% at 60% 70%, #D9C2A7 0%, transparent 70%),
+    linear-gradient(135deg, #CDB89E 0%, #A99179 55%, #8E7B69 100%);
+  background-attachment: fixed;
+}
+.topbar, .day, .chip, .btn, .fab, .dialog, .upcoming, .todo-row {
+  backdrop-filter: blur(28px) saturate(160%); -webkit-backdrop-filter: blur(28px) saturate(160%);
+}
+.topbar { background: transparent; border-bottom: none; padding: 18px 26px; }
+#clock-time { font-size: 50px; font-weight: 700; letter-spacing: -0.035em; text-shadow: 0 2px 12px rgba(0,0,0,.18); }
+#clock-date { color: var(--ink-soft); font-weight: 600; }
+.btn { border: 1px solid var(--glass-line); background: rgba(70,50,30,.22); color: var(--ink); border-radius: 999px;
+  min-height: 46px; padding: 8px 20px; font-weight: 600; text-shadow: 0 1px 4px rgba(40,25,10,.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 6px 20px rgba(60,40,20,.12); }
+.btn:hover { background: var(--glass-strong); }
+.btn-icon { width: 46px; padding: 0; }
+.btn-primary { background: rgba(255,255,255,.85); color: #3B4A5E; text-shadow: none; }
+.status { color: #fff; }
+.chip { border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); min-height: 42px;
+  padding: 6px 16px; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,.3); }
+.chip.on { background: color-mix(in srgb, var(--chip) 55%, rgba(255,255,255,.15)); color: #fff; }
+.chip:not(.on) { color: var(--ink-soft); opacity: .7; }
+.chip.on .swatch { background: #fff; }
+.week { gap: 10px; padding: 18px 26px 26px; }
+.day {
+  background: linear-gradient(180deg, rgba(86,116,160,.62), rgba(66,96,140,.55));
+  border: 1px solid rgba(255,255,255,.22); border-radius: var(--radius); padding: 12px 7px;
+  box-shadow: inset 0 10px 24px rgba(20,30,50,.35), inset 0 -2px 0 rgba(255,255,255,.12),
+              0 0 0 6px rgba(255,255,255,.10), 0 18px 40px rgba(50,35,20,.22);
+}
+.day.today { background: linear-gradient(180deg, rgba(96,128,176,.72), rgba(72,104,150,.62)); border-color: rgba(255,255,255,.45); }
+.day-head { border-bottom: none; justify-content: center; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 10px; }
+.day-name { color: var(--ink-soft); font-size: 14px; letter-spacing: .08em; }
+.day-num { font-size: 28px; font-weight: 600; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; color: #fff; }
+.day.today .day-num { background: rgba(255,255,255,.75); color: #3B4A5E; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+.event { border-left: none; position: relative; padding: 7px 8px 7px 21px; border-radius: 14px;
+  background: rgba(255,255,255,.16); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); margin-bottom: 8px; }
+.event::before { content: ""; position: absolute; left: 8px; top: 12px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ev); box-shadow: 0 0 0 2px rgba(255,255,255,.55); }
+.ev-time { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+.ev-title { color: #fff; font-size: 15px; line-height: 1.25; font-weight: 600; }
+.upcoming { background: rgba(120,100,80,.28); border: 1px solid var(--glass-line); border-radius: var(--radius);
+  margin: 18px 26px 26px 0; padding: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 18px 40px rgba(50,35,20,.2); }
+.upcoming h2, .upcoming h3 { color: #fff; }
+.upcoming .event { background: rgba(255,255,255,.14); }
+.fab { background: rgba(255,255,255,.8); color: #3B4A5E; border: 1px solid rgba(255,255,255,.9);
+  box-shadow: 0 12px 30px rgba(50,35,20,.3); font-weight: 300; }
+.overlay { background: rgba(60,45,30,.18); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.dialog { background: rgba(120,102,84,.92); border: 1px solid var(--glass-line); border-radius: 34px; color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 30px 80px rgba(40,25,10,.35); padding: 26px; }
+.dialog h2 { color: #fff; font-size: 28px; }
+.dialog label { color: rgba(255,255,255,.9); font-weight: 600; }
+.dialog input[type="text"], .dialog input:not([type]), .dialog input[type="date"], .dialog input[type="time"], .dialog select {
+  border: none; background: rgba(40,30,20,.28); color: #fff; border-radius: 18px; min-height: 50px; padding: 10px 16px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.18); color-scheme: dark; }
+.dialog .card, .dialog fieldset { background: rgba(40,30,20,.18); border: none; border-radius: 22px; }
+@media (max-width: 600px) {
+  .day-head { flex-direction: row; justify-content: space-between; }
+  .day-num, .day.today .day-num { width: auto; height: auto; padding: 2px 12px; border-radius: 999px; font-size: 20px; white-space: nowrap; }
+  .topbar { padding: 12px 14px; } #clock-time { font-size: 38px; }
+  .week { padding: 12px 14px 90px; }
+}
+/* Added to the reference: the tokens the Avvisi page uses, a menu in the same glass, words
+   that never break in the middle, and "Riduci trasparenza" (body.reduce-transparency) and the
+   system setting prefers-reduced-transparency, which make every glass surface solid. */
+:root {
+  --field: rgba(40,30,20,.28);
+  --dialog: rgba(120,102,84,.92);
+  --solid: #6E5C4D;
+}
+.menu {
+  background: rgba(70,50,30,.55);
+  backdrop-filter: blur(28px) saturate(160%); -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid var(--glass-line); border-radius: var(--radius);
+  box-shadow: 0 18px 40px rgba(40,25,10,.35);
+}
+.event, .ev-title, .ev-time, .day-name, .day-num, .chip, .btn {
+  overflow-wrap: normal; word-break: normal; hyphens: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .topbar, .day, .chip, .btn, .fab, .dialog, .upcoming, .todo-row, .menu {
+    backdrop-filter: none; -webkit-backdrop-filter: none; background-color: var(--solid);
+  }
+  .dialog { background: var(--solid); }
+}
+body.reduce-transparency .topbar, body.reduce-transparency .day, body.reduce-transparency .chip,
+body.reduce-transparency .btn, body.reduce-transparency .fab, body.reduce-transparency .dialog,
+body.reduce-transparency .upcoming, body.reduce-transparency .todo-row, body.reduce-transparency .menu {
+  backdrop-filter: none; -webkit-backdrop-filter: none; background-color: var(--solid);
+}
+body.reduce-transparency { background: var(--solid); }
+
+/* iOS-style switches: every checkbox in a .switch row (and the "Tutto il giorno" check).
+   Off: a translucent grey track; on: green; the white knob slides. */
+.switch input[type="checkbox"],
+.check input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 51px;
+  height: 31px;
+  margin: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.switch input[type="checkbox"]::after,
+.check input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+}
+.switch input[type="checkbox"]:checked,
+.check input[type="checkbox"]:checked { background: #34C759; }
+.switch input[type="checkbox"]:checked::after,
+.check input[type="checkbox"]:checked::after { transform: translateX(20px); }
+.switch input[type="checkbox"]:focus-visible,
+.check input[type="checkbox"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.switch-row span, .check span { white-space: nowrap; }
+.check.switch-row,
+#event-form .check {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Weather: the top bar, the day columns, and the phone's Today and Tomorrow. */
+.weather-now { display: flex; align-items: center; gap: 10px; font-size: 20px; color: #fff; }
+.weather-now[hidden] { display: none; }
+.weather-now strong { font-size: 26px; font-weight: 700; }
+.wx-icon { display: inline-flex; width: 30px; height: 30px; flex: 0 0 auto; }
+.wx-icon svg { width: 100%; height: 100%; }
+.day-weather {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  color: #fff;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.day-weather .wx-icon { width: 22px; height: 22px; }
+.day-weather .wx-min { opacity: 0.7; }
+
+/* Touch targets stay at least 48 px high, as the reference's 42 px chips would drop below. */
+.chip, .btn { min-height: 48px; }
+
+/* Event pills: a word that is too wide for the pill is hyphenated (lang is set on the page);
+   only as a last resort is it broken, so no text leaves the pill. */
+.event {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+.ev-title, .ev-time { hyphens: auto; overflow-wrap: break-word; min-width: 0; }
+
+/* Switch rows as in iOS Settings: text on the left, switch on the right, full width. */
+label.switch.switch-row,
+.dialog label.switch-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  font-weight: 500;
+}
+
+/* Volume: a slider as wide as the row, the value in % beside it. */
+.volume { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.volume-slider { display: flex; align-items: center; gap: 12px; width: 100%; }
+.volume-slider input[type="range"] { flex: 1 1 auto; min-width: 0; width: 100%; accent-color: #34C759; }
+.volume-value { flex: 0 0 64px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Event form: Start and End side by side, both inside the dialog, also on a phone. */
+#event-form .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+#event-form .row > label { min-width: 0; }
+#event-form input, #event-form select { width: 100%; min-width: 0; box-sizing: border-box; }
+#event-form input[type="checkbox"] { width: 51px; height: 31px; flex: 0 0 auto; }
+
+/* Menu: under the Menu button, over the page, big entries. */
+.menu {
+  position: fixed;
+  right: 16px;
+  left: auto;
+  top: 96px;
+  z-index: 20;
+  width: min(360px, calc(100% - 32px));
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 24px;
+}
+.menu .btn { min-height: 48px; width: 100%; font-size: 18px; text-align: left; }
+.menu .switch-row { min-height: 48px; }
+
+/* ---- notifications page and switches ---- */
+
+.notify { width: min(760px, 100%); }
+.notify-card {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 14px 14px;
+  margin: 0 0 14px;
+  background: var(--field);
+}
+.notify-card h3 { margin: 0 0 8px; font-size: 19px; }
+.notify-card .fieldrow + .fieldrow { margin-top: 8px; }
+.switch-list { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.notify-tests { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.notify-tests .btn { min-height: 44px; }
+.menu .switch { min-height: 48px; padding: 4px 6px; }
+.menu-switch { display: flex; }
+.hint { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+
+.status-note { margin: 0; padding: 10px 16px; text-align: center; color: var(--ok); font-weight: 600; }
+
+/* External calendar links can be long: they wrap anywhere, so they never leave the dialog. */
+.ics-url { overflow-wrap: anywhere; word-break: break-all; }
+
+/* All-day events: one compact row, icon and name, on one line (tablet and PC). */
+.event.allday {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  hyphens: none;
+  overflow-wrap: normal;
+  background: color-mix(in srgb, var(--ev) 45%, rgba(255, 255, 255, 0.2));
+}
+.event.allday::before { display: none; }
+.allday-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.event.allday .waste-icon { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; }
+/* On the phone there is room: the whole name, wrapped at spaces. */
+.event.allday.allday-wrap { white-space: normal; }
+.allday-wrap .allday-name { white-space: normal; overflow: visible; text-overflow: clip; }
+
+/* The chips of external calendars carry their type's icon. */
+.chip .waste-icon { width: 18px; height: 18px; margin: 0 6px 0 0; vertical-align: -3px; }
+
+/* The segmented control "Da link | Da file", iOS style. */
+.segmented {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  margin: 8px 0 12px;
+  border-radius: 12px;
+  background: rgba(40, 30, 20, 0.28);
+}
+.segment {
+  flex: 1 1 0;
+  min-height: 44px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 600;
+  cursor: pointer;
+}
+.segment[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.85);
+  color: #3b4a5e;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* A file chooser: a glass button and the chosen file's name, not the browser's own button. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.file-choice { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
+.file-button { background: rgba(255, 255, 255, 0.22) !important; color: #fff !important; }
+.file-name { color: var(--ink-soft); font-size: 15px; overflow-wrap: anywhere; }
+
+/* Calendars and rubbish: the icon in a pill, the colour bar, and the colour pickers. */
+.ics-head { display: flex; align-items: center; gap: 10px; }
+.ics-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ev);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+.waste-icon { display: inline-flex; width: 18px; height: 18px; margin-right: 6px; vertical-align: -3px; }
+.waste-icon svg { width: 100%; height: 100%; }
+.waste-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+.waste-row .waste-icon { width: 26px; height: 26px; color: #fff; margin: 0; }
+.waste-label { flex: 1 1 auto; }
+.waste-row input[type="color"] { width: 52px; height: 36px; border: none; background: transparent; }

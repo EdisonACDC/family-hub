@@ -1,0 +1,26 @@
+[project]
+name = "family-hub"
+version = "0.5.0"
+requires-python = ">=3.13"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC"]
+
+# The external review file has long lines and a broad assert by design; its logic is kept as is.
+[tool.ruff.lint.per-file-ignores]
+"tests/test_revisione.py" = ["E501", "B017"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+ignore_missing_imports = true
+files = ["custom_components/family_hub"]

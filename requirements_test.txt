@@ -1,0 +1,4 @@
+pytest-homeassistant-custom-component
+ruff
+mypy
+ical==14.3.0

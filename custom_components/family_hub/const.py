@@ -1,0 +1,134 @@
+"""Constants for the Family Hub integration."""
+
+from __future__ import annotations
+
+from typing import Any, Final
+
+DOMAIN: Final = "family_hub"
+STORAGE_VERSION: Final = 1
+
+# Entry data (set once in the config flow).
+CONF_FAMILY_NAME: Final = "family_name"
+CONF_LANGUAGE: Final = "language"
+CONF_FIRST_WEEKDAY: Final = "first_weekday"
+
+# Entry options (editable in the options flow). Persons and categories live here,
+# so the whole configuration is one list per kind and no name is hard-coded.
+OPT_PERSONS: Final = "persons"
+OPT_CATEGORIES: Final = "categories"
+
+LANGUAGES: Final[list[str]] = ["it", "de", "en"]
+# Family settings, kept in the entry options since config entry version 2.
+CONF_COUNTRY: Final = "country"
+CONF_REGION: Final = "region"
+CONF_TIME_FORMAT: Final = "time_format"
+CONF_THEME: Final = "theme"
+TIME_FORMATS: Final[list[str]] = ["24h", "12h"]
+THEMES: Final[list[str]] = ["auto", "light", "dark"]
+WEEKDAYS: Final[list[str]] = ["monday", "sunday"]
+ROLES: Final[list[str]] = ["adult", "child", "guest"]
+
+CATEGORY_NAMES: Final[dict[str, dict[str, str]]] = {
+    "it": {
+        "famiglia": "Famiglia",
+        "scuola": "Scuola",
+        "dottore": "Dottore",
+        "compleanni": "Compleanni",
+    },
+    "de": {
+        "famiglia": "Familie",
+        "scuola": "Schule",
+        "dottore": "Arzt",
+        "compleanni": "Geburtstage",
+    },
+    "en": {
+        "famiglia": "Family",
+        "scuola": "School",
+        "dottore": "Doctor",
+        "compleanni": "Birthdays",
+    },
+}
+
+DEFAULT_CATEGORIES: Final[list[dict[str, str]]] = [
+    {"id": "famiglia", "name": "Famiglia", "color": "#3B82F6"},
+    {"id": "scuola", "name": "Scuola", "color": "#10B981"},
+    {"id": "dottore", "name": "Dottore", "color": "#EF4444"},
+    {"id": "compleanni", "name": "Compleanni", "color": "#F59E0B"},
+]
+
+
+def default_categories(language: str) -> list[dict[str, str]]:
+    """The default categories, named in the family's language (English if unknown)."""
+    names = CATEGORY_NAMES.get(language, CATEGORY_NAMES["en"])
+    return [{**category, "name": names[category["id"]]} for category in DEFAULT_CATEGORIES]
+
+
+# Action (service) names and field names.
+SERVICE_ADD_EVENT: Final = "add_event"
+SERVICE_UPDATE_EVENT: Final = "update_event"
+SERVICE_DELETE_EVENT: Final = "delete_event"
+SERVICE_MOVE_EVENT: Final = "move_event"
+SERVICE_SNOOZE_REMINDER: Final = "snooze_reminder"
+SERVICE_STOP_REMINDER: Final = "stop_reminder"
+
+ATTR_ENTRY_ID: Final = "entry_id"
+ATTR_CATEGORY: Final = "category"
+ATTR_UID: Final = "uid"
+ATTR_SUMMARY: Final = "summary"
+ATTR_START: Final = "start"
+ATTR_END: Final = "end"
+ATTR_DESCRIPTION: Final = "description"
+ATTR_LOCATION: Final = "location"
+ATTR_PERSONS: Final = "persons"
+ATTR_REMINDER_OFFSETS: Final = "reminder_offsets"
+ATTR_MINUTES: Final = "minutes"
+ATTR_SHIFT_ID: Final = "shift_id"
+# Entry options: shift models, a dict of person id -> list of models.
+OPT_SHIFTS: Final = "shifts"
+
+# Person fields for reminders (all optional).
+CONF_PHONE_NOTIFY: Final = "phone_notify"
+CONF_SPEAKER: Final = "speaker"
+CONF_QUIET_START: Final = "quiet_start"
+CONF_QUIET_END: Final = "quiet_end"
+CONF_ALEXA_NOTIFY: Final = "alexa_notify"
+# Optional link to a Home Assistant user: the tablet add-on uses it to apply the person's role.
+CONF_HA_USER: Final = "ha_user_id"
+# Per-person notification settings (the "Avvisi" page): channels that reach the person, the
+# announce volume on Echo speakers (0-100, optional), and the services the person may use.
+CONF_ALEXA_VOLUME: Final = "alexa_volume"
+CONF_CHANNELS: Final = "channels"
+PERSON_CHANNELS: Final[list[str]] = ["phone", "alexa", "tablet"]
+# alexa_notify is one Echo service, or ALEXA_ALL for every Echo that Home Assistant knows.
+ALEXA_ALL: Final = "all"
+PHONE_SERVICE_PREFIX: Final = "mobile_app_"
+ALEXA_PLATFORM: Final = "alexa_media"
+# Seconds before the volume an Echo had is put back after an announcement at another volume.
+ECHO_RESTORE_SECONDS: Final = 20
+CONF_ALL_DAY_REMINDER: Final = "all_day_reminder"
+ATTR_ALL_DAY_REMINDER: Final = "all_day_reminder"
+
+# Entry options: reminder settings, read by reminders.py.
+OPT_REMINDERS: Final = "reminders"
+# phone: notify.<service>; speaker: Alexa announce or tts.speak; tablet: persistent
+# notification; popup: browser_mod.popup (only if browser_mod is installed).
+CHANNELS: Final[list[str]] = ["phone", "speaker", "tablet", "popup"]
+DEFAULT_REMINDERS: Final[dict[str, Any]] = {
+    "offsets": [30, 10],  # minutes before the start
+    "channels": ["phone", "speaker", "tablet"],
+    "quiet_start": "22:00",  # no reminders from quiet_start until quiet_end (family default)
+    "quiet_end": "07:00",
+    "snooze_minutes": 10,  # default for snooze_reminder
+    "tts_entity": None,  # tts.* entity used for spoken reminders
+    "morning_summary": "07:00",  # None disables
+    "evening_summary": "20:00",
+    "all_day_reminder": "19:00",  # day before an all-day event, local time
+}
+
+# Bus events for the tablet add-on: a reminder popup to show, and one to close.
+EVENT_REMINDER: Final = "family_hub_reminder"
+EVENT_REMINDER_CLOSED: Final = "family_hub_reminder_closed"
+
+# Phone notification buttons send FH_<CMD>[_<minutes>]_<uid> back as a mobile_app event.
+ACTION_EVENT: Final = "mobile_app_notification_action"
+ACTION_PREFIX: Final = "FH_"

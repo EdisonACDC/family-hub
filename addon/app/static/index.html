@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Family Hub</title>
+  <link rel="stylesheet" href="static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="clock" aria-live="off">
+      <span id="clock-time">--:--</span>
+      <span id="clock-date"></span>
+    </div>
+    <div class="weather-now" id="weather-now" hidden></div>
+    <nav class="weeknav" aria-label="Settimana">
+      <button type="button" id="prev-week" class="btn btn-icon" aria-label="Settimana precedente">&larr;</button>
+      <button type="button" id="this-week" class="btn">Oggi</button>
+      <button type="button" id="next-week" class="btn btn-icon" aria-label="Settimana successiva">&rarr;</button>
+      <button type="button" id="wizard-start" class="btn">Procedura guidata</button>
+    </nav>
+    <div class="status" role="status">
+      <button type="button" id="todo-btn" class="btn">Liste</button>
+      <button type="button" id="menu-btn" class="btn" aria-haspopup="true" aria-expanded="false">Menu</button>
+      <span id="conn-dot" class="dot" aria-hidden="true"></span>
+      <span id="conn-text"></span>
+    </div>
+  </header>
+
+  <section class="filters" id="filters" aria-label="Calendari"></section>
+
+  <div class="menu" id="menu" hidden>
+    <button type="button" class="btn" id="menu-shifts">Turni</button>
+    <button type="button" class="btn" id="menu-notify">Avvisi</button>
+    <button type="button" class="btn" id="menu-ics" hidden>Calendari esterni</button>
+    <button type="button" class="btn" id="menu-wizard">Procedura guidata</button>
+    <label class="switch switch-row menu-switch">
+      <span id="menu-transparency-label">Riduci trasparenza</span>
+      <input type="checkbox" id="menu-transparency" role="switch" aria-checked="false">
+    </label>
+  </div>
+
+  <div class="main">
+    <main class="week" id="week" aria-label="Eventi della settimana"></main>
+    <aside class="upcoming" id="upcoming" aria-label="Prossimi eventi" hidden></aside>
+  </div>
+
+  <button type="button" id="add-btn" class="fab" aria-label="Nuovo evento">+</button>
+
+  <p id="empty-note" class="empty-note" hidden></p>
+  <p id="status-note" class="status-note" role="status" hidden></p>
+
+  <!-- New event form -->
+  <div class="overlay" id="event-overlay" hidden>
+    <form class="dialog" id="event-form" role="dialog" aria-modal="true" aria-labelledby="event-title">
+      <h2 id="event-title">Nuovo evento</h2>
+      <label>Titolo <input name="summary" required maxlength="255" autocomplete="off"></label>
+      <label>Calendario <select name="category" required></select></label>
+      <label class="switch switch-row check"><span>Tutto il giorno</span><input type="checkbox" name="all_day" role="switch" aria-checked="false"></label>
+      <label>Data <input type="text" name="date" required inputmode="numeric" placeholder="gg/mm/aaaa"></label>
+      <div class="row">
+        <label>Inizio <input type="text" name="start_time" inputmode="numeric" placeholder="09:00"></label>
+        <label>Fine <input type="text" name="end_time" inputmode="numeric" placeholder="10:00"></label>
+      </div>
+      <p class="error" id="event-error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" class="btn" id="event-cancel">Annulla</button>
+        <button type="submit" class="btn btn-primary">Salva</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Reminder popup (shown by the add-on when Home Assistant sends family_hub_reminder) -->
+  <div class="overlay" id="reminder-overlay" hidden>
+    <div class="dialog reminder" role="alertdialog" aria-modal="true" aria-labelledby="reminder-title" aria-describedby="reminder-message">
+      <h2 id="reminder-title"></h2>
+      <p id="reminder-message" class="reminder-message"></p>
+      <div class="reminder-buttons">
+        <button type="button" class="btn btn-primary" data-act="done">Fatto</button>
+        <button type="button" class="btn" data-act="snooze" data-minutes="10">Posticipa 10 min</button>
+        <button type="button" class="btn" data-act="snooze" data-minutes="60">Posticipa 1 ora</button>
+        <button type="button" class="btn" data-act="close">Ferma</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shifts: models per person, and days -->
+  <div class="overlay" id="shifts-overlay" hidden>
+    <section class="dialog shifts" role="dialog" aria-modal="true" aria-labelledby="shifts-title">
+      <h2 id="shifts-title">Turni</h2>
+      <label><span id="shift-person-label">Persona</span> <select id="shift-person"></select></label>
+      <div class="tabs" role="tablist">
+        <button type="button" class="btn" role="tab" id="tab-models" aria-selected="true">Modelli</button>
+        <button type="button" class="btn" role="tab" id="tab-calendar" aria-selected="false">Calendario</button>
+      </div>
+      <div id="shifts-models"></div>
+      <div id="shifts-calendar" hidden></div>
+      <p class="error" id="shifts-error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" class="btn" id="shifts-close">Chiudi</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- External calendars (ICS from a link or a file), adults only -->
+  <div class="overlay" id="ics-overlay" hidden>
+    <section class="dialog notify" role="dialog" aria-modal="true" aria-labelledby="ics-title">
+      <h2 id="ics-title">Calendari esterni</h2>
+      <div id="ics-body"></div>
+      <p class="error" id="ics-error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" class="btn" id="ics-close">Chiudi</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Notifications per person: phone, Echo speakers, channels, volume, quiet hours -->
+  <div class="overlay" id="notify-overlay" hidden>
+    <section class="dialog notify" role="dialog" aria-modal="true" aria-labelledby="notify-title">
+      <h2 id="notify-title">Avvisi</h2>
+      <div id="notify-body"></div>
+      <p class="error" id="notify-error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" class="btn" id="notify-close">Chiudi</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Question shown when changed shift times reach events already entered -->
+  <div class="overlay" id="confirm-overlay" hidden>
+    <section class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text">
+      <p id="confirm-text"></p>
+      <div class="actions">
+        <button type="button" class="btn" id="confirm-cancel">Annulla</button>
+        <button type="button" class="btn" id="confirm-no">No</button>
+        <button type="button" class="btn btn-primary" id="confirm-yes">Sì</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- To-do lists and the calendars the guide chose -->
+  <div class="overlay" id="todo-overlay" hidden>
+    <section class="dialog todos" role="dialog" aria-modal="true" aria-labelledby="todos-title">
+      <h2 id="todos-title">Liste</h2>
+      <div id="todos-body"></div>
+      <p class="error" id="todos-error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" class="btn" id="todos-close">Chiudi</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Setup guide: fields are built by app.js from the configuration Home Assistant holds -->
+  <div class="overlay" id="wizard-overlay" hidden>
+    <section class="dialog wizard" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+      <p class="wizard-progress" id="wizard-progress"></p>
+      <h2 id="wizard-title"></h2>
+      <p id="wizard-text"></p>
+      <p class="example" id="wizard-example"></p>
+      <div id="wizard-body"></div>
+      <p class="error" id="wizard-error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" class="btn" id="wizard-back">Indietro</button>
+        <button type="button" class="btn" id="wizard-skip">Salta, lo faccio dopo</button>
+        <button type="button" class="btn btn-primary" id="wizard-next">Avanti</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="static/i18n.js"></script>
+  <script src="static/app.js"></script>
+</body>
+</html>

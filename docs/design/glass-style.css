@@ -1,0 +1,78 @@
+:root {
+  --glass: rgba(255,255,255,.16);
+  --glass-strong: rgba(255,255,255,.24);
+  --glass-line: rgba(255,255,255,.35);
+  --ink: #FFFFFF;
+  --ink-soft: rgba(255,255,255,.72);
+  --accent: #34C759;
+  --radius: 30px;
+  --text: var(--ink); --muted: var(--ink-soft); --surface: var(--glass); --line: var(--glass-line);
+}
+html, body { color: var(--ink); }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", Inter, system-ui, sans-serif;
+  letter-spacing: -0.01em; -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(60% 70% at 85% 10%, #F3E3CF 0%, transparent 60%),
+    radial-gradient(50% 60% at 10% 90%, #B8A48C 0%, transparent 65%),
+    radial-gradient(40% 50% at 60% 70%, #D9C2A7 0%, transparent 70%),
+    linear-gradient(135deg, #CDB89E 0%, #A99179 55%, #8E7B69 100%);
+  background-attachment: fixed;
+}
+.topbar, .day, .chip, .btn, .fab, .dialog, .upcoming, .todo-row {
+  backdrop-filter: blur(28px) saturate(160%); -webkit-backdrop-filter: blur(28px) saturate(160%);
+}
+.topbar { background: transparent; border-bottom: none; padding: 18px 26px; }
+#clock-time { font-size: 50px; font-weight: 700; letter-spacing: -0.035em; text-shadow: 0 2px 12px rgba(0,0,0,.18); }
+#clock-date { color: var(--ink-soft); font-weight: 600; }
+.btn { border: 1px solid var(--glass-line); background: rgba(70,50,30,.22); color: var(--ink); border-radius: 999px;
+  min-height: 46px; padding: 8px 20px; font-weight: 600; text-shadow: 0 1px 4px rgba(40,25,10,.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 6px 20px rgba(60,40,20,.12); }
+.btn:hover { background: var(--glass-strong); }
+.btn-icon { width: 46px; padding: 0; }
+.btn-primary { background: rgba(255,255,255,.85); color: #3B4A5E; text-shadow: none; }
+.status { color: #fff; }
+.chip { border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); min-height: 42px;
+  padding: 6px 16px; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,.3); }
+.chip.on { background: color-mix(in srgb, var(--chip) 55%, rgba(255,255,255,.15)); color: #fff; }
+.chip:not(.on) { color: var(--ink-soft); opacity: .7; }
+.chip.on .swatch { background: #fff; }
+.week { gap: 10px; padding: 18px 26px 26px; }
+.day {
+  background: linear-gradient(180deg, rgba(86,116,160,.62), rgba(66,96,140,.55));
+  border: 1px solid rgba(255,255,255,.22); border-radius: var(--radius); padding: 12px 7px;
+  box-shadow: inset 0 10px 24px rgba(20,30,50,.35), inset 0 -2px 0 rgba(255,255,255,.12),
+              0 0 0 6px rgba(255,255,255,.10), 0 18px 40px rgba(50,35,20,.22);
+}
+.day.today { background: linear-gradient(180deg, rgba(96,128,176,.72), rgba(72,104,150,.62)); border-color: rgba(255,255,255,.45); }
+.day-head { border-bottom: none; justify-content: center; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 10px; }
+.day-name { color: var(--ink-soft); font-size: 14px; letter-spacing: .08em; }
+.day-num { font-size: 28px; font-weight: 600; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; color: #fff; }
+.day.today .day-num { background: rgba(255,255,255,.75); color: #3B4A5E; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+.event { border-left: none; position: relative; padding: 7px 8px 7px 21px; border-radius: 14px;
+  background: rgba(255,255,255,.16); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); margin-bottom: 8px; }
+.event::before { content: ""; position: absolute; left: 8px; top: 12px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ev); box-shadow: 0 0 0 2px rgba(255,255,255,.55); }
+.ev-time { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+.ev-title { color: #fff; font-size: 15px; line-height: 1.25; font-weight: 600; }
+.upcoming { background: rgba(120,100,80,.28); border: 1px solid var(--glass-line); border-radius: var(--radius);
+  margin: 18px 26px 26px 0; padding: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 18px 40px rgba(50,35,20,.2); }
+.upcoming h2, .upcoming h3 { color: #fff; }
+.upcoming .event { background: rgba(255,255,255,.14); }
+.fab { background: rgba(255,255,255,.8); color: #3B4A5E; border: 1px solid rgba(255,255,255,.9);
+  box-shadow: 0 12px 30px rgba(50,35,20,.3); font-weight: 300; }
+.overlay { background: rgba(60,45,30,.18); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.dialog { background: rgba(120,102,84,.92); border: 1px solid var(--glass-line); border-radius: 34px; color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 30px 80px rgba(40,25,10,.35); padding: 26px; }
+.dialog h2 { color: #fff; font-size: 28px; }
+.dialog label { color: rgba(255,255,255,.9); font-weight: 600; }
+.dialog input[type="text"], .dialog input:not([type]), .dialog input[type="date"], .dialog input[type="time"], .dialog select {
+  border: none; background: rgba(40,30,20,.28); color: #fff; border-radius: 18px; min-height: 50px; padding: 10px 16px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.18); color-scheme: dark; }
+.dialog .card, .dialog fieldset { background: rgba(40,30,20,.18); border: none; border-radius: 22px; }
+@media (max-width: 600px) {
+  .day-head { flex-direction: row; justify-content: space-between; }
+  .day-num, .day.today .day-num { width: auto; height: auto; padding: 2px 12px; border-radius: 999px; font-size: 20px; white-space: nowrap; }
+  .topbar { padding: 12px 14px; } #clock-time { font-size: 38px; }
+  .week { padding: 12px 14px 90px; }
+}

@@ -1,0 +1,94 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Family Hub",
+        "description": "Dai un nome alla famiglia. Persone e calendari si aggiungono dopo, nelle impostazioni.",
+        "data": {
+          "family_name": "Nome della famiglia",
+          "language": "Lingua",
+          "first_weekday": "Primo giorno della settimana"
+        }
+      }
+    },
+    "error": {
+      "empty_name": "Inserisci un nome."
+    },
+    "abort": {
+      "single_instance_allowed": "Family Hub è già configurato."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Impostazioni di Family Hub",
+        "menu_options": {
+          "add_person": "Aggiungi persona",
+          "remove_person": "Rimuovi persona",
+          "add_category": "Aggiungi categoria",
+          "remove_category": "Rimuovi categoria",
+          "reminders": "Impostazioni promemoria"
+        }
+      },
+      "add_person": {
+        "title": "Nuova persona",
+        "data": {
+          "name": "Nome",
+          "color": "Colore",
+          "role": "Ruolo",
+          "phone_notify": "Servizio notifiche del telefono (es. mobile_app_pixel)",
+          "speaker": "Altoparlante (media player)",
+          "alexa_notify": "Servizio Alexa per annunci, es. alexa_media_cucina",
+          "ha_user_id": "Utente di Home Assistant",
+          "all_day_reminder": "Avviso il giorno prima degli eventi di tutto il giorno (HH:MM)",
+          "quiet_start": "Silenzio dalle (HH:MM)",
+          "quiet_end": "Silenzio fino alle (HH:MM)"
+        }
+      },
+      "remove_person": {
+        "title": "Rimuovi persona",
+        "data": { "person": "Persona" }
+      },
+      "add_category": {
+        "title": "Nuova categoria",
+        "data": { "name": "Nome", "color": "Colore" }
+      },
+      "remove_category": {
+        "title": "Rimuovi categoria",
+        "data": { "category": "Categoria" }
+      },
+      "reminders": {
+        "title": "Impostazioni promemoria",
+        "description": "Valori predefiniti per tutta la famiglia. Ogni evento può cambiare gli anticipi.",
+        "data": {
+          "offsets": "Minuti prima dell'inizio, es. 30, 10",
+          "channels": "Canali",
+          "quiet_start": "Silenzio dalle (HH:MM)",
+          "quiet_end": "Silenzio fino alle (HH:MM)",
+          "snooze_minutes": "Minuti di posticipo",
+          "tts_entity": "Voce dell'altoparlante (entità TTS)",
+          "morning_summary": "Riepilogo del mattino alle (HH:MM, vuoto = off)",
+          "evening_summary": "Riepilogo della sera alle (HH:MM, vuoto = off)",
+          "all_day_reminder": "Avviso del giorno prima per eventi di tutto il giorno (HH:MM)"
+        }
+      }
+    },
+    "error": {
+      "empty_name": "Inserisci un nome.",
+      "category_in_use": "La categoria contiene ancora eventi. Eliminali prima.",
+      "invalid_time": "Usa il formato HH:MM, per esempio 07:30.",
+      "invalid_offsets": "Usa minuti interi separati da virgole, per esempio 30, 10."
+    },
+    "abort": {
+      "no_persons": "Non ci sono persone da rimuovere."
+    }
+  },
+  "selector": {
+    "weekday": {
+      "options": { "monday": "Lunedì", "sunday": "Domenica" }
+    },
+    "role": {
+      "options": { "adult": "Adulto", "child": "Bambino", "guest": "Ospite" }
+    }
+  }
+}

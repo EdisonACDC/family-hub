@@ -1,0 +1,138 @@
+add_event:
+  name: Add event
+  description: Create an event in a category calendar.
+  fields:
+    entry_id:
+      example: "01J0000000000000000000000"
+      selector:
+        text:
+    category:
+      required: true
+      example: famiglia
+      selector:
+        text:
+    summary:
+      required: true
+      example: Dentista Sofia
+      selector:
+        text:
+    start:
+      required: true
+      example: "2026-11-12 15:00:00"
+      selector:
+        text:
+    end:
+      example: "2026-11-12 16:00:00"
+      selector:
+        text:
+    description:
+      selector:
+        text:
+          multiline: true
+    location:
+      selector:
+        text:
+    persons:
+      example: ["sofia"]
+      selector:
+        object:
+    reminder_offsets:
+      description: Minutes before the start for this event's reminders, e.g. [30, 10]. Empty list = none. Omit for the family default.
+      example: [30, 10]
+      selector:
+        object:
+
+update_event:
+  name: Update event
+  description: Change fields of an event. Only the given fields change.
+  fields:
+    entry_id:
+      selector:
+        text:
+    uid:
+      required: true
+      selector:
+        text:
+    summary:
+      selector:
+        text:
+    start:
+      selector:
+        text:
+    end:
+      selector:
+        text:
+    description:
+      selector:
+        text:
+          multiline: true
+    location:
+      selector:
+        text:
+    persons:
+      selector:
+        object:
+    reminder_offsets:
+      selector:
+        object:
+
+delete_event:
+  name: Delete event
+  description: Delete an event by uid.
+  fields:
+    entry_id:
+      selector:
+        text:
+    uid:
+      required: true
+      selector:
+        text:
+
+move_event:
+  name: Move event
+  description: Move an event to a new start. Keeps its duration unless end is given.
+  fields:
+    entry_id:
+      selector:
+        text:
+    uid:
+      required: true
+      selector:
+        text:
+    start:
+      required: true
+      selector:
+        text:
+    end:
+      selector:
+        text:
+
+snooze_reminder:
+  name: Snooze reminder
+  description: Remind again for this event after a number of minutes.
+  fields:
+    entry_id:
+      selector:
+        text:
+    uid:
+      required: true
+      selector:
+        text:
+    minutes:
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 1440
+
+stop_reminder:
+  name: Stop reminders
+  description: Stop all reminders of this event, including pending snoozes.
+  fields:
+    entry_id:
+      selector:
+        text:
+    uid:
+      required: true
+      selector:
+        text:

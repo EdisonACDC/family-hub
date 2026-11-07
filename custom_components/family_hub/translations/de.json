@@ -1,0 +1,94 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Family Hub",
+        "description": "Gib deiner Familie einen Namen. Personen und Kalender kannst du später in den Einstellungen hinzufügen.",
+        "data": {
+          "family_name": "Familienname",
+          "language": "Sprache",
+          "first_weekday": "Erster Tag der Woche"
+        }
+      }
+    },
+    "error": {
+      "empty_name": "Bitte einen Namen eingeben."
+    },
+    "abort": {
+      "single_instance_allowed": "Family Hub ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Family Hub Einstellungen",
+        "menu_options": {
+          "add_person": "Person hinzufügen",
+          "remove_person": "Person entfernen",
+          "add_category": "Kategorie hinzufügen",
+          "remove_category": "Kategorie entfernen",
+          "reminders": "Erinnerungen einstellen"
+        }
+      },
+      "add_person": {
+        "title": "Neue Person",
+        "data": {
+          "name": "Name",
+          "color": "Farbe",
+          "role": "Rolle",
+          "phone_notify": "Benachrichtigungsdienst des Handys (z. B. mobile_app_pixel)",
+          "speaker": "Lautsprecher (Media Player)",
+          "alexa_notify": "Alexa-Ansage-Dienst, z. B. alexa_media_kueche",
+          "ha_user_id": "Home-Assistant-Benutzer",
+          "all_day_reminder": "Erinnerung am Tag davor bei Ganztagsterminen (HH:MM)",
+          "quiet_start": "Ruhezeit ab (HH:MM)",
+          "quiet_end": "Ruhezeit bis (HH:MM)"
+        }
+      },
+      "remove_person": {
+        "title": "Person entfernen",
+        "data": { "person": "Person" }
+      },
+      "add_category": {
+        "title": "Neue Kategorie",
+        "data": { "name": "Name", "color": "Farbe" }
+      },
+      "remove_category": {
+        "title": "Kategorie entfernen",
+        "data": { "category": "Kategorie" }
+      },
+      "reminders": {
+        "title": "Erinnerungen einstellen",
+        "description": "Voreinstellungen für die ganze Familie. Jeder Termin kann die Vorlaufzeiten ändern.",
+        "data": {
+          "offsets": "Minuten vor Beginn, z. B. 30, 10",
+          "channels": "Kanäle",
+          "quiet_start": "Ruhezeit ab (HH:MM)",
+          "quiet_end": "Ruhezeit bis (HH:MM)",
+          "snooze_minutes": "Minuten für Später erinnern",
+          "tts_entity": "Stimme des Lautsprechers (TTS-Entität)",
+          "morning_summary": "Morgenübersicht um (HH:MM, leer = aus)",
+          "evening_summary": "Abendübersicht um (HH:MM, leer = aus)",
+          "all_day_reminder": "Erinnerung am Tag davor bei Ganztagsterminen (HH:MM)"
+        }
+      }
+    },
+    "error": {
+      "empty_name": "Bitte einen Namen eingeben.",
+      "category_in_use": "In dieser Kategorie gibt es noch Termine. Bitte zuerst löschen.",
+      "invalid_time": "Bitte HH:MM verwenden, z. B. 07:30.",
+      "invalid_offsets": "Bitte ganze Minuten mit Kommas trennen, z. B. 30, 10."
+    },
+    "abort": {
+      "no_persons": "Es gibt keine Personen zum Entfernen."
+    }
+  },
+  "selector": {
+    "weekday": {
+      "options": { "monday": "Montag", "sunday": "Sonntag" }
+    },
+    "role": {
+      "options": { "adult": "Erwachsene/r", "child": "Kind", "guest": "Gast" }
+    }
+  }
+}

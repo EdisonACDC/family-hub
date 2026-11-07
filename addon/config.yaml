@@ -1,0 +1,18 @@
+name: Family Hub UI
+version: "0.5.0"
+slug: family_hub_ui
+description: Tablet interface for the Family Hub calendar (wall tablet, guided setup, reminder popups)
+url: https://github.com/EdisonACDC/family-hub
+arch:
+  - amd64
+  - aarch64
+init: false
+# The UI is served only through Ingress: it is never exposed on a host port.
+ingress: true
+ingress_port: 8099
+ingress_stream: false
+panel_icon: mdi:calendar-heart
+panel_title: Family Hub
+panel_admin: false
+# Gives the add-on SUPERVISOR_TOKEN and access to the Home Assistant WebSocket API.
+homeassistant_api: true
