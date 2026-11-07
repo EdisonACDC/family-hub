@@ -1,0 +1,4 @@
+# Scripts run inside Linux containers: they must keep Unix line endings, also on Windows.
+*.sh text eol=lf
+**/services.d/**/run text eol=lf
+**/services.d/**/finish text eol=lf

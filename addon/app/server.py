@@ -950,6 +950,12 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     url, token, port, peers = config_from_env()
     if not token:
+        # Only the names are logged, never the values.
+        names = sorted(k for k in os.environ if k.startswith(("SUPERVISOR", "HA_")))
+        LOGGER.error(
+            "No token: SUPERVISOR_TOKEN is missing. Variables present (names only): %s",
+            ", ".join(names) or "none",
+        )
         raise SystemExit("No token: SUPERVISOR_TOKEN is missing")
     app = create_app(HAClient(url, token), peers)
     web.run_app(app, host="0.0.0.0", port=port, print=None)

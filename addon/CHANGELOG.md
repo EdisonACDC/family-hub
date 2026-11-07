@@ -1,5 +1,11 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.5.1
+
+- Corretto avvio: SUPERVISOR_TOKEN non arrivava al programma. L'add-on ora parte come servizio
+  s6 (con l'ambiente del Supervisor) e, se un errore lo ferma, il container si arresta
+  invece di riavviarsi in loop. Nel log compaiono solo i nomi delle variabili, mai i valori.
+
 ## 0.5.0
 
 - Notification settings per person ("Avvisi"): phone and Echo speakers chosen from the

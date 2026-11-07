@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bashio
+bashio::log.info "Avvio Family Hub UI"
+cd /opt/family_hub_ui
+exec python3 -m app.server

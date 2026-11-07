@@ -434,8 +434,8 @@ def test_child_adds_but_cannot_remove_and_guest_only_reads(
 def test_external_waste_calendar_is_shown_read_only(stack_full: Stack, tablet: Page) -> None:
     today = date.today()
     for event in stack_full.fake.events[WASTE]:
-        event["start"] = _local_iso(today + timedelta(days=1), 7)
-        event["end"] = _local_iso(today + timedelta(days=1), 8)
+        event["start"] = _local_iso(today, 7)
+        event["end"] = _local_iso(today, 8)
     tablet.goto(stack_full.url + "/?lang=it")
     expect(tablet.locator(".event.external", has_text="Ritiro indifferenziato")).to_be_visible(
         timeout=5000
