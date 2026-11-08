@@ -16,6 +16,9 @@ CONF_FIRST_WEEKDAY: Final = "first_weekday"
 # so the whole configuration is one list per kind and no name is hard-coded.
 OPT_PERSONS: Final = "persons"
 OPT_CATEGORIES: Final = "categories"
+# Home Assistant users that are shared screens (not linked to a person): they may add,
+# change and tick events and lists, but not open the settings.
+OPT_SHARED_USERS: Final = "shared_users"
 
 LANGUAGES: Final[list[str]] = ["it", "de", "en"]
 # Family settings, kept in the entry options since config entry version 2.

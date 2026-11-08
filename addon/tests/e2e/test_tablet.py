@@ -208,7 +208,7 @@ def test_adult_completes_the_guide_and_the_data_is_saved(
 
     # 4 Promemoria
     expect(tablet.locator("#wizard-progress")).to_have_text("Passo 4 di 6")
-    tablet.get_by_label("Posticipo predefinito (minuti)").fill("15")
+    tablet.locator("#wizard-body .segment", has_text="15").click()
     tablet.locator("#wizard-next").click()
 
     # 5 Fonti: nothing to fill, skip it
@@ -440,7 +440,8 @@ def test_external_waste_calendar_is_shown_read_only(stack_full: Stack, tablet: P
     expect(tablet.locator(".event.external", has_text="Ritiro indifferenziato")).to_be_visible(
         timeout=5000
     )
-    expect(tablet.locator(".chip", has_text="Rifiuti")).to_be_visible()
+    tablet.locator(".more-toggle").click()
+    expect(tablet.locator(".more-calendars", has_text="Rifiuti")).to_be_visible()
     # Clicking an external event does not open anything to change it.
     tablet.locator(".event.external", has_text="Ritiro indifferenziato").click()
     expect(tablet.locator("#event-overlay")).to_be_hidden()

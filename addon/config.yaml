@@ -1,5 +1,5 @@
 name: Family Hub UI
-version: "0.5.2"
+version: "0.6.0"
 slug: family_hub_ui
 description: Tablet interface for the Family Hub calendar (wall tablet, guided setup, reminder popups)
 url: https://github.com/EdisonACDC/family-hub

@@ -1,5 +1,45 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.6.0
+
+- Evento: toccandolo si apre una scheda con titolo, calendario, data e ora, persone e promemoria,
+  con Modifica (stesso modulo, già compilato) ed Elimina (con conferma). Gli eventi esterni
+  (rifiuti, festività, turni) sono di sola lettura.
+- Orari: si scrivono anche a mano (1030 diventa 10:30, 930 diventa 09:30, 7 diventa 07:00,
+  10.30 diventa 10:30). Il selettore a rotella usa ore 00–23 e minuti a passi di 5. Un orario
+  non valido diventa rosso con un messaggio sotto il campo, e non si può andare avanti né salvare.
+- Data: toccando il campo si apre un piccolo calendario del mese, con oggi evidenziato, un punto
+  colorato per ogni calendario e gli appuntamenti del giorno scelto. Avvisa se un nuovo evento
+  si sovrappone a un altro. Si può ancora scrivere la data a mano.
+- Pulsanti in basso fissi in ogni finestra: scorre solo il contenuto.
+- Esempi leggibili, in riquadri traslucidi.
+- Snooze dei promemoria: scelta fra 5, 10, 15, 30 e 60 minuti.
+- Avvisi: telefoni ed Echo con un nome leggibile (per esempio "iPhone Luca", "Alexa Cucina"),
+  in ordine alfabetico. Il nome è quello che Home Assistant conosce per l'Echo.
+- Calendari di Family Hub: il nome è la categoria (per esempio "Sport"), senza prefisso.
+  Gli identificativi restano calendar.family_hub_<categoria>.
+- Canali dei promemoria: interruttori a destra. "Popup" diventa "Notifica in Home Assistant" e
+  "Popup tablet" diventa "Finestra sul tablet", con una riga che spiega la differenza.
+- Barra in alto: testo scuro sul colore chiaro, contrasto oltre 4,5:1.
+- Ruoli: un amministratore di Home Assistant non legato a una persona ha sempre i permessi di
+  adulto, quindi il tablet non diventa più ospite dopo la configurazione.
+- Schermi condivisi (in Avvisi, solo adulti): si scelgono utenti di Home Assistant non legati a
+  una persona (per esempio il tablet della cucina). Possono aggiungere, modificare e spuntare
+  eventi e liste, ma non aprire le impostazioni. Gli schermi condivisi ricevono i popup dei
+  promemoria.
+- Ospite: una riga in basso dice "Sei collegato come <utente>: solo lettura" invece di nascondere
+  i pulsanti senza spiegazione.
+- Calendari: in alto solo quelli di Family Hub. Gli altri stanno dietro al pulsante
+  "Altri calendari (N)", che apre un elenco con interruttori.
+- Fonti: per ogni calendario di Home Assistant si può scegliere il nome da mostrare, il tipo
+  (rifiuti, vacanze scolastiche, vacanze d'asilo, festività, altro) e il colore.
+- La settimana e il mini calendario partono dal primo giorno scelto nelle impostazioni
+  (lunedì o domenica).
+
+Non ancora incluso (rimandato): "Importa dai vecchi calendari" e i promemoria della sera prima e
+della mattina per i calendari di Home Assistant scelti come fonti (rifiuti). Il nome, il tipo e il colore
+si impostano già in Fonti; i promemoria per questi calendari non sono ancora attivi.
+
 ## 0.5.2
 
 - Barre di scorrimento in stile iOS (sottili, traslucide, arrotondate) in tutte le finestre e

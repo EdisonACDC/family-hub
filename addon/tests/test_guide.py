@@ -137,9 +137,10 @@ def test_after_an_adult_is_linked_the_normal_rules_apply() -> None:
             admin = await connect(client, ADMIN_USER)
             assert (await request(admin, {"id": 1, "op": "config_save", "config": _config()}))["ok"]
             await admin.close()
-            # The saved configuration links Mamma (adult) to u-mamma: the admin is now a guest.
+            # The saved configuration links Mamma (adult) to u-mamma. An administrator of Home
+            # Assistant who is no person is still an adult: the family's tablet is never a guest.
             admin = await connect(client, ADMIN_USER)
-            assert (await request(admin, {"id": 2, "op": "config_get"}))["ok"] is False
+            assert (await request(admin, {"id": 2, "op": "config_get"}))["ok"] is True
             await admin.close()
             mamma = await connect(client, ADULT_USER)
             assert (await request(mamma, {"id": 3, "op": "config_get"}))["ok"] is True
@@ -214,14 +215,24 @@ def test_theme_is_sent_on_connect_and_after_a_save() -> None:
         try:
             ws = await client.ws_connect("/ws", headers={"X-Remote-User-Id": ADULT_USER})
             themes = [(await ws.receive_json(timeout=5)) for _ in range(3)]
-            assert {"type": "theme", "theme": "dark", "time_format": "24h"} in themes
+            assert {
+                "type": "theme",
+                "theme": "dark",
+                "time_format": "24h",
+                "first_weekday": "monday",
+            } in themes
             config = _config()
             config["screen"] = {"theme": "light"}
             await ws.send_json({"id": 1, "op": "config_save", "config": config})
             seen = []
             for _ in range(2):  # the theme broadcast and the reply
                 seen.append(await ws.receive_json(timeout=5))
-            assert {"type": "theme", "theme": "light", "time_format": "24h"} in seen
+            assert {
+                "type": "theme",
+                "theme": "light",
+                "time_format": "24h",
+                "first_weekday": "monday",
+            } in seen
             await ws.close()
         finally:
             await shutdown(ha_server, client)

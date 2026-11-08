@@ -300,6 +300,16 @@ class FakeHA:
             await self._save_config(ws, msg)
         elif kind == "family_hub/notify/save":
             await self._save_notify(ws, msg)
+        elif kind == "family_hub/shared/save":
+            linked = {p.get("ha_user_id") for p in self.config["persons"]}
+            self.config["shared_users"] = [u for u in msg["users"] if u not in linked]
+            # Like the integration's reload: the calendars carry the shared users.
+            for state in self.states:
+                if state["entity_id"].startswith(CALENDAR_PREFIX):
+                    state["attributes"]["shared_users"] = list(self.config["shared_users"])
+            await self._reply(
+                ws, msg_id, True, {"saved": True, "users": self.config["shared_users"]}
+            )
         elif kind in (
             "family_hub/ics/list",
             "family_hub/ics/add",
@@ -363,6 +373,7 @@ class FakeHA:
                         "friendly_name": category["name"],
                         "category_id": category["id"],
                         "persons": copy.deepcopy(config["persons"]),
+                        "shared_users": list(config.get("shared_users", [])),
                     },
                 }
             )

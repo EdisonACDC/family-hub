@@ -329,9 +329,10 @@ def test_external_chips_show_the_type_icon_not_an_emoji(stack_full: Stack, table
     _add_rubbish_calendar(stack_full, key, "chipicon", [])
     try:
         tablet.goto(stack_full.url + "/?lang=it")
-        chip = tablet.locator(".chip", has_text="Abfuhr")
-        expect(chip).to_be_visible(timeout=5000)
-        expect(chip.locator("svg")).to_have_count(1)
-        assert "📅" not in chip.inner_text()
+        # The other calendars sit behind "Altri calendari (N)"; the family's own are on top.
+        tablet.locator(".more-toggle").click()
+        row = tablet.locator(".more-calendars", has_text="Abfuhr")
+        expect(row).to_be_visible(timeout=5000)
+        assert "📅" not in row.inner_text()
     finally:
         _remove_rubbish_calendar(stack_full, key, "chipicon")

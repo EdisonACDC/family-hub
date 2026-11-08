@@ -44,6 +44,7 @@ from .const import (
     OPT_CATEGORIES,
     OPT_PERSONS,
     OPT_REMINDERS,
+    OPT_SHARED_USERS,
     OPT_SHIFTS,
     PERSON_CHANNELS,
     ROLES,
@@ -51,6 +52,7 @@ from .const import (
     TIME_FORMATS,
     WEEKDAYS,
 )
+from .external import TYPES as ICS_TYPES
 from .external_api import async_register_external_commands
 from .notifier import TEST_MESSAGE, announce_on_echos
 from .notify_settings import alexa_targets, available_services
@@ -130,9 +132,9 @@ def _slug(name: str) -> str:
 SOURCE_DOMAINS = {"todo": "todo.", "calendars": "calendar.", "weather": "weather."}
 
 
-def _sources(value: Any, known: Callable[[str], bool]) -> dict[str, list[str]]:
+def _sources(value: Any, known: Callable[[str], bool]) -> dict[str, Any]:
     raw = _obj(value, "sources")
-    result: dict[str, list[str]] = {}
+    result: dict[str, Any] = {}
     for key, prefix in SOURCE_DOMAINS.items():
         items = raw.get(key, [])
         if not isinstance(items, list) or not all(isinstance(e, str) for e in items):
@@ -145,7 +147,32 @@ def _sources(value: Any, known: Callable[[str], bool]) -> dict[str, list[str]]:
         result[key] = list(dict.fromkeys(items))
     if len(result.get("weather", [])) > 1:
         raise ConfigError("sources.weather: choose one weather entity")
+    result["calendar_styles"] = _calendar_styles(
+        raw.get("calendar_styles", {}), result["calendars"]
+    )
     return result
+
+
+def _calendar_styles(value: Any, calendars: list[str]) -> dict[str, dict[str, str]]:
+    """How a calendar of Home Assistant looks in Family Hub: its shown name, its type (rubbish,
+    holidays, ...) and its colour. Only the chosen source calendars can have one."""
+    raw = _obj(value, "sources.calendar_styles")
+    styles: dict[str, dict[str, str]] = {}
+    for entity_id, style in raw.items():
+        if entity_id not in calendars:
+            raise ConfigError(f"sources.calendar_styles: {entity_id} is not a chosen calendar")
+        style = _obj(style, f"sources.calendar_styles.{entity_id}")
+        kind = str(style.get("type") or "altro")
+        if kind not in ICS_TYPES:
+            raise ConfigError(f"sources.calendar_styles.{entity_id}.type: unknown type")
+        styles[entity_id] = {
+            "name": _text(style.get("name"), f"sources.calendar_styles.{entity_id}.name"),
+            "type": kind,
+            "color": _color(
+                style.get("color") or "#64748B", f"sources.calendar_styles.{entity_id}.color"
+            ),
+        }
+    return styles
 
 
 def clean_config(
@@ -183,6 +210,10 @@ def clean_config(
         raise ConfigError("persons: duplicate id")
     _check_unique_users(persons)
     options[OPT_PERSONS] = persons
+    # Kept when the configuration does not mention them, so a save never drops the shared screens.
+    options[OPT_SHARED_USERS] = clean_shared_users(
+        config.get("shared_users", current.get(OPT_SHARED_USERS, [])), persons
+    )
 
     categories = []
     for index, raw in enumerate(_items(config.get("categories", []), "categories")):
@@ -306,6 +337,7 @@ def describe(options: dict[str, Any]) -> dict[str, Any]:
         "sources": {
             "todo": list(options.get("sources", {}).get("todo", [])),
             "calendars": list(options.get("sources", {}).get("calendars", [])),
+            "calendar_styles": dict(options.get("sources", {}).get("calendar_styles", {})),
             "weather": list(options.get("sources", {}).get("weather", [])),
         },
         "family": {
@@ -319,6 +351,7 @@ def describe(options: dict[str, Any]) -> dict[str, Any]:
         "screen": {CONF_THEME: options.get(CONF_THEME, "auto")},
         "shifts": dict(options.get(OPT_SHIFTS, {})),
         "persons": list(options.get(OPT_PERSONS, [])),
+        "shared_users": list(options.get(OPT_SHARED_USERS, [])),
         "categories": list(options.get(OPT_CATEGORIES, [])),
         "reminders": {**DEFAULT_REMINDERS, **options.get(OPT_REMINDERS, {})},
     }
@@ -541,6 +574,42 @@ async def ws_notify_test(
     connection.send_error(msg["id"], "bad_request", "Unknown kind")
 
 
+def clean_shared_users(users: Any, persons: list[dict[str, Any]]) -> list[str]:
+    """Home Assistant users that are shared screens. A user linked to a person is never one."""
+    if not isinstance(users, list) or not all(isinstance(u, str) and u for u in users):
+        raise ConfigError("shared_users: list of Home Assistant user ids")
+    linked = {p.get(CONF_HA_USER) for p in persons if p.get(CONF_HA_USER)}
+    return list(dict.fromkeys(u for u in users if u not in linked))
+
+
+@require_admin
+@websocket_command(
+    {
+        vol.Required("type"): "family_hub/shared/save",
+        vol.Optional("entry_id"): str,
+        vol.Required("users"): [str],
+    }
+)
+@async_response
+async def ws_shared_save(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Save which Home Assistant users are shared screens (the "Schermi condivisi" list)."""
+    entry = _entry(hass, msg.get("entry_id"))
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Family Hub is not set up")
+        return
+    try:
+        users = clean_shared_users(msg["users"], list(entry.options.get(OPT_PERSONS, [])))
+    except ConfigError as err:
+        connection.send_error(msg["id"], err.code, str(err))
+        return
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, OPT_SHARED_USERS: users}
+    )
+    connection.send_result(msg["id"], {"saved": True, "users": users})
+
+
 @callback
 def async_register_commands(hass: HomeAssistant) -> None:
     """Register the websocket commands once."""
@@ -549,4 +618,5 @@ def async_register_commands(hass: HomeAssistant) -> None:
     async_register_command(hass, ws_shifts_save)
     async_register_command(hass, ws_notify_save)
     async_register_command(hass, ws_notify_test)
+    async_register_command(hass, ws_shared_save)
     async_register_external_commands(hass)

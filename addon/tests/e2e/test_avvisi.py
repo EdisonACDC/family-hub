@@ -47,7 +47,7 @@ def test_adult_sets_phone_echo_channels_and_volume(stack_full: Stack, tablet: Pa
         "(el) => { el.value = '40'; el.dispatchEvent(new Event('input', { bubbles: true })); }"
     )
     expect(mamma.locator(".volume-value")).to_have_text("40 %")
-    mamma.locator(".switch", has_text="Popup tablet").locator("input").uncheck()
+    mamma.locator(".switch", has_text="Finestra sul tablet").locator("input").uncheck()
     tablet.get_by_role("button", name="Salva avvisi").click()
     expect(tablet.locator("#status-note")).to_contain_text("Avvisi salvati", timeout=3000)
     saved = stack_full.fake.config["persons"][1]

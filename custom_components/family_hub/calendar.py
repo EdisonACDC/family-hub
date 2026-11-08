@@ -19,9 +19,16 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, OPT_CATEGORIES, OPT_PERSONS
+from .const import DOMAIN, OPT_CATEGORIES, OPT_PERSONS, OPT_SHARED_USERS
 from .models import FamilyHubConfigEntry
 from .storage import EventStore
+
+
+def _offsets_text(offsets: Any) -> str:
+    """The reminder minutes as text: "default" when the family's own are used."""
+    if offsets is None:
+        return "default"
+    return ",".join(str(int(o)) for o in offsets)
 
 
 @dataclass
@@ -36,6 +43,8 @@ class FamilyHubEvent(CalendarEvent):
     person_ids: str = ""
     record_id: str = ""
     shift_id: str = ""
+    # Minutes before the start, comma separated; "" for none; "default" for the family's own.
+    reminder_offsets: str = "default"
 
 
 SUPPORTED_FEATURES = (
@@ -95,7 +104,13 @@ async def async_setup_entry(
     """Create one calendar entity per configured category."""
     data = entry.runtime_data
     calendars = [
-        FamilyHubCalendar(data.store, entry.entry_id, category, entry.options.get(OPT_PERSONS, []))
+        FamilyHubCalendar(
+            data.store,
+            entry.entry_id,
+            category,
+            entry.options.get(OPT_PERSONS, []),
+            entry.options.get(OPT_SHARED_USERS, []),
+        )
         for category in entry.options.get(OPT_CATEGORIES, [])
     ]
     data.calendars = {cal.category_id: cal for cal in calendars}
@@ -107,7 +122,8 @@ async def async_setup_entry(
 class FamilyHubCalendar(CalendarEntity):
     """A calendar that stores its events in the Family Hub store."""
 
-    _attr_has_entity_name = True
+    # The name the family chose is the friendly name; the entity id is set below.
+    _attr_has_entity_name = False
     _attr_supported_features = SUPPORTED_FEATURES
 
     def __init__(
@@ -116,13 +132,19 @@ class FamilyHubCalendar(CalendarEntity):
         entry_id: str,
         category: dict[str, str],
         persons: list[dict[str, Any]] | None = None,
+        shared_users: list[str] | None = None,
     ) -> None:
         self._store = store
+        self._shared_users = list(shared_users or [])
         self.category_id = category["id"]
         self._attr_name = category["name"]
         self._attr_unique_id = f"{entry_id}_{self.category_id}"
-        # The device name is the prefix of the entity id: calendar.family_hub_<category>.
+        # The device keeps the calendars together; its name is not added to the friendly name
+        # (has_entity_name is off), so the name shown is the one the family chose.
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry_id)}, name="Family Hub")
+        self._stem = "".join(ch if ch.isalnum() else "_" for ch in category["name"].lower()).strip(
+            "_"
+        )
         self._persons = [dict(person) for person in persons or []]
 
     # ----- helpers -------------------------------------------------------
@@ -141,6 +163,7 @@ class FamilyHubCalendar(CalendarEntity):
                 }
                 for person in self._persons
             ],
+            "shared_users": list(self._shared_users),
         }
 
     def _records(self) -> list[dict[str, Any]]:
@@ -152,6 +175,7 @@ class FamilyHubCalendar(CalendarEntity):
             person_ids=",".join(record.get("persons", [])),
             record_id=record["uid"],
             shift_id=record.get("shift_id", ""),
+            reminder_offsets=_offsets_text(record.get("reminder_offsets")),
             uid=record["uid"],
             summary=record["summary"],
             start=deserialize_time(record["start"], all_day),
@@ -182,6 +206,11 @@ class FamilyHubCalendar(CalendarEntity):
             if as_datetime(ev.end) > now
         ]
         return min(upcoming, key=lambda ev: as_datetime(ev.start), default=None)
+
+    @property
+    def suggested_object_id(self) -> str:
+        """calendar.family_hub_<name>, as before, while the name shown is the category's."""
+        return self._stem
 
     async def async_get_events(
         self, hass: HomeAssistant, start_date: datetime, end_date: datetime

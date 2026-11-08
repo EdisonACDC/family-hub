@@ -288,6 +288,7 @@ async def test_external_sources_are_checked_and_stored(
         "todo": ["todo.spesa"],
         "calendars": ["calendar.rifiuti"],
         "weather": [],
+        "calendar_styles": {},
     }
 
     bad = [
@@ -306,4 +307,5 @@ async def test_external_sources_are_checked_and_stored(
         "todo": ["todo.spesa"],
         "calendars": ["calendar.rifiuti"],
         "weather": [],
+        "calendar_styles": {},
     }

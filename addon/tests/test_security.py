@@ -85,6 +85,7 @@ def test_identity_is_reported_from_the_user_header() -> None:
                     "/ws", headers={"X-Remote-User-Id": user} if user else {}
                 )
                 first = await ws.receive_json(timeout=5)
+                first.pop("user_name", None)  # the name for the guest notice
                 assert first == {"type": "identity", "role": role, "person_id": person}
                 await ws.close()
         finally:

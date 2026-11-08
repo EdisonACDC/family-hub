@@ -831,3 +831,106 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
     background: #8e8e93;
   }
 }
+
+/* ---- v0.6.0: windows keep their buttons at the foot; the content scrolls. ---- */
+.dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+.dialog > h2,
+.dialog > .wizard-progress { flex: 0 0 auto; }
+.dialog-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.dialog-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+/* The wizard's example: readable on the dark glass, not white on white. */
+.dialog .example,
+.example {
+  background: rgba(40, 30, 20, 0.45);
+  color: #fff;
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+/* The top bar sits on a light background: dark ink keeps it readable (contrast over 4.5:1). */
+.topbar .clock,
+#clock-date,
+.status,
+#conn-text,
+.weather-now {
+  color: #2b1d12;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+#clock-time { color: #2b1d12; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6); }
+.weather-now strong { color: #2b1d12; }
+
+/* The event form: Start and End side by side inside the window. */
+.persons-fieldset { margin: 8px 0; }
+.persons-fieldset legend { font-weight: 600; }
+
+/* ---- v0.6.0: the touch time picker, the date picker and the day's notes ---- */
+.timepick-overlay { align-items: center; }
+.timepick {
+  width: min(420px, 100%);
+  max-height: min(560px, calc(100dvh - 32px));
+  padding: 18px;
+}
+.timepick-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  max-height: 60dvh;
+}
+.timepick-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  padding-right: 4px;
+}
+.timepick-cell {
+  min-height: 46px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(40, 30, 20, 0.28);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.timepick-cell.on { background: rgba(255, 255, 255, 0.85); color: #3b4a5e; }
+
+/* The date picker is the same glass, with a dot per calendar on the days that have events. */
+.datepick .month-grid { gap: 4px; }
+.datepick .day-cell { min-height: 52px; color: #fff; background: rgba(40, 30, 20, 0.28); border: none; }
+.datepick .day-cell.today { box-shadow: inset 0 0 0 2px #fff; }
+.datepick .day-cell[aria-pressed="true"] { background: rgba(255, 255, 255, 0.85); color: #3b4a5e; }
+.day-dots { display: flex; gap: 3px; min-height: 6px; margin-top: 2px; }
+.day-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dot); }
+.day-info { margin: 6px 0 10px; color: #fff; font-size: 15px; }
+.day-info p { margin: 2px 0; }
+.day-warning { color: #ffd1c9; font-weight: 600; }
+.field-error {
+  display: block;
+  margin-top: 4px;
+  color: #ffd1c9;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* v0.6.0: calendars beyond the family's own sit behind one button, and each source calendar
+   has its own name, type and colour in the Fonti step. */
+.more-toggle { align-self: flex-start; }
+.more-calendars { flex-basis: 100%; display: grid; gap: 6px; padding: 8px 0; }
+.cal-style { display: grid; gap: 8px; padding: 4px 0 10px 28px; }

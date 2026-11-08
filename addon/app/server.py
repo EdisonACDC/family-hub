@@ -128,7 +128,7 @@ class Hub:
                 owners = await self.owner_ids(str(data.get("uid", "")))
                 if owners is None or not can_see(identity, owners):
                     continue
-            elif identity.role != "adult":
+            elif identity.role not in ("adult", "shared"):
                 continue  # guests get no popups: they cannot act on them
             await self._send(ws, message)
 
@@ -146,6 +146,14 @@ class Hub:
 
     async def _states(self) -> list[dict[str, Any]]:
         return list(await self.ha.call("get_states"))
+
+    async def calendar_styles(self) -> dict[str, dict[str, str]]:
+        """Name, type and colour the family gave the calendars of Home Assistant."""
+        try:
+            config = await self.ha.call("family_hub/config/get")
+        except HAError:
+            return {}
+        return dict(config.get("sources", {}).get("calendar_styles", {}))
 
     async def sources(self) -> dict[str, list[str]]:
         """The external entities the guide chose: {"todo": [...], "calendars": [...]}."""
@@ -179,6 +187,7 @@ class Hub:
                     "name": attributes.get("friendly_name", entity_id),
                     "category_id": attributes.get("category_id", ""),
                     "external": False,
+                    "persons": list(attributes.get("persons", [])),
                 }
             )
         return found
@@ -187,17 +196,23 @@ class Hub:
         """Family calendars, then the external calendars the guide chose (read only)."""
         found = await self.family_calendars()
         external = (await self.sources())["calendars"]
+        styles = await self.calendar_styles()
         names = {
             s["entity_id"]: s.get("attributes", {}).get("friendly_name")
             for s in await self._states()
         }
         for entity_id in external:
+            style = styles.get(entity_id, {})
+            # The name the family chose, else the friendly name, else the entity id made readable.
+            name = style.get("name") or names.get(entity_id) or readable_name(entity_id)
             found.append(
                 {
                     "entity_id": entity_id,
-                    "name": names.get(entity_id) or entity_id,
+                    "name": name,
                     "category_id": "",
                     "external": True,
+                    "type": style.get("type", "altro"),
+                    "color": style.get("color", "#64748B"),
                 }
             )
         # Calendars from ICS files or links (read only): calendar.family_hub_ext_<id>.
@@ -455,6 +470,15 @@ class Hub:
             return "auto"
         return str(config.get("screen", {}).get("theme", "auto"))
 
+    async def first_weekday(self) -> str:
+        """The first day of the week in the family's settings: "monday" or "sunday"."""
+        try:
+            config = await self.ha.call("family_hub/config/get")
+        except HAError:
+            return "monday"
+        value = str(config.get("family", {}).get("first_weekday", "monday"))
+        return value if value in ("monday", "sunday") else "monday"
+
     async def time_format(self) -> str:
         """The family's clock: "24h" or "12h", chosen in the setup guide. Every time on the
         screen follows it, not the browser's own setting."""
@@ -470,27 +494,38 @@ class Hub:
         users = await self.ha.call("config/auth/list")
         return {u["id"] for u in users if "system-admin" in u.get("group_ids", [])}
 
+    async def user_name(self, user_id: str | None) -> str:
+        """The name of the Home Assistant user in front of the screen, for the guest notice."""
+        if not user_id or not self.ha.connected:
+            return ""
+        try:
+            users = await self.ha.call("config/auth/list")
+        except HAError:
+            return ""
+        for user in users:
+            if user["id"] == user_id:
+                return str(user.get("name") or "")
+        return ""
+
     async def identity_for(self, user_id: str | None) -> Identity:
-        """Who is in front of the screen. Until a person with role adult is linked to a Home
-        Assistant user, administrators of Home Assistant run the family (so a new install can
-        be set up); everyone else is a guest."""
+        """Who is in front of the screen.
+
+        A person's Home Assistant user gives that person's role. A shared screen (a user listed
+        as shared in the settings) acts as an adult for events and lists. Any other
+        administrator of Home Assistant is an adult, linked to a person or not (so the family's
+        own tablet, logged in as the admin, is never a guest). Everyone else is a guest."""
         if not self.ha.connected:
             return GUEST_IDENTITY
         try:
             states = await self._states()
-            persons = next(
-                (
-                    list(s.get("attributes", {}).get("persons", []))
-                    for s in states
-                    if s["entity_id"].startswith(CALENDAR_PREFIX)
-                ),
-                [],
-            )
-            linked = identify(user_id, persons)
-            if linked.person_id is not None:
+            calendar = next((s for s in states if s["entity_id"].startswith(CALENDAR_PREFIX)), {})
+            attributes = calendar.get("attributes", {})
+            persons = list(attributes.get("persons", []))
+            shared = list(attributes.get("shared_users", []))
+            linked = identify(user_id, persons, shared)
+            if linked.role != GUEST or linked.person_id is not None:
                 return linked
-            any_linked_adult = any(p.get("role") == ADULT and p.get("ha_user_id") for p in persons)
-            if not any_linked_adult and user_id and user_id in await self.admin_ids():
+            if user_id and user_id in await self.admin_ids():
                 return Identity(ADULT, None)
             return GUEST_IDENTITY
         except HAError:
@@ -597,6 +632,10 @@ class Hub:
                         "record_id": raw.get("record_id", ""),
                         "person_ids": owners,
                         "shift_id": raw.get("shift_id", ""),
+                        "description": raw.get("description") or "",
+                        "reminder_offsets": raw.get("reminder_offsets", "default"),
+                        "category_id": calendar.get("category_id", ""),
+                        "calendar": calendar.get("name", ""),
                     }
                 )
             result[entity_id] = visible
@@ -646,6 +685,7 @@ class Hub:
                         "type": "theme",
                         "theme": theme,
                         "time_format": await self.time_format(),
+                        "first_weekday": await self.first_weekday(),
                     }
                 )
                 return {"ok": True}
@@ -664,7 +704,7 @@ class Hub:
                 "ics_styles",
             ):
                 return {"ok": True, "result": await self.ics_op(identity, op, request)}
-            if op in ("notify_get", "notify_save", "notify_test"):
+            if op in ("notify_get", "notify_save", "notify_test", "shared_save"):
                 return {"ok": True, "result": await self.notify_op(identity, op, request)}
             if op == "weather":
                 # Read only, for everyone: the screen shows the weather to guests too.
@@ -699,6 +739,8 @@ class Hub:
             return await self.notify_settings(identity)
         if op == "notify_save":
             return await self.save_notify(identity, request)
+        if op == "shared_save":
+            return await self.save_shared(identity, request)
         return await self.notify_test(identity, request)
 
     async def notify_settings(self, identity: Identity) -> dict[str, Any]:
@@ -710,7 +752,10 @@ class Hub:
             "persons": [settings_of(p) for p in persons],
             "services": {
                 "phone": phone_services(await self.ha.call("get_services")),
-                "alexa": echo_speakers(await self.ha.call("config/entity_registry/list")),
+                "alexa": echo_speakers(
+                    await self.ha.call("config/entity_registry/list"),
+                    await self.ha.call("get_states"),
+                ),
             },
             "time_format": config.get("family", {}).get("time_format", "24h"),
         }
@@ -721,6 +766,16 @@ class Hub:
                 for u in users
                 if not u.get("system_generated")
             ]
+            result["shared_users"] = list(config.get("shared_users", []))
+        return result
+
+    async def save_shared(self, identity: Identity, request: dict[str, Any]) -> dict[str, Any]:
+        """Which Home Assistant users are shared screens. Only adults; the integration keeps
+        only users that are not linked to a person."""
+        if identity.role != ADULT:
+            raise PermissionError("shared_save")
+        users = [str(u) for u in request["users"]]
+        result: dict[str, Any] = await self.ha.call("family_hub/shared/save", users=users)
         return result
 
     async def save_notify(self, identity: Identity, request: dict[str, Any]) -> dict[str, Any]:
@@ -817,6 +872,11 @@ def _shift_fields(shift: dict[str, Any]) -> tuple[Any, Any, Any, Any]:
     return (shift.get("name"), shift.get("start"), shift.get("end"), shift.get("category"))
 
 
+def readable_name(entity_id: str) -> str:
+    """calendar.weekend_festivi_bw -> "Weekend Festivi Bw": a name for an id with no name."""
+    return entity_id.split(".", 1)[-1].replace("_", " ").title()
+
+
 def _owners(raw: dict[str, Any]) -> list[str]:
     return [p for p in str(raw.get("person_ids", "")).split(",") if p]
 
@@ -845,13 +905,16 @@ async def _ws_handler(request: web.Request) -> web.WebSocketResponse:
     user_id = _user_of(request)
     hub.browsers[ws] = user_id
     identity = await hub.identity_for(user_id)
-    await ws.send_json({"type": "identity", **identity.as_dict()})
+    await ws.send_json(
+        {"type": "identity", **identity.as_dict(), "user_name": await hub.user_name(user_id)}
+    )
     await ws.send_json({"type": "connection", "connected": hub.ha.connected})
     await ws.send_json(
         {
             "type": "theme",
             "theme": await hub.theme(),
             "time_format": await hub.time_format(),
+            "first_weekday": await hub.first_weekday(),
         }
     )
     try:

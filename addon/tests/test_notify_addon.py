@@ -23,7 +23,11 @@ def test_adult_reads_everyone_child_only_self_guest_nothing() -> None:
             adult = await connect(client, ADULT_USER)
             result = (await request(adult, {"id": 1, "op": "notify_get"}))["result"]
             assert {p["id"] for p in result["persons"]} == {"sofia", "mamma", "ospite"}
-            assert result["services"]["phone"] == ["mobile_app_mamma", "mobile_app_sofia"]
+            assert [s["name"] for s in result["services"]["phone"]] == [
+                "mobile_app_mamma",
+                "mobile_app_sofia",
+            ]
+            assert [s["label"] for s in result["services"]["phone"]] == ["Mamma", "Sofia"]
             assert [s["entity_id"] for s in result["services"]["alexa"]] == [
                 "media_player.kueche",
                 "media_player.wohnzimmer",
