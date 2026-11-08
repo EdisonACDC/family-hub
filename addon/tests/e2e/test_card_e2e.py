@@ -31,7 +31,7 @@ def _today() -> str:
 
 def _open(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
 
 
 def _seed_mamma_event(stack: Stack, summary: str = "Visita dentista") -> None:

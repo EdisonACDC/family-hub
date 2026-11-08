@@ -63,6 +63,7 @@ def settings_of(person: dict[str, Any]) -> dict[str, Any]:
         "phone_notify": person.get("phone_notify") or "",
         "alexa_notify": person.get("alexa_notify") or "",
         "alexa_volume": person.get("alexa_volume"),
+        "phone_sound": person.get("phone_sound") or "important",
         "channels": list(person.get("channels", PERSON_CHANNELS)),
         "quiet_start": person.get("quiet_start") or "",
         "quiet_end": person.get("quiet_end") or "",

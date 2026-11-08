@@ -40,8 +40,11 @@ def _block_offset(page: Page, key: str) -> float:
 
 def _open_month(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
-    page.locator("#view-switch [data-view='month']").click()
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
+    phone = (page.viewport_size or {}).get("width", 1024) < 600
+    page.locator(
+        "#tabbar [data-tab='month']" if phone else "#view-switch [data-view='month']"
+    ).click()
     expect(page.locator("#month-scroll")).to_be_visible(timeout=5000)
 
 
@@ -132,7 +135,7 @@ def test_swiping_the_week_goes_to_the_next_and_previous_week(
     stack_full: Stack, tablet: Page
 ) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     today = date.today()
     first = tablet.locator("#week .day").first
     expect(first).to_have_attribute("aria-label", today.isoformat(), timeout=5000)
@@ -158,7 +161,7 @@ def test_swiping_on_the_phone_moves_one_day(stack_full: Stack, browser: Browser)
     page = context.new_page()
     try:
         page.goto(stack_full.url + "/?lang=it")
-        expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         first = page.locator("#week .day").first
         today = date.today()
         expect(first).to_have_attribute("aria-label", today.isoformat(), timeout=5000)
@@ -197,7 +200,7 @@ def test_list_view_shows_the_year_by_month_and_day_with_filters(
 ) -> None:
     with _list_events(stack_full):
         tablet.goto(stack_full.url + "/?lang=it")
-        expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         tablet.locator("#view-switch [data-view='list']").click()
         body = tablet.locator("#list-scroll")
         expect(body.locator(".list-row", has_text="Lista Mamma")).to_be_visible(timeout=5000)
@@ -212,14 +215,14 @@ def test_list_view_shows_the_year_by_month_and_day_with_filters(
         expect(tablet.locator("#list-scroll .list-row", has_text="Organico")).to_be_visible()
         _shot(tablet, "tablet_list_view")
         # The person filter, as in the month view.
-        tablet.locator("#month-person").select_option("sofia")
+        tablet.locator("#persons-bar [data-person='sofia']").click()
         expect(tablet.locator("#list-scroll .list-row", has_text="Lista Mamma")).to_have_count(0)
         sofia = tablet.locator("#list-scroll .list-row", has_text="Lista Sofia")
         expect(sofia).to_be_visible()
         sofia.click()
         expect(tablet.locator("#card-body .card-title")).to_have_text("Lista Sofia")
         tablet.locator("#card-foot").get_by_role("button", name="Chiudi").click()
-        tablet.locator("#month-person").select_option("")
+        tablet.locator("#persons-bar [data-person='']").click()
         tablet.locator("#view-switch [data-view='week']").click()
 
 
@@ -230,14 +233,14 @@ def test_list_and_month_on_the_phone(stack_full: Stack, browser: Browser) -> Non
     try:
         with _list_events(stack_full):
             page.goto(stack_full.url + "/?lang=it")
-            expect(page.locator(".chip").first).to_be_visible(timeout=5000)
-            page.locator("#view-switch [data-view='list']").click()
+            expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
+            page.locator("#tabbar [data-tab='list']").click()
             expect(page.locator("#list-scroll .list-row", has_text="Lista Mamma")).to_be_visible(
                 timeout=5000
             )
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             _shot(page, "phone_list_view")
-            page.locator("#view-switch [data-view='month']").click()
+            page.locator("#tabbar [data-tab='month']").click()
             expect(page.locator(".week.month.compact #month-scroll")).to_be_visible()
             # The months scroll inside their area, which opens on this month.
             now_key = _month_key(date.today())
@@ -255,7 +258,7 @@ def test_list_and_month_on_the_phone(stack_full: Stack, browser: Browser) -> Non
             assert all(names), names
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             _shot(page, "phone_month_scroll")
-            page.locator("#view-switch [data-view='week']").click()
+            page.locator("#tabbar [data-tab='week']").click()
     finally:
         context.close()
 
@@ -302,18 +305,18 @@ def test_the_first_row_of_the_month_is_never_under_its_title(
             "month-block loaded", timeout=5000
         )
         _first_row_visible(phone, now_key)
-        phone.locator("#view-switch [data-view='week']").click()
+        phone.locator("#tabbar [data-tab='week']").click()
     finally:
         context.close()
 
 
 def test_the_list_takes_the_whole_width_on_the_pc(stack_full: Stack, browser: Browser) -> None:
-    context = browser.new_context(viewport={"width": 1366, "height": 900})
+    context = browser.new_context(viewport={"width": 1600, "height": 900})
     context.set_extra_http_headers({"X-Remote-User-Id": ADULT_USER})
     page = context.new_page()
     try:
         page.goto(stack_full.url + "/?lang=it")
-        expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         expect(page.locator("#upcoming")).to_be_visible(timeout=5000)
         page.locator("#view-switch [data-view='list']").click()
         expect(page.locator("#list-scroll")).to_be_visible(timeout=5000)
@@ -335,21 +338,21 @@ def test_the_view_names_fit_on_the_phone_with_a_wider_font(
         page = context.new_page()
         try:
             page.goto(stack_full.url + "/?lang=it")
-            expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+            expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
             # A font wider than the usual one (as some Android phones have).
             page.add_style_tag(
                 content="body, button { font-family: 'Courier New', monospace !important;"
                 " letter-spacing: 0.06em !important; }"
             )
-            fits = page.locator("#view-switch .segment").evaluate_all(
-                "bs => bs.map(b => b.scrollWidth <= b.clientWidth + 1)"
+            fits = page.locator("#tabbar .tab-label").evaluate_all(
+                "bs => bs.map(b => b.scrollWidth <= b.parentElement.clientWidth + 1)"
             )
             assert all(fits), fits
-            for selector in ("#view-switch", "#next-week", "#this-week"):
+            for selector in ("#tabbar", "#menu-btn", "#period-title"):
                 box = page.locator(selector).bounding_box()
                 assert box and box["x"] + box["width"] <= width + 1, (selector, box)
             bar = page.locator(".topbar").bounding_box()
-            assert bar and bar["height"] <= height * 0.36, bar
+            assert bar and bar["height"] <= 56, bar
             _shot(page, f"phone_views_wide_font_{width}")
         finally:
             context.close()

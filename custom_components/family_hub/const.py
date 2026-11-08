@@ -102,6 +102,11 @@ CONF_HA_USER: Final = "ha_user_id"
 # Per-person notification settings (the "Avvisi" page): channels that reach the person, the
 # announce volume on Echo speakers (0-100, optional), and the services the person may use.
 CONF_ALEXA_VOLUME: Final = "alexa_volume"
+# How a reminder sounds on the phone: normal, important (time sensitive, the default) or
+# critical (through Full immersion / Do not disturb; iPhone needs the critical alerts permission).
+CONF_PHONE_SOUND: Final = "phone_sound"
+PHONE_SOUNDS: Final[list[str]] = ["normal", "important", "critical"]
+DEFAULT_PHONE_SOUND: Final = "important"
 CONF_CHANNELS: Final = "channels"
 PERSON_CHANNELS: Final[list[str]] = ["phone", "alexa", "tablet"]
 # alexa_notify is one Echo service, or ALEXA_ALL for every Echo that Home Assistant knows.
@@ -117,6 +122,7 @@ ATTR_ALL_DAY_REMINDER: Final = "all_day_reminder"
 ATTR_CHANNELS: Final = "channels"
 ATTR_ALEXA_TARGET: Final = "alexa_target"
 ATTR_ALEXA_VOLUME: Final = "alexa_volume"
+ATTR_PHONE_SOUND: Final = "phone_sound"
 EVENT_CHANNELS: Final[list[str]] = ["phone", "alexa", "tablet"]
 
 # Entry options: reminder settings, read by reminders.py.

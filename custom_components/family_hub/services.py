@@ -27,6 +27,7 @@ from .const import (
     ATTR_LOCATION,
     ATTR_MINUTES,
     ATTR_PERSONS,
+    ATTR_PHONE_SOUND,
     ATTR_REMINDER_OFFSETS,
     ATTR_SHIFT_ID,
     ATTR_START,
@@ -35,6 +36,7 @@ from .const import (
     DOMAIN,
     EVENT_CHANNELS,
     OPT_PERSONS,
+    PHONE_SOUNDS,
     SERVICE_ADD_EVENT,
     SERVICE_DELETE_EVENT,
     SERVICE_MOVE_EVENT,
@@ -79,6 +81,7 @@ NOTIFY_FIELDS = {
     vol.Optional(ATTR_CHANNELS): CHANNELS,
     vol.Optional(ATTR_ALEXA_TARGET): ALEXA_TARGET,
     vol.Optional(ATTR_ALEXA_VOLUME): ALEXA_VOLUME,
+    vol.Optional(ATTR_PHONE_SOUND): vol.Any(None, vol.In(PHONE_SOUNDS)),
 }
 
 
@@ -94,6 +97,7 @@ def _notify_of(data: dict[str, Any]) -> dict[str, Any] | None:
         "channels": [c for c in EVENT_CHANNELS if c in channels],
         "alexa_target": target,
         "alexa_volume": data.get(ATTR_ALEXA_VOLUME),
+        "phone_sound": data.get(ATTR_PHONE_SOUND) or None,
     }
 
 

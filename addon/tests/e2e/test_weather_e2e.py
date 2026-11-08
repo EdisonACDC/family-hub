@@ -48,10 +48,11 @@ def test_day_columns_show_high_and_low_where_there_is_a_forecast(
 def test_phone_shows_today_and_tomorrow_weather(stack_full: Stack, browser: Browser) -> None:
     with _phone(browser) as page:
         page.goto(stack_full.url + "/?lang=it")
-        expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         today = date.today().isoformat()
         expect(page.locator(f".day[aria-label='{today}'] .day-weather")).to_be_visible(timeout=5000)
-        expect(page.locator(".week.agenda .day-weather")).to_have_count(2)
+        # Every day of Giorni with a forecast shows it (the fake has five days).
+        expect(page.locator(".week.agenda .day-weather")).to_have_count(5)
 
 
 def test_guests_see_the_weather_too(stack_full: Stack, browser: Browser) -> None:

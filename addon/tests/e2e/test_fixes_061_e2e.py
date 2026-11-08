@@ -20,7 +20,7 @@ def _seed(stack: Stack) -> None:
 
 def _open(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
 
 
 def test_new_event_title_is_translated(stack_full: Stack, tablet: Page) -> None:
@@ -70,19 +70,13 @@ def test_time_picker_has_its_title_and_buttons_below_the_columns(
     assert cancel["y"] >= columns_bottom - 1, "Annulla must sit below the columns"
 
 
-def test_altri_calendari_chip_is_readable_not_faded(stack_full: Stack, tablet: Page) -> None:
+def test_calendars_button_is_readable_and_opens_the_panel(stack_full: Stack, tablet: Page) -> None:
+    """0.7.0: "Altri calendari" became "Calendari ▾" (all calendars in one panel)."""
     _open(tablet, stack_full)
-    toggle = tablet.locator(".more-toggle")
-    expect(toggle).to_be_visible()
-    style = toggle.evaluate(
-        "e => ({opacity: getComputedStyle(e).opacity, color: getComputedStyle(e).color})"
-    )
-    assert style["opacity"] == "1"
-    channels = [int(v) for v in style["color"][style["color"].index("(") + 1 : -1].split(",")[:3]]
-    # WCAG contrast of the text against the light pill (about white).
-    lum = 0.0
-    for value, weight in zip(channels, (0.2126, 0.7152, 0.0722), strict=True):
-        c = value / 255
-        lum += weight * (c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
-    contrast = 1.05 / (lum + 0.05)
-    assert contrast >= 4.5, f"contrast {contrast:.2f} is below 4.5:1"
+    button = tablet.locator("#calendars-btn")
+    expect(button).to_be_visible()
+    assert button.evaluate("e => getComputedStyle(e).opacity") == "1"
+    expect(button).to_contain_text("Calendari")
+    button.click()
+    expect(tablet.locator("#filters")).to_be_visible()
+    expect(tablet.locator("#filters .cal-switch")).to_have_count(3)

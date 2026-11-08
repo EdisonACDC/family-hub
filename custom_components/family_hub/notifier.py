@@ -13,8 +13,15 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_call_later
+from homeassistant.util import slugify
 
-from .const import ECHO_RESTORE_SECONDS, EVENT_REMINDER, EVENT_REMINDER_CLOSED, PERSON_CHANNELS
+from .const import (
+    DEFAULT_PHONE_SOUND,
+    ECHO_RESTORE_SECONDS,
+    EVENT_REMINDER,
+    EVENT_REMINDER_CLOSED,
+    PERSON_CHANNELS,
+)
 from .notify_settings import alexa_targets
 
 LOGGER = logging.getLogger(__name__)
@@ -91,6 +98,8 @@ class Target:
     channels: frozenset[str] = frozenset(PERSON_CHANNELS)
     # Announce volume on Echo speakers, 0-100, or None for the speaker's own level.
     alexa_volume: int | None = None
+    # How the reminder sounds on the phone (see CONF_PHONE_SOUND).
+    phone_sound: str = DEFAULT_PHONE_SOUND
 
 
 @dataclass(frozen=True)
@@ -162,6 +171,52 @@ async def announce_on_echos(
         async_call_later(hass, ECHO_RESTORE_SECONDS, _restore)
 
 
+ANDROID_CHANNEL = "Promemoria Family Hub"
+ANDROID_CHANNEL_URGENT = "Promemoria Family Hub urgenti"
+
+
+def phone_os(hass: HomeAssistant, service: str) -> str | None:
+    """ "ios" or "android" for a notify.mobile_app_<device> service, from the Companion app's
+    registration; None when it cannot be told."""
+    for entry in hass.config_entries.async_entries("mobile_app"):
+        name = str(entry.data.get("device_name") or entry.title or "")
+        if service != f"mobile_app_{slugify(name)}":
+            continue
+        os_name = str(entry.data.get("os_name") or "").lower()
+        if "ios" in os_name or "ipados" in os_name or "iphone" in os_name:
+            return "ios"
+        if "android" in os_name:
+            return "android"
+    return None
+
+
+def sound_data(level: str, os_name: str | None) -> dict[str, Any]:
+    """The notification data that makes a reminder ring: time sensitive ("important") or
+    critical. Unknown phones get both the iOS and the Android keys (each ignores the other's)."""
+    if level not in ("important", "critical"):
+        return {}
+    critical = level == "critical"
+    data: dict[str, Any] = {}
+    if os_name in (None, "ios"):
+        data["push"] = (
+            {"sound": {"name": "default", "critical": 1, "volume": 1.0}}
+            if critical
+            else {"sound": "default", "interruption-level": "time-sensitive"}
+        )
+    if os_name in (None, "android"):
+        data.update(
+            {
+                "priority": "high",
+                "ttl": 0,
+                "importance": "high",
+                "channel": ANDROID_CHANNEL_URGENT if critical else ANDROID_CHANNEL,
+            }
+        )
+        if critical:
+            data["media_stream"] = "alarm_stream"
+    return data
+
+
 async def async_send(hass: HomeAssistant, delivery: Delivery) -> None:
     """Send on every enabled channel, to the people who accept that channel."""
     seen: set[str] = set()  # one message per service or speaker, even if shared
@@ -174,6 +229,7 @@ async def async_send(hass: HomeAssistant, delivery: Delivery) -> None:
                 data: dict[str, Any] = {"tag": delivery.notification_id}
                 if delivery.actions:
                     data["actions"] = delivery.actions
+                data.update(sound_data(target.phone_sound, phone_os(hass, target.phone_notify)))
                 await _call(
                     hass,
                     "notify",

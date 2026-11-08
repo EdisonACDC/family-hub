@@ -26,7 +26,7 @@ def _phone(browser: Browser, user: str = ADULT_USER) -> Iterator[Page]:
 
 def _open_notify(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     page.locator("#menu-btn").click()
     page.locator("#menu-notify").click()
     expect(page.locator("#notify-overlay")).to_be_visible()
@@ -93,7 +93,7 @@ def test_child_sees_only_their_own_card(stack_full: Stack, browser: Browser) -> 
 def test_guest_has_no_notifications_entry(stack_full: Stack, browser: Browser) -> None:
     with tablet_as(browser, GUEST_USER) as page:
         page.goto(stack_full.url + "/?lang=it")
-        expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         expect(page.locator("#menu-btn")).to_be_hidden()
 
 
@@ -128,7 +128,7 @@ def test_event_form_shows_times_in_the_family_clock_and_dates_as_day_first(
     family["time_format"] = "12h"
     try:
         tablet.goto(stack_full.url + "/?lang=it")
-        expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         tablet.locator("#add-btn").click()
         expect(tablet.locator("input[name='start_time']")).to_have_value("09:00 AM")
         expect(tablet.locator("input[name='end_time']")).to_have_value("10:00 AM")
@@ -220,7 +220,7 @@ def test_event_form_fields_stay_inside_the_dialog_on_the_phone(
 ) -> None:
     with _phone(browser) as page:
         page.goto(stack_full.url + "/?lang=it")
-        expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         page.locator("#add-btn").click()
         dialog = page.locator("#event-form").bounding_box()
         for name in ("date", "start_time", "end_time"):
@@ -245,7 +245,7 @@ def test_switch_rows_are_ios_switches_and_clicking_the_row_toggles(
 
 def test_all_day_is_one_switch_row_in_the_event_form(stack_full: Stack, tablet: Page) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     tablet.locator("#add-btn").click()
     row = tablet.locator("#event-form .check")
     expect(row).to_be_visible()
@@ -298,7 +298,7 @@ def test_events_stay_in_order_after_a_new_one_at_14_00(stack_full: Stack, browse
         titles = page.locator(".week.agenda .day").first.locator(".ev-title").all_text_contents()
         assert titles == expected
 
-    with _viewport(browser, 1280, 800) as page:
+    with _viewport(browser, 1600, 900) as page:
         page.goto(stack_full.url + "/?lang=it")
         expect(page.locator(".upcoming .event", has_text="Gita a Würzburg")).to_be_visible(
             timeout=5000
@@ -309,7 +309,7 @@ def test_events_stay_in_order_after_a_new_one_at_14_00(stack_full: Stack, browse
 
 def test_all_day_switch_sits_at_the_right_end_of_its_row(stack_full: Stack, tablet: Page) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     tablet.locator("#add-btn").click()
     row = tablet.locator("#event-form .check").bounding_box()
     switch = tablet.locator("#event-form .check input").bounding_box()
@@ -320,7 +320,7 @@ def test_reduce_transparency_is_a_row_with_the_switch_on_the_right(
     stack_full: Stack, tablet: Page
 ) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     tablet.locator("#menu-btn").click()
     row = tablet.locator("#menu .switch-row").first
     text = row.locator("span").bounding_box()

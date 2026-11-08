@@ -69,34 +69,49 @@ def test_week_view_loads_fast_and_fits_the_tablet(stack_full: Stack, tablet: Pag
     fits = tablet.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert fits
 
-    # Every button and filter chip is at least 48 px high (WCAG touch target guidance).
+    # Every button of the top bar and of the days is at least 44 px high; the second row's
+    # chips (persons, Calendari, pickups) fit its 40 px.
     heights = tablet.evaluate(
-        "[...document.querySelectorAll('button, .chip, a.btn')]"
+        "[...document.querySelectorAll('button, a.btn')]"
+        ".filter(e => e.offsetParent !== null && !e.closest('#subbar'))"
+        ".map(e => e.getBoundingClientRect().height)"
+    )
+    assert heights and min(heights) >= 44, heights
+    small = tablet.evaluate(
+        "[...document.querySelectorAll('#subbar button')]"
         ".filter(e => e.offsetParent !== null).map(e => e.getBoundingClientRect().height)"
     )
-    assert heights and min(heights) >= 48, heights
+    assert small and min(small) >= 32, small
 
-    # The add button is a large round target in the corner.
-    fab = tablet.locator("#add-btn").bounding_box()
-    assert fab is not None and fab["width"] >= 72 and fab["height"] >= 72
+    # "+ Nuovo" is in the top bar (44 px), not a round button over the days.
+    add = tablet.locator("#add-btn").bounding_box()
+    top = tablet.locator("#topbar").bounding_box()
+    assert (
+        add and top and add["height"] >= 44 and add["y"] + add["height"] <= top["y"] + top["height"]
+    )
 
     _shot(tablet, "tablet_week")
 
 
 def test_calendar_filter_hides_and_shows_a_calendar(stack_full: Stack, tablet: Page) -> None:
+    """ "Calendari ▾" opens a panel with a switch per calendar; off hides its events."""
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip")).to_have_count(3)
-    school_chip = tablet.locator(".chip", has_text="Scuola")
-    assert school_chip.get_attribute("aria-pressed") == "true"
-    school_chip.click()
-    assert school_chip.get_attribute("aria-pressed") == "false"
-    school_chip.click()
-    assert school_chip.get_attribute("aria-pressed") == "true"
+    expect(tablet.locator("#filters .cal-switch")).to_have_count(3, timeout=5000)
+    tablet.locator("#calendars-btn").click()
+    school = tablet.locator("#filters .cal-switch", has_text="Scuola")
+    expect(school).to_be_visible()
+    switch = school.locator("input")
+    expect(switch).to_be_checked()
+    school.click()
+    expect(switch).not_to_be_checked()
+    expect(tablet.locator("#calendars-btn")).to_contain_text("2/3")
+    school.click()
+    expect(switch).to_be_checked()
 
 
 def test_external_change_appears_within_a_second(stack_full: Stack, tablet: Page) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip")).to_have_count(3)
+    expect(tablet.locator("#filters .cal-switch")).to_have_count(3, timeout=5000)
     today = date.today()
     started = time.perf_counter()
     stack_full.run(
@@ -112,7 +127,7 @@ def test_external_change_appears_within_a_second(stack_full: Stack, tablet: Page
 
 def test_new_event_form_sends_add_event(stack_full: Stack, tablet: Page) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip")).to_have_count(3)
+    expect(tablet.locator("#filters .cal-switch")).to_have_count(3, timeout=5000)
     tablet.locator("#add-btn").click()
     dialog = tablet.locator("#event-form")
     expect(dialog).to_be_visible()
@@ -136,7 +151,7 @@ def test_new_event_form_sends_add_event(stack_full: Stack, tablet: Page) -> None
 
 def test_reminder_popup_snooze_sends_action(stack_full: Stack, tablet: Page) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip")).to_have_count(3)
+    expect(tablet.locator("#filters .cal-switch")).to_have_count(3, timeout=5000)
     _push(
         stack_full,
         "family_hub_reminder",
@@ -155,7 +170,7 @@ def test_reminder_popup_snooze_sends_action(stack_full: Stack, tablet: Page) -> 
 
 def test_done_stops_the_reminder(stack_full: Stack, tablet: Page) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip")).to_have_count(3)
+    expect(tablet.locator("#filters .cal-switch")).to_have_count(3, timeout=5000)
     _push(
         stack_full, "family_hub_reminder", {"uid": "rem-2", "title": "Promemoria", "message": "x"}
     )
@@ -168,7 +183,7 @@ def test_done_stops_the_reminder(stack_full: Stack, tablet: Page) -> None:
 
 def test_reminder_closes_when_closed_elsewhere(stack_full: Stack, tablet: Page) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip")).to_have_count(3)
+    expect(tablet.locator("#filters .cal-switch")).to_have_count(3, timeout=5000)
     _push(
         stack_full, "family_hub_reminder", {"uid": "rem-3", "title": "Promemoria", "message": "y"}
     )
@@ -233,14 +248,14 @@ def test_adult_completes_the_guide_and_the_data_is_saved(
     assert saved["reminders"]["snooze_minutes"] == 15
     assert saved["screen"]["theme"] == "dark"
     # The new calendar appears on the tablet without a reload.
-    expect(tablet.locator(".chip", has_text="Sport")).to_be_visible(timeout=6000)
+    expect(tablet.locator("#filters .cal-switch", has_text="Sport")).to_have_count(1, timeout=6000)
     expect(tablet.locator("#wizard-overlay")).to_be_hidden()
 
 
 def test_guide_stays_closed_once_configured(stack_full: Stack, admin_tablet: Page) -> None:
     tablet = admin_tablet
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     expect(tablet.locator("#wizard-overlay")).to_be_hidden()
 
 
@@ -260,7 +275,7 @@ def test_child_cannot_open_or_save_the_guide(stack_full: Stack, browser: Browser
     before = len(stack_full.fake.saved_configs)
     with tablet_as(browser, CHILD_USER) as page:
         page.goto(stack_full.url + "/?lang=it")
-        expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         expect(page.locator("#wizard-start")).to_be_hidden()
         expect(page.locator("#wizard-overlay")).to_be_hidden()
         # Even from the page's own script the server refuses the save.
@@ -291,7 +306,7 @@ def test_week_fills_the_height_of_the_tablet(stack_full: Stack, tablet: Page) ->
 def test_guest_reads_but_cannot_add(stack_full: Stack, browser: Browser) -> None:
     with tablet_as(browser, GUEST_USER) as page:
         page.goto(stack_full.url + "/?lang=it")
-        expect(page.locator(".chip")).to_have_count(3)
+        expect(page.locator("#filters .cal-switch")).to_have_count(3, timeout=5000)
         expect(page.locator(".event", has_text="Dentista Sofia")).to_be_visible(timeout=5000)
         expect(page.locator("#add-btn")).to_be_hidden()
 
@@ -345,12 +360,13 @@ def test_phone_shows_today_and_tomorrow_as_an_agenda(stack_full: Stack, browser:
     with _device(browser, 390, 844) as page:
         page.goto(stack_full.url + "/?lang=it")
         expect(page.locator(".week.agenda")).to_be_visible(timeout=5000)
-        expect(page.locator(".week.agenda .day")).to_have_count(2)
+        # Today and the next 13 days, one under the other.
+        expect(page.locator(".week.agenda .day")).to_have_count(14)
         expect(page.locator(".event", has_text="Agenda oggi")).to_be_visible()
         expect(page.locator(".event", has_text="Agenda domani")).to_be_visible()
         expect(page.locator("#add-btn")).to_be_visible()
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-        assert page.locator("#add-btn").bounding_box()["width"] >= 64
+        assert page.locator("#add-btn").bounding_box()["width"] >= 56 - 1
 
 
 def test_pc_shows_the_next_fourteen_days_beside_the_week(
@@ -362,7 +378,8 @@ def test_pc_shows_the_next_fourteen_days_beside_the_week(
             FAMILY, "Riunione PC", _local_iso(today, 16), _local_iso(today, 17), "mamma"
         )
     )
-    with _device(browser, 1280, 800) as page:
+    # The next 14 days beside the calendar only from 1400 px.
+    with _device(browser, 1600, 900) as page:
         page.goto(stack_full.url + "/?lang=it")
         expect(page.locator("#upcoming")).to_be_visible(timeout=5000)
         expect(page.locator("#upcoming .event", has_text="Riunione PC")).to_be_visible()
@@ -394,7 +411,7 @@ def test_save_error_is_shown_in_the_guide_language(stack_empty: Stack, admin_tab
 
 def _open_lists(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     page.locator("#todo-btn").click()
     expect(page.locator("#todo-overlay")).to_be_visible()
 
@@ -440,8 +457,9 @@ def test_external_waste_calendar_is_shown_read_only(stack_full: Stack, tablet: P
     expect(tablet.locator(".event.external", has_text="Ritiro indifferenziato")).to_be_visible(
         timeout=5000
     )
-    tablet.locator(".more-toggle").click()
-    expect(tablet.locator(".more-calendars", has_text="Rifiuti")).to_be_visible()
+    tablet.locator("#calendars-btn").click()
+    expect(tablet.locator("#filters .cal-switch", has_text="Rifiuti")).to_be_visible()
+    tablet.locator("#calendars-btn").click()
     # Clicking an external event does not open anything to change it.
     tablet.locator(".event.external", has_text="Ritiro indifferenziato").click()
     expect(tablet.locator("#event-overlay")).to_be_hidden()
@@ -463,11 +481,20 @@ def test_phone_steps_between_days_and_offers_the_guide_in_a_menu(
     with _device(browser, 390, 844) as page:
         page.goto(stack_full.url + "/?lang=it")
         expect(page.locator(".week.agenda")).to_be_visible(timeout=5000)
-        expect(page.locator(".event", has_text="Dopodomani")).to_have_count(0)
-        page.locator("#next-week").click()
+        # Giorni lists today and the next 13 days; a swipe moves one day, the title goes back.
         expect(page.locator(".event", has_text="Dopodomani")).to_be_visible(timeout=3000)
-        page.locator("#this-week").click()
-        expect(page.locator(".event", has_text="Dopodomani")).to_have_count(0, timeout=3000)
+        first = page.locator("#week .day").first
+        page.evaluate(
+            """() => {
+              const w = document.getElementById('week');
+              const o = (x) => ({ clientX: x, clientY: 500, pointerType: 'touch', bubbles: true });
+              w.dispatchEvent(new PointerEvent('pointerdown', o(330)));
+              w.dispatchEvent(new PointerEvent('pointerup', o(40)));
+            }"""
+        )
+        expect(first).to_have_attribute("aria-label", (today + timedelta(days=1)).isoformat())
+        page.locator("#period-title").click()
+        expect(first).to_have_attribute("aria-label", today.isoformat())
         page.locator("#menu-btn").click()
         expect(page.locator("#menu-wizard")).to_be_visible()
         page.locator("#menu-wizard").click()
@@ -479,8 +506,9 @@ def test_sources_step_saves_the_chosen_lists(stack_full: Stack, tablet: Page) ->
     original = list(stack_full.fake.config["sources"]["todo"])
     try:
         tablet.goto(stack_full.url + "/?lang=it")
-        expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
-        tablet.locator("#wizard-start").click()
+        expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
+        tablet.locator("#menu-btn").click()
+        tablet.locator("#menu-wizard").click()
         expect(tablet.locator("#wizard-overlay")).to_be_visible()
         for _ in range(4):
             tablet.locator("#wizard-next").click()
@@ -499,7 +527,7 @@ def test_sources_step_saves_the_chosen_lists(stack_full: Stack, tablet: Page) ->
 
 def _open_shifts(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     page.locator("#menu-btn").click()
     page.locator("#menu-shifts").click()
     expect(page.locator("#shifts-overlay")).to_be_visible()
@@ -609,7 +637,7 @@ def test_child_sees_only_own_shifts(stack_full: Stack, browser: Browser) -> None
 def test_guest_has_no_shifts_entry(stack_full: Stack, browser: Browser) -> None:
     with tablet_as(browser, GUEST_USER) as page:
         page.goto(stack_full.url + "/?lang=it")
-        expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         expect(page.locator("#menu-btn")).to_be_hidden()
 
 

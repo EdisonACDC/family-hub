@@ -15,7 +15,7 @@ CSS = Path(__file__).resolve().parents[2] / "app" / "static" / "app.css"
 
 def test_dialog_scrollbar_is_thin(stack_full: Stack, tablet: Page) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     tablet.locator("#menu-btn").click()
     tablet.locator("#menu-notify").click()
     expect(tablet.locator("#notify-overlay .dialog")).to_be_visible()
@@ -24,7 +24,7 @@ def test_dialog_scrollbar_is_thin(stack_full: Stack, tablet: Page) -> None:
 
 def test_reduce_transparency_makes_the_scrollbar_grey(stack_full: Stack, tablet: Page) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     tablet.locator("#menu-btn").click()
     tablet.locator("#menu .switch-row").first.click()
     expect(tablet.locator("body")).to_have_class("reduce-transparency")

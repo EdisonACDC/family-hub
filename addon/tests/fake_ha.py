@@ -18,9 +18,15 @@ TOKEN = "test-token"
 
 # Who is who in the fake family. ``ha_user_id`` links a Home Assistant user to a person.
 PERSONS = [
-    {"id": "sofia", "name": "Sofia", "role": "child", "ha_user_id": "u-sofia"},
-    {"id": "mamma", "name": "Mamma", "role": "adult", "ha_user_id": "u-mamma"},
-    {"id": "ospite", "name": "Ospite", "role": "guest", "ha_user_id": "u-guest"},
+    {"id": "sofia", "name": "Sofia", "role": "child", "ha_user_id": "u-sofia", "color": "#E91E63"},
+    {"id": "mamma", "name": "Mamma", "role": "adult", "ha_user_id": "u-mamma", "color": "#2563EB"},
+    {
+        "id": "ospite",
+        "name": "Ospite",
+        "role": "guest",
+        "ha_user_id": "u-guest",
+        "color": "#607D8B",
+    },
 ]
 
 FAMILY = "calendar.family_hub_famiglia"
@@ -50,6 +56,7 @@ def notify_text(data: dict[str, Any]) -> str:
             ",".join(channels),
             str(data.get("alexa_target") or ""),
             "" if volume is None else str(volume),
+            str(data.get("phone_sound") or ""),
         ]
     )
 
@@ -436,6 +443,7 @@ class FakeHA:
                 "phone_notify",
                 "alexa_notify",
                 "alexa_volume",
+                "phone_sound",
                 "channels",
                 "quiet_start",
                 "quiet_end",

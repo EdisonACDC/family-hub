@@ -1,5 +1,40 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.0
+
+Nuova impaginazione: il calendario ha almeno l'80% dello schermo.
+
+- Tablet e PC: una sola barra in alto di 64 px (ora e data piccole; Settimana | Mese | Elenco,
+  ← Oggi → e il periodo mostrato; meteo compatto, Liste, ☰ Menu e "+ Nuovo"). La procedura guidata
+  è nel Menu. Sotto, una riga di 40 px: le persone a sinistra, "Calendari ▾" e i prossimi ritiri
+  (icone colorate con il giorno abbreviato) a destra; il meteo dei prossimi giorni va in questa riga
+  sotto i 1280 px.
+- Persone in primo piano: "Tutti · Mamma · Papà …" con il colore di ciascuno. Toccandone una si
+  filtrano Settimana, Mese, Elenco e la giornata (i suoi eventi e turni, e quelli della famiglia
+  senza persone); la scelta resta sullo schermo. Ogni evento mostra i pallini delle sue persone.
+  Il menu "Persona" di Mese ed Elenco non c'è più.
+- "Calendari ▾": un pannello con un interruttore per ogni calendario (Family Hub ed esterni), al
+  posto dei chip.
+- Settimana a tutta altezza; Mese con le settimane del mese intere nello schermo (le righe di ogni
+  giorno si adattano), poi scorrimento; "Prossimi 14 giorni" solo da 1400 px.
+- Nuovo evento: "+ Nuovo" nella barra in alto; un tocco sullo spazio libero di un giorno della
+  settimana apre il modulo con la data, uno spazio libero della giornata anche con l'ora.
+- Mese: ogni appuntamento (nel mese e nella giornata) apre la sua scheda (Modifica / Elimina /
+  Chiudi; sola lettura per esterni e turni); il tocco sul giorno apre la giornata; dopo una modifica
+  tutto si aggiorna e il mese resta dov'era.
+- Telefono, stile Calendario iPhone: una barra di una riga (ora e meteo; il periodo, che riporta a
+  oggi, e ☰), sotto i chip delle persone che scorrono, e in basso quattro schede: Giorni, Mese,
+  Elenco, Liste. Giorni: oggi e i 13 giorni dopo, con meteo e icone dei ritiri nell'intestazione,
+  righe grandi; lo scorrimento laterale cambia giorno. Mese: griglia compatta con puntini e sotto il
+  giorno scelto con appuntamenti e spazi liberi. Il + da 56 px sta sopra le schede e niente resta
+  coperto. Calendari, Prossimi ritiri, Procedura guidata, Avvisi e Turni sono nel Menu.
+- Suono dei promemoria sul telefono, per persona in Avvisi (Normale / Importante, predefinito /
+  Critico) e per evento in "Avvisa su". Importante: su iPhone suono e "time-sensitive"; su Android
+  priorità alta, ttl 0 e canale "Promemoria Family Hub". Critico: su iPhone avviso critico (serve
+  il permesso "Avvisi critici" per l'app Home Assistant); su Android canale "Promemoria Family Hub
+  urgenti" e alarm_stream. iPhone o Android si riconoscono dal dispositivo dell'app; se non si sa,
+  si mandano entrambi. Anche "Invia avviso di prova" usa il suono scelto.
+
 ## 0.6.5
 
 - Vista Mese a scorrimento continuo: i mesi uno sotto l'altro, da 3 mesi indietro a 12 avanti (altri

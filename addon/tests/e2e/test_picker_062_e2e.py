@@ -10,7 +10,7 @@ from tests.e2e.conftest import Stack
 
 def _open_picker_for(page: Page, stack: Stack, value: str) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     page.locator("#add-btn").click()
     start = page.locator("#event-form input[name='start_time']")
     start.fill(value)

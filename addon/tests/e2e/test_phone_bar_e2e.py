@@ -19,7 +19,7 @@ from tests.helpers import ADULT_USER
 # Every visible element that ends past the right edge, outside the rows that scroll sideways.
 OVERFLOW = """() => {
   const width = window.innerWidth;
-  const scrollers = ['.filters', '.pickups', '.week', '#menu'];
+  const scrollers = ['.filters', '.pickups', '.week', '#menu', '.persons-bar'];
   const out = [];
   for (const e of document.querySelectorAll('body *')) {
     if (scrollers.some(s => e.closest(s))) continue;
@@ -74,33 +74,24 @@ def test_the_phone_bar_stays_on_screen(
     try:
         with _phone(browser, width, height) as page:
             page.goto(stack_full.url + "/?lang=it")
-            expect(page.locator(".chip").first).to_be_visible(timeout=5000)
-            expect(page.locator("#weather-days .wx-day")).to_have_count(3, timeout=5000)
-            expect(page.locator("#pickups .pickup-chip")).to_have_count(3, timeout=5000)
-            for selector in (
-                "#next-week",
-                "#prev-week",
-                "#this-week",
-                "#weather-days",
-                "#menu-btn",
-            ):
+            expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
+            for selector in ("#menu-btn", "#period-title", "#tabbar", "#add-btn", "#persons-bar"):
                 box = page.locator(selector).bounding_box()
-                assert box and box["x"] >= 0 and box["x"] + box["width"] <= width + 1, (
+                assert box and box["x"] >= -1 and box["x"] + box["width"] <= width + 1, (
                     selector,
                     box,
                 )
             assert page.evaluate(OVERFLOW) == []
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             bar = page.locator(".topbar").bounding_box()
-            assert bar and bar["height"] <= height * 0.36, bar
-            # The calendar chips scroll sideways inside their row.
-            filters = page.locator(".filters")
-            assert filters.evaluate("e => getComputedStyle(e).overflowX") == "auto"
+            assert bar and bar["height"] <= 56, bar
+            # The persons' chips scroll sideways in their row under the bar.
+            persons = page.locator("#persons-bar")
+            assert persons.evaluate("e => getComputedStyle(e).overflowX") == "auto"
             _shot(page, f"phone_bar_{width}")
-            # Liste is in the menu.
+            # Liste is a tab at the bottom.
             expect(page.locator("#todo-btn")).to_be_hidden()
-            page.locator("#menu-btn").click()
-            page.locator("#menu-lists").click()
+            page.locator("#tabbar [data-tab='lists']").click()
             expect(page.locator("#todo-overlay")).to_be_visible()
     finally:
         _remove_rubbish_calendar(stack_full, key, "telefono")
@@ -108,7 +99,7 @@ def test_the_phone_bar_stays_on_screen(
 
 def test_the_event_form_offers_only_family_hub_calendars(stack_full: Stack, tablet: Page) -> None:
     tablet.goto(stack_full.url + "/?lang=it")
-    expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     tablet.locator("#add-btn").click()
     options = tablet.locator("#event-form select[name='category'] option")
     expect(options.first).to_be_attached()

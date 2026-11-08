@@ -41,6 +41,7 @@ def notify_text(notify: dict[str, Any] | None) -> str:
             ",".join(notify.get("channels", [])),
             str(notify.get("alexa_target") or ""),
             "" if volume is None else str(int(volume)),
+            str(notify.get("phone_sound") or ""),
         ]
     )
 
@@ -180,6 +181,7 @@ class FamilyHubCalendar(CalendarEntity):
                     "name": person.get("name", ""),
                     "role": person.get("role", "adult"),
                     "ha_user_id": person.get("ha_user_id"),
+                    "color": person.get("color") or "",
                 }
                 for person in self._persons
             ],

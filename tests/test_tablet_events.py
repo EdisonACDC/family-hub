@@ -133,7 +133,7 @@ async def test_calendar_state_lists_persons_with_roles_and_user_links(hass: Home
     state = hass.states.get(CAL)
     assert state is not None
     assert state.attributes["persons"] == [
-        {"id": "sofia", "name": "Sofia", "role": "child", "ha_user_id": None}
+        {"id": "sofia", "name": "Sofia", "role": "child", "ha_user_id": None, "color": "#FF8800"}
     ]
 
 

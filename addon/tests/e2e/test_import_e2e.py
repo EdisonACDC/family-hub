@@ -12,7 +12,7 @@ from tests.fake_ha import stored_event
 
 def _open_sources_step(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     page.locator("#menu-btn").click()
     page.locator("#menu-wizard").click()
     expect(page.locator("#wizard-overlay")).to_be_visible(timeout=3000)

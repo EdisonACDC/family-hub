@@ -8,37 +8,52 @@
   <link rel="stylesheet" href="static/app.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="clock" aria-live="off">
+  <!-- Tablet and PC: one top bar (time | views, <- Oggi ->, period | weather, Liste, Menu, + Nuovo)
+       and a second row (Calendari, next pickups). Phone: one short bar and tabs at the bottom. -->
+  <header class="topbar" id="topbar">
+    <div class="tb-left clock" aria-live="off">
       <span id="clock-time">--:--</span>
       <span id="clock-date"></span>
     </div>
-    <div class="weather-now" id="weather-now" hidden></div>
-    <div class="weather-days" id="weather-days" hidden></div>
-    <nav class="weeknav" aria-label="Settimana">
-      <div class="segmented view-switch" id="view-switch" role="group" aria-label="Vista">
-        <button type="button" class="segment" data-view="week" aria-pressed="true">Settimana</button>
-        <button type="button" class="segment" data-view="month" aria-pressed="false">Mese</button>
-        <button type="button" class="segment" data-view="list" aria-pressed="false">Elenco</button>
-      </div>
-      <button type="button" id="prev-week" class="btn btn-icon" aria-label="Settimana precedente">&larr;</button>
-      <button type="button" id="this-week" class="btn">Oggi</button>
-      <button type="button" id="next-week" class="btn btn-icon" aria-label="Settimana successiva">&rarr;</button>
-      <button type="button" id="wizard-start" class="btn">Procedura guidata</button>
-    </nav>
-    <div class="status" role="status">
-      <button type="button" id="todo-btn" class="btn">Liste</button>
-      <button type="button" id="menu-btn" class="btn" aria-haspopup="true" aria-expanded="false">Menu</button>
-      <span id="conn-dot" class="dot" aria-hidden="true"></span>
-      <span id="conn-text"></span>
+    <div class="tb-center">
+      <nav class="weeknav" aria-label="Settimana">
+        <div class="segmented view-switch" id="view-switch" role="group" aria-label="Vista">
+          <button type="button" class="segment" data-view="week" aria-pressed="true">Settimana</button>
+          <button type="button" class="segment" data-view="month" aria-pressed="false">Mese</button>
+          <button type="button" class="segment" data-view="list" aria-pressed="false">Elenco</button>
+        </div>
+        <button type="button" id="prev-week" class="btn btn-icon" aria-label="Settimana precedente">&larr;</button>
+        <button type="button" id="this-week" class="btn">Oggi</button>
+        <button type="button" id="next-week" class="btn btn-icon" aria-label="Settimana successiva">&rarr;</button>
+        <button type="button" id="wizard-start" class="btn" hidden>Procedura guidata</button>
+      </nav>
+      <button type="button" id="period-title" class="period-title"></button>
     </div>
-    <div class="pickups" id="pickups" hidden></div>
+    <div class="tb-right">
+      <div class="weather-now" id="weather-now" hidden></div>
+      <div class="weather-days" id="weather-days" hidden></div>
+      <div class="status" role="status">
+        <button type="button" id="todo-btn" class="btn">Liste</button>
+        <button type="button" id="menu-btn" class="btn" aria-haspopup="true" aria-expanded="false">Menu</button>
+        <span id="conn-dot" class="dot" aria-hidden="true"></span>
+        <span id="conn-text"></span>
+      </div>
+    </div>
   </header>
 
-  <section class="filters" id="filters" aria-label="Calendari"></section>
+  <div class="subbar" id="subbar">
+    <div class="persons-bar" id="persons-bar" role="group" aria-label="Persone"></div>
+    <button type="button" id="calendars-btn" class="btn subbar-btn" aria-expanded="false" aria-controls="filters">Calendari</button>
+    <div class="pickups" id="pickups" hidden></div>
+    <div class="weather-days weather-days-sub" id="weather-days-sub" hidden></div>
+  </div>
+
+  <section class="filters calendars-panel" id="filters" aria-label="Calendari" hidden></section>
 
   <div class="menu" id="menu" hidden>
     <button type="button" class="btn" id="menu-lists">Liste</button>
+    <button type="button" class="btn" id="menu-calendars">Calendari</button>
+    <button type="button" class="btn" id="menu-pickups">Prossimi ritiri</button>
     <button type="button" class="btn" id="menu-shifts">Turni</button>
     <button type="button" class="btn" id="menu-notify">Avvisi</button>
     <button type="button" class="btn" id="menu-ics" hidden>Calendari esterni</button>
@@ -54,7 +69,24 @@
     <aside class="upcoming" id="upcoming" aria-label="Prossimi eventi" hidden></aside>
   </div>
 
-  <button type="button" id="add-btn" class="fab" aria-label="Nuovo evento">+</button>
+  <button type="button" id="add-btn" class="fab" aria-label="Nuovo evento"><span class="add-plus" aria-hidden="true">+</span><span class="add-label">Nuovo</span></button>
+
+  <!-- Phone: the tabs at the bottom. -->
+  <nav class="tabbar" id="tabbar" aria-label="Viste">
+    <button type="button" class="tab" data-tab="week"><span class="tab-icon" aria-hidden="true"></span><span class="tab-label">Giorni</span></button>
+    <button type="button" class="tab" data-tab="month"><span class="tab-icon" aria-hidden="true"></span><span class="tab-label">Mese</span></button>
+    <button type="button" class="tab" data-tab="list"><span class="tab-icon" aria-hidden="true"></span><span class="tab-label">Elenco</span></button>
+    <button type="button" class="tab" data-tab="lists"><span class="tab-icon" aria-hidden="true"></span><span class="tab-label">Liste</span></button>
+  </nav>
+
+  <!-- Phone: the next pickups, from the menu. -->
+  <div class="overlay" id="pickups-overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pickups-title">
+      <h2 id="pickups-title">Prossimi ritiri</h2>
+      <div class="dialog-body pickups-list" id="pickups-list"></div>
+      <div class="dialog-foot actions"><button type="button" class="btn" id="pickups-close">Chiudi</button></div>
+    </div>
+  </div>
 
   <p id="empty-note" class="empty-note" hidden></p>
   <p id="status-note" class="status-note" role="status" hidden></p>

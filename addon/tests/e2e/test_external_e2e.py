@@ -17,7 +17,7 @@ ICS = (
 
 def _open(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     page.locator("#menu-btn").click()
     page.locator("#menu-ics").click()
     expect(page.locator("#ics-overlay")).to_be_visible()
@@ -86,7 +86,7 @@ def test_refresh_button_on_a_link_calendar(stack_full: Stack, tablet: Page) -> N
 def test_children_do_not_see_the_menu_entry(stack_full: Stack, browser: Browser) -> None:
     with tablet_as(browser, CHILD_USER) as page:
         page.goto(stack_full.url + "/?lang=it")
-        expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         page.locator("#menu-btn").click()
         expect(page.locator("#menu-ics")).to_be_hidden()
 
@@ -376,10 +376,14 @@ def test_external_chips_show_the_type_icon_not_an_emoji(stack_full: Stack, table
     _add_rubbish_calendar(stack_full, key, "chipicon", [])
     try:
         tablet.goto(stack_full.url + "/?lang=it")
-        # The other calendars sit behind "Altri calendari (N)"; the family's own are on top.
-        tablet.locator(".more-toggle").click()
-        row = tablet.locator(".more-calendars", has_text="Abfuhr")
+        # In "Calendari ▾" an external calendar shows the icon of its type, not an emoji.
+        expect(tablet.locator("#filters .cal-switch", has_text="Abfuhr")).to_have_count(
+            1, timeout=5000
+        )
+        tablet.locator("#calendars-btn").click()
+        row = tablet.locator("#filters .cal-switch", has_text="Abfuhr")
         expect(row).to_be_visible(timeout=5000)
+        expect(row.locator(".waste-icon svg")).to_have_count(1)
         assert "📅" not in row.inner_text()
     finally:
         _remove_rubbish_calendar(stack_full, key, "chipicon")

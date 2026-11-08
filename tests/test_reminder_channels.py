@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -203,6 +204,7 @@ async def test_an_event_uses_its_own_channels_echo_and_volume(
         "channels": ["alexa"],
         "alexa_target": "media_player.cucina",
         "alexa_volume": 80,
+        "phone_sound": None,
     }
     state = hass.states.get("calendar.family_hub_famiglia")
     assert state is not None
@@ -268,3 +270,100 @@ async def test_a_wrong_echo_is_refused(hass: HomeAssistant) -> None:
             },
             blocking=True,
         )
+
+
+def _phone_app(hass: HomeAssistant, name: str, os_name: str) -> None:
+    """A phone with the Home Assistant Companion app, as mobile_app registers it."""
+    MockConfigEntry(
+        domain="mobile_app", title=name, data={"device_name": name, "os_name": os_name}
+    ).add_to_hass(hass)
+
+
+@pytest.mark.parametrize(
+    ("sound", "os_name", "expected"),
+    [
+        (
+            "important",
+            "iOS",
+            {"push": {"sound": "default", "interruption-level": "time-sensitive"}},
+        ),
+        (
+            "critical",
+            "iOS",
+            {"push": {"sound": {"name": "default", "critical": 1, "volume": 1.0}}},
+        ),
+        (
+            "important",
+            "Android",
+            {
+                "priority": "high",
+                "ttl": 0,
+                "importance": "high",
+                "channel": "Promemoria Family Hub",
+            },
+        ),
+        (
+            "critical",
+            "Android",
+            {
+                "priority": "high",
+                "ttl": 0,
+                "importance": "high",
+                "channel": "Promemoria Family Hub urgenti",
+                "media_stream": "alarm_stream",
+            },
+        ),
+        ("normal", "iOS", {}),
+    ],
+)
+async def test_the_reminder_sound_on_ios_and_android(
+    hass: HomeAssistant, freezer: Any, sound: str, os_name: str, expected: dict[str, Any]
+) -> None:
+    freezer.move_to(local(10))
+    _phone_app(hass, "Telefono Sofia", os_name)
+    await _setup(
+        hass,
+        [{**SOFIA, CONF_PHONE_NOTIFY: "mobile_app_telefono_sofia", "phone_sound": sound}],
+        reminders={"channels": ["phone"]},
+    )
+    phone = async_mock_service(hass, "notify", "mobile_app_telefono_sofia")
+    await _add(hass)
+    await _tick(hass, freezer, local(14, 30))
+    assert len(phone) == 1
+    data = dict(phone[0].data["data"])
+    for key in ("tag", "actions"):
+        data.pop(key, None)
+    assert data == expected
+
+
+async def test_an_unknown_phone_gets_both_and_the_event_can_change_the_sound(
+    hass: HomeAssistant, freezer: Any
+) -> None:
+    from custom_components.family_hub.notifier import sound_data
+
+    both = sound_data("important", None)
+    assert both["push"]["interruption-level"] == "time-sensitive"
+    assert both["priority"] == "high"
+    freezer.move_to(local(10))
+    await _setup(
+        hass,
+        [{**SOFIA, CONF_PHONE_NOTIFY: "mobile_app_sofia", "phone_sound": "critical"}],
+        reminders={"channels": ["phone"]},
+    )
+    phone = async_mock_service(hass, "notify", "mobile_app_sofia")
+    await hass.services.async_call(
+        DOMAIN,
+        "add_event",
+        {
+            "category": "famiglia",
+            "summary": "Dentista",
+            "start": "2026-11-10 15:00:00",
+            "persons": ["sofia"],
+            "channels": ["phone"],
+            "phone_sound": "normal",
+        },
+        blocking=True,
+    )
+    await _tick(hass, freezer, local(14, 30))
+    assert len(phone) == 1
+    assert "push" not in phone[0].data["data"] and "priority" not in phone[0].data["data"]

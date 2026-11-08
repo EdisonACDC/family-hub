@@ -4,6 +4,7 @@ family's, and a free slot of the day opens "Nuovo evento" already filled in."""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, timedelta
@@ -48,8 +49,11 @@ def _seeded(stack: Stack) -> Iterator[str]:
 
 def _open_month(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
-    page.locator("#view-switch [data-view='month']").click()
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
+    phone = (page.viewport_size or {}).get("width", 1024) < 600
+    page.locator(
+        "#tabbar [data-tab='month']" if phone else "#view-switch [data-view='month']"
+    ).click()
     expect(page.locator("#month-scroll")).to_be_visible(timeout=5000)
 
 
@@ -61,8 +65,10 @@ def test_busy_bar_counts_hours_and_not_rubbish(stack_full: Stack, tablet: Page) 
         expect(cell).to_have_attribute("data-busy", "540")
         width = cell.locator(".occ-fill").evaluate("e => e.style.width")
         assert width == "64%", width
-        expect(cell.locator(".month-ev")).to_have_count(3)
-        expect(cell.locator(".month-more")).to_have_text("+1 altri")
+        # As many lines as the cell has room for, the rest in "+N altri" (4 events that day).
+        lines = cell.locator(".month-ev").count()
+        assert lines >= 1
+        expect(cell.locator(".month-more")).to_have_text(f"+{4 - lines} altri")
         _shot(tablet, "tablet_month")
         # The choice stays on this screen.
         tablet.reload()
@@ -74,19 +80,19 @@ def test_busy_bar_counts_hours_and_not_rubbish(stack_full: Stack, tablet: Page) 
 def test_person_filter_keeps_that_person_and_the_family(stack_full: Stack, tablet: Page) -> None:
     with _seeded(stack_full) as day:
         _open_month(tablet, stack_full)
-        tablet.locator("#month-person").select_option("sofia")
+        tablet.locator("#persons-bar [data-person='sofia']").click()
         cell = tablet.locator(f".month-day[data-day='{day}']")
         # Sofia: the family lunch 11:00-14:00 and her school 15:00-17:00 = 5 hours.
         expect(cell).to_have_attribute("data-busy", "300")
         expect(cell.locator(".month-ev", has_text="Lavoro")).to_have_count(0)
-        tablet.locator("#month-person").select_option("mamma")
+        tablet.locator("#persons-bar [data-person='mamma']").click()
         expect(cell).to_have_attribute("data-busy", "420")
 
 
 def test_a_free_slot_opens_new_event_with_date_and_time(stack_full: Stack, tablet: Page) -> None:
     with _seeded(stack_full) as day:
         _open_month(tablet, stack_full)
-        tablet.locator(f".month-day[data-day='{day}']").click()
+        tablet.locator(f".month-day[data-day='{day}']").click(position={"x": 8, "y": 8})
         dayview = tablet.locator(".dayview")
         expect(dayview).to_be_visible()
         slots = dayview.locator(".free-slot")
@@ -120,7 +126,9 @@ def test_phone_shows_a_compact_month_with_dots(stack_full: Stack, browser: Brows
             expect(cell.locator(".month-ev")).to_have_count(0)
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             _shot(page, "phone_month")
-            cell.click()
-            expect(page.locator(".dayview")).to_be_visible()
+            # On the phone the chosen day is shown under the month.
+            cell.click(position={"x": 8, "y": 8})
+            expect(cell).to_have_class(re.compile("selected"))
+            expect(page.locator("#month-day-panel .busy-name").first).to_be_visible()
     finally:
         context.close()

@@ -12,7 +12,7 @@ from tests.e2e.conftest import Stack
 
 def _load(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=en")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     expect(page.locator("#week .day")).to_have_count(7)
 
 
@@ -20,9 +20,10 @@ def test_top_bar_shows_the_next_three_days_beside_the_weather(
     stack_full: Stack, tablet: Page
 ) -> None:
     _load(tablet, stack_full)
-    days = tablet.locator("#weather-days .wx-day")
+    # On a 1024 px tablet the next three days are in the second row (top bar from 1280 px).
+    days = tablet.locator("#weather-days-sub .wx-day")
     expect(days).to_have_count(3, timeout=5000)
-    expect(tablet.locator("#weather-days")).to_be_visible()
+    expect(tablet.locator("#weather-days-sub")).to_be_visible()
     expect(days.first.locator(".wx-day-name")).not_to_be_empty()
     expect(days.first.locator(".wx-max")).to_contain_text("°")
     expect(days.first.locator("svg")).to_be_attached()

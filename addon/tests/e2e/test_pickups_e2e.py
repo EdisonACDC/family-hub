@@ -82,9 +82,7 @@ def test_a_home_assistant_rubbish_calendar_feeds_the_row(stack_full: Stack, tabl
         stack_full.fake.events[WASTE] = old
 
 
-def test_pickups_stay_on_one_line_that_scrolls_on_the_phone(
-    stack_full: Stack, browser: Browser
-) -> None:
+def test_on_the_phone_the_next_pickups_are_in_the_menu(stack_full: Stack, browser: Browser) -> None:
     today = date.today()
     key = "calendar.family_hub_ext_riga"
     titles = ["Abfuhr: Bioabfall", "Abfuhr: Papierabfall", "Abfuhr: Gelbe Tonne"]
@@ -99,20 +97,19 @@ def test_pickups_stay_on_one_line_that_scrolls_on_the_phone(
     page = context.new_page()
     try:
         page.goto(stack_full.url + "/?lang=it")
-        chips = page.locator("#pickups .pickup-chip")
-        expect(chips).to_have_count(6, timeout=5000)
-        row = page.locator("#pickups")
-        # Read in one go: the row is drawn again when the week's events arrive.
-        tops = set(
-            row.evaluate(
-                "e => [...e.querySelectorAll('.pickup-chip')]"
-                ".map(c => Math.round(c.getBoundingClientRect().top))"
-            )
-        )
-        assert len(tops) == 1, tops  # one line, never one under the other
-        assert row.evaluate("e => e.scrollWidth > e.clientWidth")
+        expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
+        expect(page.locator("#pickups-list .pickup-chip")).to_have_count(6, timeout=5000)
+        page.locator("#menu-btn").click()
+        page.locator("#menu-pickups").click()
+        overlay = page.locator("#pickups-overlay")
+        expect(overlay).to_be_visible()
+        chips = overlay.locator(".pickup-chip")
+        expect(chips.first).to_contain_text("Organico")
+        expect(chips.first).to_contain_text("oggi")
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         _shot(page, "phone_next_pickups")
+        page.locator("#pickups-close").click()
+        expect(overlay).to_be_hidden()
     finally:
         context.close()
         _remove_rubbish_calendar(stack_full, key, "riga")

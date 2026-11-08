@@ -59,8 +59,11 @@ def _old_calendar(stack: Stack) -> Iterator[str]:
 
 def _open_month(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
-    page.locator("#view-switch [data-view='month']").click()
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
+    phone = (page.viewport_size or {}).get("width", 1024) < 600
+    page.locator(
+        "#tabbar [data-tab='month']" if phone else "#view-switch [data-view='month']"
+    ).click()
     expect(page.locator("#month-scroll")).to_be_visible(timeout=5000)
 
 
@@ -72,13 +75,13 @@ def test_old_calendars_count_as_busy_and_belong_to_their_person(
         cell = tablet.locator(f".month-day[data-day='{day}']")
         # Fisio 09:00-10:30 and the visit 15:00-16:00: 150 minutes.
         expect(cell).to_have_attribute("data-busy", "150")
-        tablet.locator("#month-person").select_option("mamma")
+        tablet.locator("#persons-bar [data-person='mamma']").click()
         expect(cell).to_have_attribute("data-busy", "150")
-        tablet.locator("#month-person").select_option("sofia")
+        tablet.locator("#persons-bar [data-person='sofia']").click()
         expect(cell).to_have_attribute("data-busy", "0")
         expect(cell.locator(".month-ev", has_text="Fisio")).to_have_count(0)
-        tablet.locator("#month-person").select_option("")
-        cell.click()
+        tablet.locator("#persons-bar [data-person='']").click()
+        cell.click(position={"x": 8, "y": 8})
         busy = tablet.locator(".dayview .busy-block", has_text="Fisio")
         expect(busy).to_be_visible()
 
@@ -106,7 +109,7 @@ def test_fonti_chooses_the_persons_of_a_home_assistant_calendar(
     with _old_calendar(stack_full):
         before = len(stack_full.fake.saved_configs)
         tablet.goto(stack_full.url + "/?lang=it")
-        expect(tablet.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(tablet.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         tablet.locator("#menu-btn").click()
         tablet.locator("#menu-wizard").click()
         for _ in range(4):

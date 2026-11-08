@@ -21,7 +21,7 @@ from tests.fake_ha import FAMILY, stored_event
 
 def _open(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
 
 
 def _added(stack: Stack, summary: str) -> dict[str, object]:
@@ -128,13 +128,13 @@ def test_volume_slider_turns_default_off_and_shows_percent(stack_full: Stack, ta
     expect(volume).to_have_class("volume is-default")
 
 
-def test_month_person_filter_has_no_empty_extra_option(stack_full: Stack, tablet: Page) -> None:
+def test_persons_bar_has_all_then_each_person_once(stack_full: Stack, tablet: Page) -> None:
+    """ "Tutti" first, then each person once (no empty or "undefined" chip, no guests)."""
     _open(tablet, stack_full)
-    tablet.locator("#view-switch [data-view='month']").click()
-    options = tablet.locator("#month-person option")
-    expect(options.first).to_be_attached(timeout=5000)
-    values = options.evaluate_all("os => os.map(o => o.value)")
+    chips = tablet.locator("#persons-bar .person-chip")
+    expect(chips.first).to_be_visible(timeout=5000)
+    values = chips.evaluate_all("cs => cs.map(c => c.getAttribute('data-person'))")
     assert values[0] == ""  # "Tutti"
     assert all(values[1:]) and "undefined" not in values, values
     assert len(values) == len(set(values))
-    tablet.locator("#view-switch [data-view='week']").click()
+    assert "ospite" not in values

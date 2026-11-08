@@ -35,10 +35,12 @@ from .const import (
     CONF_FIRST_WEEKDAY,
     CONF_HA_USER,
     CONF_LANGUAGE,
+    CONF_PHONE_SOUND,
     CONF_REGION,
     CONF_THEME,
     CONF_TIME_FORMAT,
     CONF_WEEK_FROM_TODAY,
+    DEFAULT_PHONE_SOUND,
     DEFAULT_REMINDERS,
     DOMAIN,
     LANGUAGES,
@@ -48,6 +50,7 @@ from .const import (
     OPT_SHARED_USERS,
     OPT_SHIFTS,
     PERSON_CHANNELS,
+    PHONE_SOUNDS,
     ROLES,
     THEMES,
     TIME_FORMATS,
@@ -55,7 +58,7 @@ from .const import (
 )
 from .external import TYPES as ICS_TYPES
 from .external_api import async_register_external_commands
-from .notifier import TEST_MESSAGE, announce_on_echos
+from .notifier import TEST_MESSAGE, announce_on_echos, phone_os, sound_data
 from .notify_settings import alexa_targets, available_services
 from .shifts import ShiftError, apply_to_future, clean_shifts
 
@@ -333,6 +336,11 @@ def clean_person(
         if isinstance(volume, bool) or not isinstance(volume, int) or not 0 <= volume <= 100:
             raise ConfigError(f"{field}.alexa_volume: whole number from 0 to 100")
         person[CONF_ALEXA_VOLUME] = volume
+    sound = raw.get(CONF_PHONE_SOUND)
+    if sound not in (None, ""):
+        if sound not in PHONE_SOUNDS:
+            raise ConfigError(f"{field}.phone_sound: normal, important or critical")
+        person[CONF_PHONE_SOUND] = sound
     return person
 
 
@@ -349,6 +357,7 @@ NOTIFY_KEYS = (
     "phone_notify",
     "alexa_notify",
     CONF_ALEXA_VOLUME,
+    CONF_PHONE_SOUND,
     CONF_CHANNELS,
     "quiet_start",
     "quiet_end",
@@ -586,9 +595,14 @@ async def ws_notify_test(
         if phone not in available_services(hass)["phone"]:
             connection.send_error(msg["id"], "no_service", "No phone is chosen")
             return
-        await hass.services.async_call(
-            "notify", phone, {"title": "Family Hub", "message": TEST_MESSAGE}, blocking=True
+        # The test sounds as the reminders will.
+        sound = sound_data(
+            person.get(CONF_PHONE_SOUND) or DEFAULT_PHONE_SOUND, phone_os(hass, phone)
         )
+        payload: dict[str, Any] = {"title": "Family Hub", "message": TEST_MESSAGE}
+        if sound:
+            payload["data"] = sound
+        await hass.services.async_call("notify", phone, payload, blocking=True)
         connection.send_result(msg["id"], {"sent": 1})
         return
     if kind == "alexa":

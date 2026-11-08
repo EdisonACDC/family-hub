@@ -44,7 +44,7 @@ def test_every_key_app_js_uses_exists_in_the_language(
     ui_used, form_used = _keys_used(APP_JS.read_text(encoding="utf-8"))
     with tablet_as(browser, ADULT_USER) as page:
         page.goto(stack_full.url + f"/?lang={lang}")
-        expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
         ui_have = set(page.evaluate("window.FH_I18N.keys('ui')"))
         form_have = set(page.evaluate("window.FH_I18N.keys('form')"))
     assert sorted(ui_used - ui_have) == [], f"interface keys missing in {lang}"

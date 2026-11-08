@@ -28,6 +28,8 @@ from .const import (
     CONF_ALL_DAY_REMINDER,
     CONF_CHANNELS,
     CONF_LANGUAGE,
+    CONF_PHONE_SOUND,
+    DEFAULT_PHONE_SOUND,
     DEFAULT_REMINDERS,
     OPT_PERSONS,
     OPT_REMINDERS,
@@ -224,6 +226,7 @@ class ReminderManager:
                     quiet=in_quiet_hours(now, start, end),
                     channels=frozenset(person.get(CONF_CHANNELS, PERSON_CHANNELS)),
                     alexa_volume=person.get(CONF_ALEXA_VOLUME),
+                    phone_sound=person.get(CONF_PHONE_SOUND) or DEFAULT_PHONE_SOUND,
                 )
             )
         return targets
@@ -239,6 +242,7 @@ class ReminderManager:
         channels = frozenset(notify.get("channels", []))
         echo = notify.get("alexa_target") or None
         volume = notify.get("alexa_volume")
+        sound = notify.get("phone_sound") or None
         if not targets:
             settings = self.settings
             now = dt_util.as_local(dt_util.now()).time()
@@ -254,6 +258,7 @@ class ReminderManager:
                     quiet=quiet,
                     channels=channels,
                     alexa_volume=volume,
+                    phone_sound=sound or DEFAULT_PHONE_SOUND,
                 )
             ]
         return [
@@ -262,6 +267,7 @@ class ReminderManager:
                 channels=channels,
                 alexa_notify=echo or target.alexa_notify,
                 alexa_volume=target.alexa_volume if volume is None else volume,
+                phone_sound=sound or target.phone_sound,
             )
             for target in targets
         ]

@@ -13,7 +13,7 @@ from tests.fake_ha import FAMILY, stored_event
 
 def _open_form(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
-    expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+    expect(page.locator("body[data-ready='1']")).to_be_attached(timeout=5000)
     page.locator("#add-btn").click()
     expect(page.locator("#event-form")).to_be_visible()
 
