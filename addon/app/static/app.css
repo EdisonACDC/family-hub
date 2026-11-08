@@ -1098,3 +1098,47 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
 .volume.is-default input[type="range"] { filter: grayscale(1); opacity: 0.55; }
 .volume.is-default .volume-value { opacity: 0.55; }
 .volume-value { min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* ---- 0.6.5: months one under the other (title stays at the top), list view ---- */
+.week.month, .week.list-view { display: flex; flex-direction: column; gap: 8px; overflow: hidden; min-height: 0; }
+.month-scroll, .list-scroll {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch; padding-bottom: 80px;
+}
+.month-scroll:focus-visible, .list-scroll:focus-visible { outline: 3px solid rgba(255,255,255,.8); outline-offset: 2px; }
+.month-block { padding-bottom: 14px; }
+.month-block .month-title {
+  position: sticky; top: 0; z-index: 2; margin: 0 0 6px; padding: 6px 4px;
+  background: linear-gradient(180deg, rgba(120,102,84,.92), rgba(120,102,84,.75));
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: 12px;
+}
+.month-pad { min-height: 1px; }
+.list-month {
+  position: sticky; top: 0; z-index: 2; margin: 10px 0 4px; padding: 6px 8px; color: #fff; text-transform: capitalize;
+  background: linear-gradient(180deg, rgba(120,102,84,.92), rgba(120,102,84,.75)); border-radius: 12px;
+}
+.list-day { display: grid; gap: 4px; margin: 6px 0 10px; }
+.list-date { margin: 4px 4px 2px; color: #fff; font-size: 16px; text-transform: capitalize; }
+.list-date.today { text-decoration: underline; }
+.list-row {
+  display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 48px;
+  padding: 6px 12px; border: none; border-left: 6px solid var(--ev); border-radius: 12px; text-align: left;
+  background: rgba(40,30,20,.35); color: #fff; font: inherit; cursor: pointer;
+}
+.list-time { font-variant-numeric: tabular-nums; font-weight: 600; }
+.list-title { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-title .waste-icon { color: var(--ev); width: 22px; height: 22px; flex: 0 0 auto; }
+.list-persons { opacity: .85; font-size: 14px; white-space: nowrap; }
+@media (max-width: 599px) {
+  .list-row { grid-template-columns: 58px minmax(0, 1fr); }
+  .list-persons { grid-column: 2; }
+  .month-head { gap: 6px; }
+}
+
+.view-switch .label-short { display: none; }
+.list-row { grid-template-columns: 104px minmax(0, 1fr) auto; }
+@media (max-width: 599px) {
+  .view-switch .label-full { display: none; }
+  .view-switch .label-short { display: inline; }
+  .list-row { grid-template-columns: 72px minmax(0, 1fr); }
+}

@@ -61,7 +61,7 @@ def _open_month(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
     expect(page.locator(".chip").first).to_be_visible(timeout=5000)
     page.locator("#view-switch [data-view='month']").click()
-    expect(page.locator(".month-view")).to_be_visible(timeout=5000)
+    expect(page.locator("#month-scroll")).to_be_visible(timeout=5000)
 
 
 def test_old_calendars_count_as_busy_and_belong_to_their_person(

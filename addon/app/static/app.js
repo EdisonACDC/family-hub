@@ -18,6 +18,10 @@
     weekFromToday: true,
     weekStart: viewStart(new Date()),
     view: loadView(),
+    monthLoaded: {},
+    monthLoading: {},
+    monthObserver: null,
+    listWaste: false,
     monthStart: firstOfMonth(new Date()),
     monthPerson: "",
     popups: [],
@@ -263,10 +267,18 @@
     var now = new Date();
     var start, end;
     if (state.view === "month") {
-      // The whole grid of the month: six weeks.
-      var first = monthGridStart(state.monthStart);
+      // Months are read as they come near the screen (see watchMonths).
       loadPickups();
-      request({ op: "events", start: ymd(first) + " 00:00:00", end: ymd(addDays(first, 42)) + " 00:00:00" })
+      state.monthLoaded = {};
+      state.monthLoading = {};
+      renderWeek();
+      return;
+    }
+    if (state.view === "list") {
+      loadPickups();
+      var from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      var to = new Date(from.getFullYear() + 1, from.getMonth(), from.getDate());
+      request({ op: "events", start: ymd(from) + " 00:00:00", end: ymd(to) + " 00:00:00" })
         .then(function (events) { state.events = events; renderWeek(); })
         .catch(function () { renderWeek(); });
       return;
@@ -540,8 +552,9 @@
     var week = $("week");
     week.textContent = "";
     var anyEvent;
-    if (state.view === "month") {
-      renderMonth(week);
+    if (state.view === "month" || state.view === "list") {
+      if (state.view === "month") renderMonth(week);
+      else renderList(week);
       $("empty-note").hidden = true;
       return;
     }
@@ -2447,7 +2460,8 @@
 
   function loadView() {
     try {
-      return window.localStorage.getItem("fh_view") === "month" ? "month" : "week";
+      var saved = window.localStorage.getItem("fh_view");
+      return saved === "month" || saved === "list" ? saved : "week";
     } catch (err) {
       return "week";
     }
@@ -2558,35 +2572,169 @@
     var options = [["", f("personAll")]].concat(personList().map(function (p) { return [p.id, p.name]; }));
     var select = selectInput(options, state.monthPerson || "", function (v) {
       state.monthPerson = v;
-      renderWeek();
+      if (state.view === "month") repaintMonths();
+      else renderWeek();
     }, { id: "month-person", "aria-label": f("personFilter") });
     return fieldRow(f("personFilter"), select);
   }
 
+  // Months one under the other, from 3 months back to 12 ahead (more are added at the end).
+  // Each month's events are read when the month comes near the screen; its title stays at
+  // the top while its days scroll. "Oggi" goes back to this month; the arrows jump one month.
+  var MONTHS_BACK = 3;
+  var MONTHS_AHEAD = 12;
+
+  function monthKey(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1); }
+
+  function monthOf(key) {
+    var p = key.split("-");
+    return new Date(Number(p[0]), Number(p[1]) - 1, 1);
+  }
+
+  // Every loaded month's events together (the months do not overlap): for the days and the
+  // day view.
+  function monthEvents() {
+    var all = {};
+    Object.keys(state.monthLoaded).forEach(function (key) {
+      var events = state.monthLoaded[key];
+      Object.keys(events).forEach(function (entity) {
+        all[entity] = (all[entity] || []).concat(events[entity]);
+      });
+    });
+    return all;
+  }
+
   function renderMonth(week) {
-    var f = I.f;
     var compact = state.mode === "phone";
-    var month = state.monthStart;
     week.className = "week month" + (compact ? " compact" : "");
     var head = el("div", { class: "month-head" });
-    head.appendChild(el("h2", { class: "month-title" },
-      month.toLocaleDateString(I.lang, { month: "long", year: "numeric" })));
     head.appendChild(personFilter());
     week.appendChild(head);
+    var scroller = el("div", { class: "month-scroll", id: "month-scroll", tabindex: "0",
+      "aria-label": I.f("viewMonth") });
+    week.appendChild(scroller);
+    var now = firstOfMonth(new Date());
+    var from = new Date(now.getFullYear(), now.getMonth() - MONTHS_BACK, 1);
+    for (var i = 0; i <= MONTHS_BACK + MONTHS_AHEAD; i++) {
+      scroller.appendChild(monthBlock(new Date(from.getFullYear(), from.getMonth() + i, 1)));
+    }
+    fitToScreen(scroller);
+    watchMonths(scroller);
+    scroller.addEventListener("keydown", function (e) {
+      if (e.key === "PageDown") { e.preventDefault(); jumpMonth(1); }
+      if (e.key === "PageUp") { e.preventDefault(); jumpMonth(-1); }
+    });
+    scrollToMonth(monthKey(state.monthStart), false);
+  }
+
+  function fitToScreen(box) {
+    var top = box.getBoundingClientRect().top;
+    box.style.maxHeight = Math.max(240, window.innerHeight - top - 8) + "px";
+  }
+
+  function monthBlock(month) {
+    var key = monthKey(month);
+    var block = el("section", { class: "month-block", "data-month": key });
+    block.appendChild(el("h2", { class: "month-title" },
+      month.toLocaleDateString(I.lang, { month: "long", year: "numeric" })));
     var grid = el("div", { class: "month-view" });
+    block.appendChild(grid);
+    paintMonthGrid(grid, month);
+    if (state.monthLoaded[key]) block.classList.add("loaded");
+    return block;
+  }
+
+  // Load the months that come near the screen; add more months at the end.
+  function watchMonths(scroller) {
+    if (state.monthObserver) state.monthObserver.disconnect();
+    if (!("IntersectionObserver" in window)) {
+      Array.prototype.forEach.call(scroller.children, function (b) { loadMonth(b); });
+      return;
+    }
+    state.monthObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        loadMonth(entry.target);
+        if (entry.target === scroller.lastElementChild) {
+          var last = monthOf(entry.target.getAttribute("data-month"));
+          for (var i = 1; i <= 6; i++) {
+            var block = monthBlock(new Date(last.getFullYear(), last.getMonth() + i, 1));
+            scroller.appendChild(block);
+            state.monthObserver.observe(block);
+          }
+        }
+      });
+    }, { root: scroller, rootMargin: "400px 0px" });
+    Array.prototype.forEach.call(scroller.children, function (b) { state.monthObserver.observe(b); });
+  }
+
+  function loadMonth(block) {
+    var key = block.getAttribute("data-month");
+    if (state.monthLoaded[key] || state.monthLoading[key]) return;
+    state.monthLoading[key] = true;
+    var month = monthOf(key);
+    var next = new Date(month.getFullYear(), month.getMonth() + 1, 1);
+    request({ op: "events", start: ymd(month) + " 00:00:00", end: ymd(next) + " 00:00:00" })
+      .then(function (events) {
+        state.monthLoaded[key] = events;
+        delete state.monthLoading[key];
+        paintMonthGrid(block.querySelector(".month-view"), month);
+        block.classList.add("loaded");
+      })
+      .catch(function () { delete state.monthLoading[key]; });
+  }
+
+  function repaintMonths() {
+    Array.prototype.forEach.call(document.querySelectorAll(".month-block"), function (block) {
+      paintMonthGrid(block.querySelector(".month-view"), monthOf(block.getAttribute("data-month")));
+    });
+  }
+
+  function scrollToMonth(key, smooth) {
+    var scroller = $("month-scroll");
+    var block = scroller && scroller.querySelector(".month-block[data-month='" + key + "']");
+    if (!block) return;
+    state.monthStart = monthOf(key);
+    scroller.scrollTo({ top: block.offsetTop - scroller.offsetTop, behavior: smooth ? "smooth" : "auto" });
+  }
+
+  // The month whose title is at the top now.
+  function monthAtTop() {
+    var scroller = $("month-scroll");
+    if (!scroller) return monthKey(state.monthStart);
+    var top = scroller.getBoundingClientRect().top + 2;
+    var found = null;
+    Array.prototype.forEach.call(scroller.querySelectorAll(".month-block"), function (b) {
+      if (b.getBoundingClientRect().top <= top) found = b;
+    });
+    return found ? found.getAttribute("data-month") : monthKey(state.monthStart);
+  }
+
+  function jumpMonth(direction) {
+    var at = monthOf(monthAtTop());
+    scrollToMonth(monthKey(new Date(at.getFullYear(), at.getMonth() + direction, 1)), false);
+  }
+
+  function paintMonthGrid(grid, month) {
+    var f = I.f;
+    var compact = state.mode === "phone";
+    grid.textContent = "";
     orderedDays(t("days")).forEach(function (name) {
       grid.appendChild(el("div", { class: "month-dow" }, name));
     });
-    var first = monthGridStart(month);
-    var byDay = eventsByDay(state.events);
+    var events = state.monthLoaded[monthKey(month)] || {};
+    var byDay = eventsByDay(events);
     var today = ymd(new Date());
-    for (var i = 0; i < 42; i++) {
-      var day = addDays(first, i);
+    var lead = weekdayOffset(month);
+    for (var p = 0; p < lead; p++) grid.appendChild(el("span", { class: "month-pad", "aria-hidden": "true" }));
+    var days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    for (var i = 0; i < days; i++) {
+      var day = addDays(month, i);
       var key = ymd(day);
       var items = forPerson(byDay[key] || []);
       var busy = busyMinutes(items, key);
-      var cls = "month-day" + (day.getMonth() !== month.getMonth() ? " other" : "") + (key === today ? " today" : "");
-      var cell = el("button", { type: "button", class: cls, "data-day": key, "data-busy": String(busy),
+      var cell = el("button", { type: "button", class: "month-day" + (key === today ? " today" : ""),
+        "data-day": key, "data-busy": String(busy),
         "aria-label": day.toLocaleDateString(I.lang, { weekday: "long", day: "numeric", month: "long" }) });
       cell.appendChild(el("span", { class: "month-num" }, String(day.getDate())));
       var bar = el("span", { class: "occ", title: f("busyHours").replace("{h}", hoursText(busy)) });
@@ -2620,7 +2768,62 @@
       cell.addEventListener("click", (function (k) { return function () { openDay(k); }; })(key));
       grid.appendChild(cell);
     }
-    week.appendChild(grid);
+  }
+
+  // ---- list view: every appointment of the next 12 months --------------------------
+  // By month and day, with time, title, calendar colour and persons. The person filter of the
+  // month view applies; rubbish is hidden unless "Mostra rifiuti" is on. A tap opens the card.
+
+  function renderList(week) {
+    var f = I.f;
+    week.className = "week list-view";
+    var head = el("div", { class: "month-head" });
+    head.appendChild(personFilter());
+    head.appendChild(switchRow(f("showWaste"), !!state.listWaste, function (on) {
+      state.listWaste = on;
+      renderWeek();
+    }));
+    week.appendChild(head);
+    var body = el("div", { class: "list-scroll", id: "list-scroll", tabindex: "0" });
+    week.appendChild(body);
+    fitToScreen(body);
+    var byDay = eventsByDay(state.events);
+    var today = ymd(new Date());
+    var keys = Object.keys(byDay).filter(function (k) { return k >= today; }).sort();
+    var shownMonth = "";
+    var count = 0;
+    keys.forEach(function (key) {
+      var items = forPerson(byDay[key]).filter(function (it) {
+        return state.listWaste || !(it.ev.waste || it.type === "rifiuti");
+      });
+      if (!items.length) return;
+      var day = parseLocalDay(key);
+      var mk = key.slice(0, 7);
+      if (mk !== shownMonth) {
+        shownMonth = mk;
+        body.appendChild(el("h2", { class: "list-month" }, day.toLocaleDateString(I.lang, { month: "long", year: "numeric" })));
+      }
+      var section = el("section", { class: "list-day", "data-day": key });
+      section.appendChild(el("h3", { class: "list-date" + (key === today ? " today" : "") },
+        day.toLocaleDateString(I.lang, { weekday: "long", day: "numeric", month: "long" })));
+      items.forEach(function (it) {
+        count++;
+        var row = el("button", { type: "button", class: "list-row" });
+        row.style.setProperty("--ev", it.ev.waste_color || it.color);
+        row.appendChild(el("span", { class: "list-time" }, isAllDay(it.ev.start) ? I.f("allDayLabel") : timeOf(it.ev.start)));
+        var title = el("span", { class: "list-title" });
+        if (it.ev.waste) title.appendChild(wasteIcon(it.ev.waste_icon || it.ev.waste));
+        title.appendChild(document.createTextNode(shownTitle(it.ev)));
+        if ((it.colors || []).length > 1) title.appendChild(calendarDots(it));
+        row.appendChild(title);
+        var names = (it.ev.person_ids || []).map(personName).filter(function (n) { return n; });
+        row.appendChild(el("span", { class: "list-persons" }, names.join(", ")));
+        row.addEventListener("click", function () { openCard(it); });
+        section.appendChild(row);
+      });
+      body.appendChild(section);
+    });
+    if (!count) body.appendChild(el("p", { class: "hint" }, f("listEmpty")));
   }
 
   function canAdd() {
@@ -2632,7 +2835,8 @@
     var f = I.f;
     var old = document.querySelector(".day-overlay");
     if (old) old.remove();
-    var items = forPerson(eventsByDay(state.events)[key] || []);
+    var source = state.view === "month" ? monthEvents() : state.events;
+    var items = forPerson(eventsByDay(source)[key] || []);
     var box = el("div", { class: "overlay day-overlay", role: "dialog", "aria-label": key });
     var panel = el("div", { class: "dialog dayview" });
     panel.appendChild(el("h2", {}, new Date(key + "T12:00:00").toLocaleDateString(I.lang,
@@ -3047,8 +3251,13 @@
   function applyTexts() {
     document.documentElement.lang = I.lang;
     $("this-week").textContent = t("today");
-    document.querySelector("#view-switch [data-view='week']").textContent = I.f("viewWeek");
-    document.querySelector("#view-switch [data-view='month']").textContent = I.f("viewMonth");
+    [["week", "viewWeek", "viewWeekShort"], ["month", "viewMonth", "viewMonthShort"],
+      ["list", "viewList", "viewListShort"]].forEach(function (v) {
+      var b = document.querySelector("#view-switch [data-view='" + v[0] + "']");
+      b.textContent = "";
+      b.appendChild(el("span", { class: "label-full" }, I.f(v[1])));
+      b.appendChild(el("span", { class: "label-short", "aria-hidden": "true" }, I.f(v[2])));
+    });
     $("view-switch").setAttribute("aria-label", I.f("viewChoice"));
     $("todo-btn").textContent = I.f("listsButton");
     $("menu-btn").textContent = I.f("menu");
@@ -3107,7 +3316,10 @@
     });
     updateClock();
     window.setInterval(updateClock, 15000);
-    window.addEventListener("resize", function () { fitWastePills($("week")); });
+    window.addEventListener("resize", function () {
+      fitWastePills($("week"));
+      ["month-scroll", "list-scroll"].forEach(function (id) { if ($(id)) fitToScreen($(id)); });
+    });
     window.addEventListener("resize", function () {
       var mode = layoutMode();
       if (mode !== state.mode) {
@@ -3118,18 +3330,34 @@
 
     // On the phone the arrows step one day; on the tablet and PC they step one week.
     function step(direction) {
-      if (state.view === "month") {
-        state.monthStart = new Date(state.monthStart.getFullYear(), state.monthStart.getMonth() + direction, 1);
-      } else if (state.mode === "phone") state.dayOffset += direction;
+      if (state.view === "month") { jumpMonth(direction); return; }
+      if (state.view === "list") return;
+      if (state.mode === "phone") state.dayOffset += direction;
       else state.weekStart = addDays(state.weekStart, 7 * direction);
       refreshEvents();
     }
+    // A finger swiped sideways over the week: the next or the previous week (or day on the phone).
+    var swipe = null;
+    $("week").addEventListener("pointerdown", function (e) {
+      if (state.view !== "week" || e.pointerType === "mouse") return;
+      swipe = { x: e.clientX, y: e.clientY };
+    });
+    $("week").addEventListener("pointerup", function (e) {
+      if (!swipe || state.view !== "week") { swipe = null; return; }
+      var dx = e.clientX - swipe.x;
+      var dy = e.clientY - swipe.y;
+      swipe = null;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
+    });
+    $("week").addEventListener("pointercancel", function () { swipe = null; });
     $("prev-week").addEventListener("click", function () { step(-1); });
     $("next-week").addEventListener("click", function () { step(1); });
     $("this-week").addEventListener("click", function () {
       state.dayOffset = 0;
       state.weekStart = viewStart(new Date());
       state.monthStart = firstOfMonth(new Date());
+      if (state.view === "month" && $("month-scroll")) { scrollToMonth(monthKey(state.monthStart), true); return; }
+      if (state.view === "list" && $("list-scroll")) { $("list-scroll").scrollTo({ top: 0 }); return; }
       refreshEvents();
     });
     Array.prototype.forEach.call(document.querySelectorAll("#view-switch [data-view]"), function (b) {

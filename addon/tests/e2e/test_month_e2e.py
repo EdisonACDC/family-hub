@@ -50,7 +50,7 @@ def _open_month(page: Page, stack: Stack) -> None:
     page.goto(stack.url + "/?lang=it")
     expect(page.locator(".chip").first).to_be_visible(timeout=5000)
     page.locator("#view-switch [data-view='month']").click()
-    expect(page.locator(".month-view")).to_be_visible(timeout=5000)
+    expect(page.locator("#month-scroll")).to_be_visible(timeout=5000)
 
 
 def test_busy_bar_counts_hours_and_not_rubbish(stack_full: Stack, tablet: Page) -> None:
@@ -66,7 +66,7 @@ def test_busy_bar_counts_hours_and_not_rubbish(stack_full: Stack, tablet: Page) 
         _shot(tablet, "tablet_month")
         # The choice stays on this screen.
         tablet.reload()
-        expect(tablet.locator(".month-view")).to_be_visible(timeout=5000)
+        expect(tablet.locator("#month-scroll")).to_be_visible(timeout=5000)
         tablet.locator("#view-switch [data-view='week']").click()
         expect(tablet.locator(".month-view")).to_have_count(0)
 

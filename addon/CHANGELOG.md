@@ -1,5 +1,18 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.6.5
+
+- Vista Mese a scorrimento continuo: i mesi uno sotto l'altro, da 3 mesi indietro a 12 avanti (altri
+  si aggiungono in fondo), letti man mano che arrivano sullo schermo. Il titolo del mese resta fisso
+  in alto mentre si scorre. "Oggi" torna al mese corrente, le frecce saltano di un mese; funziona con
+  il dito, la rotella e la tastiera (Pagina giù / Pagina su).
+- Vista Settimana: uno scorrimento laterale del dito passa alla settimana successiva o precedente
+  (sul telefono al giorno successivo o precedente, come le frecce).
+- Nuova vista "Elenco" (Settimana | Mese | Elenco): gli appuntamenti dei prossimi 12 mesi divisi per
+  mese e per giorno, con ora, titolo, colore del calendario e persone. Filtro persona come nel Mese,
+  interruttore "Mostra rifiuti" (spento all'inizio); toccando una riga si apre la scheda dell'evento.
+- Telefono: nel controllo delle viste nomi brevi ("Sett. | Mese | Elenco").
+
 ## 0.6.4
 
 - Volume Alexa in Avvisi: il cursore non è più bloccato; toccandolo o trascinandolo "predefinito" si spegne e il
