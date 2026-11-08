@@ -604,6 +604,13 @@ body.reduce-transparency { background: var(--solid); }
 /* Weather: the top bar, the day columns, and the phone's Today and Tomorrow. */
 .weather-now { display: flex; align-items: center; gap: 10px; font-size: 20px; color: #fff; }
 .weather-now[hidden] { display: none; }
+/* The next three days, beside the current weather in the top bar. */
+.weather-days { display: flex; align-items: center; gap: 14px; color: #fff; font-size: 16px; }
+.weather-days[hidden] { display: none; }
+.wx-day { display: flex; align-items: center; gap: 6px; }
+.wx-day-name { font-weight: 600; text-transform: capitalize; }
+.wx-temps { display: inline-flex; gap: 4px; font-variant-numeric: tabular-nums; }
+.wx-temps .wx-min { opacity: 0.7; }
 .weather-now strong { font-size: 26px; font-weight: 700; }
 .wx-icon { display: inline-flex; width: 30px; height: 30px; flex: 0 0 auto; }
 .wx-icon svg { width: 100%; height: 100%; }
@@ -873,6 +880,7 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
 }
 #clock-time { color: #2b1d12; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6); }
 .weather-now strong { color: #2b1d12; }
+.weather-days { color: #2b1d12; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5); }
 
 /* The event form: Start and End side by side inside the window. */
 .persons-fieldset { margin: 8px 0; }

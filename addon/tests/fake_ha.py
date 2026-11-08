@@ -69,7 +69,7 @@ WEATHER = "weather.home"
 
 
 def weather_forecast() -> list[dict[str, Any]]:
-    """Daily forecast: today, tomorrow and the day after (today has the high and low)."""
+    """Daily forecast: today and the next four days (today has the high and low)."""
     from datetime import date, timedelta
 
     today = date.today()
@@ -80,7 +80,7 @@ def weather_forecast() -> list[dict[str, Any]]:
             "temperature": 8.0 - i,
             "templow": 2.0 - i,
         }
-        for i in range(3)
+        for i in range(5)
     ]
 
 

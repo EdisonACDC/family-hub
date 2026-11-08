@@ -119,7 +119,7 @@ async def test_get_returns_the_whole_configuration(
     result = reply["result"]
     assert result["family"][CONF_FAMILY_NAME] == "Esempio"
     assert result["family"]["time_format"] == "24h"
-    assert result["screen"] == {"theme": "auto"}
+    assert result["screen"] == {"theme": "auto", "week_from_today": True}
     assert [c["id"] for c in result["categories"]] == [c["id"] for c in DEFAULT_CATEGORIES]
     assert result["reminders"]["offsets"] == [30, 10]
 

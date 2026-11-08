@@ -480,6 +480,15 @@ class Hub:
         value = str(config.get("family", {}).get("first_weekday", "monday"))
         return value if value in ("monday", "sunday") else "monday"
 
+    async def week_from_today(self) -> bool:
+        """Whether the week shown starts today (the tablet's default) or on the first day."""
+        try:
+            config = await self.ha.call("family_hub/config/get")
+        except HAError:
+            return True
+        value = config.get("screen", {}).get("week_from_today", True)
+        return value if isinstance(value, bool) else True
+
     async def time_format(self) -> str:
         """The family's clock: "24h" or "12h", chosen in the setup guide. Every time on the
         screen follows it, not the browser's own setting."""
@@ -687,6 +696,7 @@ class Hub:
                         "theme": theme,
                         "time_format": await self.time_format(),
                         "first_weekday": await self.first_weekday(),
+                        "week_from_today": await self.week_from_today(),
                     }
                 )
                 return {"ok": True}
@@ -969,6 +979,7 @@ async def _ws_handler(request: web.Request) -> web.WebSocketResponse:
             "theme": await hub.theme(),
             "time_format": await hub.time_format(),
             "first_weekday": await hub.first_weekday(),
+            "week_from_today": await hub.week_from_today(),
         }
     )
     try:

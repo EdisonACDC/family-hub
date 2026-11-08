@@ -27,7 +27,7 @@ def test_everyone_reads_the_chosen_weather_with_its_forecast() -> None:
                 assert result["entity_id"] == WEATHER
                 assert result["condition"] == "cloudy"
                 assert result["temperature"] == 5 and result["unit"] == "°C"
-                assert len(result["forecast"]) == 3
+                assert len(result["forecast"]) == 5
                 assert result["forecast"][0]["templow"] == 2.0
                 await ws.close()
         finally:

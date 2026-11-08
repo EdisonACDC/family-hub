@@ -15,7 +15,8 @@
     calendars: [],
     hidden: {},
     events: {},
-    weekStart: mondayOf(new Date()),
+    weekFromToday: true,
+    weekStart: viewStart(new Date()),
     popups: [],
     wizardStep: 0,
     mode: layoutMode(),
@@ -66,6 +67,15 @@
     var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     x.setDate(x.getDate() - weekdayOffset(x));
     return x;
+  }
+
+  // The first day of the grid: today on the tablet's "week starts today" setting (the default),
+  // otherwise the family's first day. (state is not built yet when the first week is computed.)
+  function viewStart(d) {
+    if (!state || state.weekFromToday !== false) {
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }
+    return mondayOf(d);
   }
 
   function addDays(d, n) {
@@ -165,7 +175,12 @@
       if (msg.time_format) state.timeFormat = msg.time_format;
       if (msg.first_weekday && msg.first_weekday !== state.firstWeekday) {
         state.firstWeekday = msg.first_weekday;
-        state.weekStart = mondayOf(new Date());
+        state.weekStart = viewStart(new Date());
+      }
+      var fromToday = msg.week_from_today !== false;
+      if (fromToday !== state.weekFromToday) {
+        state.weekFromToday = fromToday;
+        state.weekStart = viewStart(new Date());
       }
       if (state.events) renderWeek();
     } else if (msg.type === "connection") {
@@ -436,7 +451,11 @@
       var key = ymd(day);
       var column = el("section", { class: "day" + (key === today ? " today" : ""), "aria-label": key });
       var head = el("header", { class: "day-head" });
-      head.appendChild(el("span", { class: "day-name" }, t("days")[i]));
+      // From today, the names follow the dates; otherwise the family's week order.
+      var dayName = state.weekFromToday
+        ? day.toLocaleDateString(I.lang, { weekday: "short" })
+        : orderedDays(t("days"))[i];
+      head.appendChild(el("span", { class: "day-name" }, dayName));
       head.appendChild(dayNumber(String(day.getDate()), key === today));
       var wx = dayWeather(key);
       if (wx) head.appendChild(wx);
@@ -1009,6 +1028,8 @@
   function buildScreenFields(box) {
     var f = I.f, screen = state.draft.screen;
     box.appendChild(fieldRow(f("theme"), selectInput([["auto", f("themeAuto")], ["light", f("themeLight")], ["dark", f("themeDark")]], screen.theme, function (v) { screen.theme = v; })));
+    box.appendChild(switchRow(f("weekFromToday"), screen.week_from_today !== false, function (on) { screen.week_from_today = on; }));
+    box.appendChild(el("p", { class: "hint" }, f("weekFromTodayHint")));
   }
 
   function openWizard(step) {
@@ -2044,10 +2065,12 @@
     request({ op: "weather" }).then(function (weather) {
       state.weather = weather;
       renderWeatherNow();
+      renderWeatherDays();
       renderWeek();
     }).catch(function () {
       state.weather = null;
       renderWeatherNow();
+      renderWeatherDays();
     });
   }
 
@@ -2062,6 +2085,28 @@
     text.appendChild(el("strong", {}, Math.round(w.temperature) + w.unit));
     text.appendChild(document.createTextNode(" " + I.w.cond(w.condition)));
     box.appendChild(text);
+  }
+
+  // The next three days in the top bar, beside the current weather: short day name, icon,
+  // high and low. Always shown when there is a forecast for them.
+  function renderWeatherDays() {
+    var box = $("weather-days");
+    box.textContent = "";
+    var today = ymd(new Date());
+    var list = state.weather && state.weather.forecast ? state.weather.forecast : [];
+    var next = list.filter(function (f) { return String(f.datetime).slice(0, 10) > today; }).slice(0, 3);
+    box.hidden = next.length === 0;
+    next.forEach(function (f) {
+      var day = new Date(String(f.datetime).slice(0, 10) + "T12:00:00");
+      var cell = el("div", { class: "wx-day", title: I.w.cond(f.condition) });
+      cell.appendChild(el("span", { class: "wx-day-name" }, day.toLocaleDateString(I.lang, { weekday: "short" })));
+      cell.appendChild(weatherIcon(f.condition));
+      var temps = el("span", { class: "wx-temps" });
+      if (f.temperature != null) temps.appendChild(el("span", { class: "wx-max" }, Math.round(f.temperature) + "°"));
+      if (f.templow != null) temps.appendChild(el("span", { class: "wx-min" }, Math.round(f.templow) + "°"));
+      cell.appendChild(temps);
+      box.appendChild(cell);
+    });
   }
 
   // Forecast by day (yyyy-mm-dd): the high and low, and the condition.
@@ -2382,7 +2427,7 @@
     $("next-week").addEventListener("click", function () { step(1); });
     $("this-week").addEventListener("click", function () {
       state.dayOffset = 0;
-      state.weekStart = mondayOf(new Date());
+      state.weekStart = viewStart(new Date());
       refreshEvents();
     });
     $("todo-btn").addEventListener("click", openTodos);

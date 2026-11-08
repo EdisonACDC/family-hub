@@ -42,7 +42,7 @@ def test_day_columns_show_high_and_low_where_there_is_a_forecast(
     expect(column.locator(".wx-max")).to_have_text("8°")
     expect(column.locator(".wx-min")).to_have_text("2°")
     # Days without a forecast show no weather at all.
-    assert tablet.locator(".day-weather").count() <= 3
+    assert tablet.locator(".day-weather").count() <= 5
 
 
 def test_phone_shows_today_and_tomorrow_weather(stack_full: Stack, browser: Browser) -> None:

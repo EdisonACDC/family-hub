@@ -26,6 +26,8 @@ CONF_COUNTRY: Final = "country"
 CONF_REGION: Final = "region"
 CONF_TIME_FORMAT: Final = "time_format"
 CONF_THEME: Final = "theme"
+# On the wall tablet the week starts today (today + 6 days) instead of the family's first day.
+CONF_WEEK_FROM_TODAY: Final = "week_from_today"
 TIME_FORMATS: Final[list[str]] = ["24h", "12h"]
 THEMES: Final[list[str]] = ["auto", "light", "dark"]
 WEEKDAYS: Final[list[str]] = ["monday", "sunday"]

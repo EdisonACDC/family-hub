@@ -220,6 +220,7 @@ def test_theme_is_sent_on_connect_and_after_a_save() -> None:
                 "theme": "dark",
                 "time_format": "24h",
                 "first_weekday": "monday",
+                "week_from_today": True,
             } in themes
             config = _config()
             config["screen"] = {"theme": "light"}
@@ -232,6 +233,7 @@ def test_theme_is_sent_on_connect_and_after_a_save() -> None:
                 "theme": "light",
                 "time_format": "24h",
                 "first_weekday": "monday",
+                "week_from_today": True,
             } in seen
             await ws.close()
         finally:

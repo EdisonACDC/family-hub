@@ -38,6 +38,7 @@ from .const import (
     CONF_REGION,
     CONF_THEME,
     CONF_TIME_FORMAT,
+    CONF_WEEK_FROM_TODAY,
     DEFAULT_REMINDERS,
     DOMAIN,
     LANGUAGES,
@@ -122,6 +123,11 @@ def _choice(value: Any, allowed: list[str], field: str) -> str:
     return str(value)
 
 
+def _flag(value: Any, default: bool) -> bool:
+    """A yes/no setting. A missing or non-boolean value keeps the default."""
+    return value if isinstance(value, bool) else default
+
+
 def _slug(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
     return slug or uuid.uuid4().hex[:8]
@@ -200,6 +206,7 @@ def clean_config(
         CONF_COUNTRY: _text(family.get(CONF_COUNTRY), CONF_COUNTRY),
         CONF_REGION: _text(family.get(CONF_REGION), CONF_REGION),
         CONF_THEME: _choice(screen.get(CONF_THEME), THEMES, CONF_THEME),
+        CONF_WEEK_FROM_TODAY: _flag(screen.get(CONF_WEEK_FROM_TODAY), True),
     }
 
     persons = []
@@ -348,7 +355,10 @@ def describe(options: dict[str, Any]) -> dict[str, Any]:
             CONF_COUNTRY: options.get(CONF_COUNTRY, ""),
             CONF_REGION: options.get(CONF_REGION, ""),
         },
-        "screen": {CONF_THEME: options.get(CONF_THEME, "auto")},
+        "screen": {
+            CONF_THEME: options.get(CONF_THEME, "auto"),
+            CONF_WEEK_FROM_TODAY: options.get(CONF_WEEK_FROM_TODAY, True),
+        },
         "shifts": dict(options.get(OPT_SHIFTS, {})),
         "persons": list(options.get(OPT_PERSONS, [])),
         "shared_users": list(options.get(OPT_SHARED_USERS, [])),
