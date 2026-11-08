@@ -1,5 +1,23 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.1
+
+Solo impaginazione (nessuna funzione nuova), su tutte le larghezze da 320 a 1024 px.
+
+- Le finestre stanno sopra la barra in basso, il + e la barra superiore; mentre una finestra è aperta
+  la barra in basso e il + non ci sono. Ogni finestra non supera lo schermo, il contenuto scorre e il
+  piede con i pulsanti resta sempre visibile; sul telefono le finestre occupano tutta la larghezza.
+- Calendari esterni: il pulsante Chiudi si vede a ogni dimensione.
+- Titolo del periodo: dimensione che si adatta, forma corta sui telefoni stretti ("nov 2026", "8–14 nov").
+- Tablet e PC sotto 1100 px: la barra in alto su due righe (le viste e il periodo sotto); niente si sovrappone.
+- Settimana sotto 1100 px: sette colonne di almeno 150 px; la settimana scorre in orizzontale al suo interno.
+- Elenco: i titoli vanno a capo (fino a tre righe), non sono più tagliati.
+- Mese: il "+N altri" sta nella riga del giorno, accanto al numero; due appuntamenti restano visibili.
+- Prossimi ritiri: niente "domani domani"; le etichette vanno a capo.
+- Turni: su telefono la riga del turno su tre righe; la scheda Calendario ha sette giorni per riga.
+- Test: per ogni schermata a 320, 360, 390, 430, 768 e 1024 px: niente scorrimento orizzontale della pagina,
+  i pulsanti del piede raggiungibili e non coperti, il titolo non tagliato, nessun pulsante sotto i 40 px.
+
 ## 0.7.0
 
 Nuova impaginazione: il calendario ha almeno l'80% dello schermo.

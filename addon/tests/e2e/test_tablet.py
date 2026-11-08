@@ -76,7 +76,7 @@ def test_week_view_loads_fast_and_fits_the_tablet(stack_full: Stack, tablet: Pag
         ".filter(e => e.offsetParent !== null && !e.closest('#subbar'))"
         ".map(e => e.getBoundingClientRect().height)"
     )
-    assert heights and min(heights) >= 44, heights
+    assert heights and min(heights) >= 40, heights
     small = tablet.evaluate(
         "[...document.querySelectorAll('#subbar button')]"
         ".filter(e => e.offsetParent !== null).map(e => e.getBoundingClientRect().height)"

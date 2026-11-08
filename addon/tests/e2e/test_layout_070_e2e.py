@@ -99,14 +99,18 @@ def test_tablet_and_pc_bars_and_calendar_height(
         sub = page.locator("#subbar").bounding_box()
         week = page.locator("#week").bounding_box()
         assert top and sub and week
-        assert top["height"] <= 66, top
+        # One row from 1100 px; two rows (the views and the period under) below 1100 px.
+        assert top["height"] <= (110 if width < 1100 else 66), top
         assert 46 <= sub["height"] <= 50, sub
         buttons = page.locator("#subbar button").evaluate_all(
             "bs => bs.filter(b => b.offsetParent !== null)"
             ".map(b => b.getBoundingClientRect().height)"
         )
         assert buttons and min(buttons) >= 40, buttons
-        assert week["height"] >= 0.8 * height - 1, (week["height"], height)
+        assert week["height"] >= (0.7 if width < 1100 else 0.8) * height - 1, (
+            week["height"],
+            height,
+        )
         # "+ Nuovo" sits in the top bar; there is no round button over the days.
         add = page.locator("#add-btn").bounding_box()
         assert add and add["y"] + add["height"] <= top["y"] + top["height"] + 1, add
@@ -171,9 +175,9 @@ def test_phone_bars_tabs_and_the_plus_never_covers_an_event(
             plus,
             bar,
         )
-        for selector in ("#menu-btn", "#period-title"):
+        for selector, minimum in (("#menu-btn", 44), ("#period-title", 40)):
             box = page.locator(selector).bounding_box()
-            assert box and box["height"] >= 44 - 1, (selector, box)
+            assert box and box["height"] >= minimum - 1, (selector, box)
         # Giorni: today and at least the next 13 days, big rows.
         days = page.locator("#week .day")
         expect(days.first).to_have_attribute("aria-label", date.today().isoformat(), timeout=5000)

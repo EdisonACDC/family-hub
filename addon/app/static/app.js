@@ -335,15 +335,15 @@
       var days = Math.round((date - today) / 86400000);
       var when = days <= 0 ? I.f("pickupToday") : days === 1 ? I.f("pickupTomorrow")
         : I.f("pickupInDays").replace("{n}", String(days));
-      var short = days <= 0 ? I.f("pickupToday") : days === 1 ? I.f("pickupTomorrow")
-        : date.toLocaleDateString(I.lang, { weekday: "short" });
+      // The day, short, beside the icon; "oggi" and "domani" are already in "when" (not repeated).
+      var short = days > 1 ? date.toLocaleDateString(I.lang, { weekday: "short" }) : "";
       var label = ev.waste_label || ev.summary;
       var chip = el("span", { class: "pickup-chip" + (days <= 0 ? " soon" : ""), title: label + " · " + when });
       chip.style.setProperty("--ev", ev.waste_color || "#9C27B0");
       chip.appendChild(wasteIcon(ev.waste_icon || ev.waste));
       chip.appendChild(el("span", { class: "pickup-label" }, label));
       chip.appendChild(el("span", { class: "pickup-when" }, when));
-      chip.appendChild(el("span", { class: "pickup-day", "aria-hidden": "true" }, short));
+      if (short) chip.appendChild(el("span", { class: "pickup-day", "aria-hidden": "true" }, short));
       box.appendChild(chip);
       if (full) full.appendChild(chip.cloneNode(true));
     });
@@ -569,8 +569,9 @@
     var title = $("period-title");
     if (!title) return;
     var text;
+    var narrow = window.innerWidth < 600;
     if (state.view === "month") {
-      text = fmtDay(monthOf(monthAtTop()), { month: "long", year: "numeric" });
+      text = fmtDay(monthOf(monthAtTop()), narrow ? { month: "short", year: "numeric" } : { month: "long", year: "numeric" });
     } else if (state.view === "list") {
       text = I.f("listTitle");
     } else if (state.mode === "phone") {
@@ -580,7 +581,7 @@
       var a = state.weekStart;
       var b = addDays(a, 6);
       text = a.getMonth() === b.getMonth()
-        ? a.getDate() + "–" + fmtDay(b, { day: "numeric", month: "short", year: "numeric" })
+        ? a.getDate() + "–" + fmtDay(b, { day: "numeric", month: "short", year: narrow ? undefined : "numeric" })
         : fmtDay(a, { day: "numeric", month: "short" }) + " – " + fmtDay(b, { day: "numeric", month: "short", year: "numeric" });
     }
     title.textContent = text;
@@ -2937,9 +2938,10 @@
           });
           cell.appendChild(line);
         });
+        // "+N altri" sits in the day's top row, beside the number: it takes no line of its own.
         var more = el("span", { class: "month-more" }, "");
         more.hidden = true;
-        cell.appendChild(more);
+        top.appendChild(more);
       }
       if (compact && key === state.selectedDay) cell.classList.add("selected");
       cell.addEventListener("click", (function (k) {

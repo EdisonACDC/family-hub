@@ -1372,3 +1372,95 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
 .month-day { gap: 1px; padding: 3px 5px; }
 .month-ev { line-height: 16px; padding: 0 6px; }
 .month-more { line-height: 13px; }
+
+/* ==== 0.7.1: the layout on every screen (320 to 1024 px wide, phones with notch and home bar) ==== */
+/* Windows always sit above the bottom bar, the + and the top bar; while one is open, the bar and
+   the + are not there at all. */
+.overlay { z-index: 60; padding: 12px; box-sizing: border-box; }
+body:has(.overlay:not([hidden])) #tabbar,
+body:has(.overlay:not([hidden])) #add-btn { visibility: hidden; }
+.dialog {
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.dialog-foot { padding-bottom: env(safe-area-inset-bottom); }
+.dialog-foot > * { min-height: 44px; }
+@media (max-width: 599px) {
+  .overlay { padding: 8px; }
+  .dialog { width: 100%; max-width: 100%; padding: 16px; border-radius: 22px; }
+}
+.dialog-body { overscroll-behavior: contain; }
+
+/* The period: a size that fits, and two lines when the words need them. */
+.period-title {
+  font-size: clamp(14px, 2.1vw, 18px);
+  white-space: normal;
+  line-height: 1.15;
+  text-align: center;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 599px) {
+  .period-title { font-size: clamp(13px, 4vw, 17px); max-width: 44vw; }
+}
+
+/* Tablets and small PCs (600 to 1099 px): the top bar in two rows; the views and the period below
+   the clock and the buttons; nothing overlaps. */
+@media (min-width: 600px) and (max-width: 1099px) {
+  .topbar {
+    flex-wrap: wrap; height: auto; min-height: 64px; max-height: none; row-gap: 6px;
+    padding: 8px 132px 8px 14px;
+  }
+  .topbar .tb-left { order: 1; }
+  .topbar .tb-right { order: 2; margin-left: auto; }
+  .topbar .tb-center { order: 3; flex: 0 0 100%; flex-wrap: wrap; justify-content: center; }
+  .topbar .weeknav { flex-wrap: wrap; justify-content: center; }
+  /* Seven days side by side with a minimum width; the week scrolls sideways inside itself. */
+  .main .week:not(.agenda):not(.month):not(.list-view) {
+    grid-template-columns: repeat(7, minmax(150px, 1fr)); overflow-x: auto;
+  }
+}
+
+/* Titles of appointments: they wrap (up to three lines) instead of being cut. */
+.list-title, .event .ev-title, .allday-name, .busy-name, .card-title {
+  white-space: normal; overflow-wrap: anywhere; hyphens: none;
+}
+.list-title { overflow: visible; text-overflow: clip; }
+.list-row { align-items: start; }
+.event .ev-title { display: block; }
+/* The month's cells keep one line each, with an ellipsis (the rest is in the day). */
+.month-ev { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Upcoming pickups: the labels wrap inside the row, never past its edge. */
+.pickup-chip { max-width: 100%; flex-wrap: wrap; }
+.pickup-chip .pickup-label { overflow-wrap: anywhere; min-width: 0; }
+.pickups { max-width: 100%; }
+
+/* Shifts: on narrow screens the row is in three lines (name / times / category and remove). */
+@media (max-width: 599px) {
+  .shift-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .shift-row > :nth-child(4) { grid-column: 1 / -1; }
+  .shift-row > :last-child { justify-self: end; }
+}
+#shifts-calendar .month-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); width: 100%; }
+#shifts-calendar .month-grid > * { min-width: 0; min-height: 40px; }
+
+/* Touch targets: at least 40 px. */
+.btn, .segment, .tab, .person-chip, .chip, .segment, .period-title { min-height: 40px; }
+.dialog .btn { min-height: 44px; }
+
+/* Nothing wider than the screen. */
+html, body { overflow-x: hidden; max-width: 100%; }
+@media (min-width: 600px) and (max-width: 1099px) {
+  .topbar { padding: 6px 132px 6px 12px; row-gap: 4px; }
+  .topbar .weeknav { gap: 6px; }
+  .topbar .view-switch .segment, .topbar .weeknav .btn { min-height: 40px; height: 40px; }
+  .topbar .period-title { min-height: 40px; }
+}
+.month-top .month-more { font-size: 11px; line-height: 13px; white-space: nowrap; flex: 0 0 auto; }
+.month-ev { line-height: 15px; }
+/* The shift calendar: seven days of at least 40 px; on a 320 px phone the body scrolls sideways. */
+#shifts-calendar .month-grid { grid-template-columns: repeat(7, minmax(40px, 1fr)); gap: 4px; width: 100%; overflow-x: auto; }
+.dialog-body { overflow-x: auto; }

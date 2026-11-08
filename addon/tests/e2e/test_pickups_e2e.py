@@ -122,6 +122,13 @@ def test_a_type_name_that_does_not_fit_shows_only_the_icon(stack_full: Stack, ta
     try:
         tablet.goto(stack_full.url + "/?lang=it")
         pill = tablet.locator(".event.waste-pill[aria-label='Indifferenziato']")
+        expect(pill).to_be_visible(timeout=5000)
+        # Narrow the name's space so it really does not fit, then let the app re-check the pills.
+        tablet.add_style_tag(
+            content=".event.waste-pill .ev-title, .event.waste-pill .allday-name"
+            " { max-width: 24px !important; overflow: hidden; white-space: nowrap; }"
+        )
+        tablet.evaluate("window.dispatchEvent(new Event('resize'))")
         expect(pill).to_have_class(re.compile(r"\bicon-only\b"), timeout=5000)
         expect(pill.locator(".allday-name")).to_be_hidden()
         icon = pill.locator(".waste-icon").bounding_box()
