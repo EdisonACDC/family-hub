@@ -258,3 +258,98 @@ def test_list_and_month_on_the_phone(stack_full: Stack, browser: Browser) -> Non
             page.locator("#view-switch [data-view='week']").click()
     finally:
         context.close()
+
+
+FIRST_ROW_CLEAR = """key => {
+  const b = document.querySelector(`.month-block[data-month='${key}']`);
+  const title = b.querySelector('.month-title').getBoundingClientRect();
+  const first = b.querySelector('.month-day').getBoundingClientRect();
+  return first.top >= title.bottom - 1;
+}"""
+
+
+def _first_row_visible(page: Page, key: str) -> None:
+    """The first row of days of the month is below its title, not behind it."""
+    page.wait_for_function(FIRST_ROW_CLEAR, arg=key, timeout=5000)
+    assert abs(_block_offset(page, key)) < 3
+
+
+def test_the_first_row_of_the_month_is_never_under_its_title(
+    stack_full: Stack, tablet: Page, browser: Browser
+) -> None:
+    today = date.today()
+    now_key = _month_key(today)
+    _open_month(tablet, stack_full)
+    # The months around are read too (their height may change): the view stays on this month.
+    for n in (-1, 1):
+        key = _month_key(_add_months(today, n))
+        expect(tablet.locator(f".month-block[data-month='{key}']")).to_have_class(
+            "month-block loaded", timeout=5000
+        )
+    _first_row_visible(tablet, now_key)
+    tablet.locator("#next-week").click()
+    _first_row_visible(tablet, _month_key(_add_months(today, 1)))
+    tablet.locator("#this-week").click()
+    _first_row_visible(tablet, now_key)
+    tablet.locator("#view-switch [data-view='week']").click()
+
+    context = browser.new_context(viewport={"width": 390, "height": 844}, has_touch=True)
+    context.set_extra_http_headers({"X-Remote-User-Id": ADULT_USER})
+    phone = context.new_page()
+    try:
+        _open_month(phone, stack_full)
+        expect(phone.locator(f".month-block[data-month='{now_key}']")).to_have_class(
+            "month-block loaded", timeout=5000
+        )
+        _first_row_visible(phone, now_key)
+        phone.locator("#view-switch [data-view='week']").click()
+    finally:
+        context.close()
+
+
+def test_the_list_takes_the_whole_width_on_the_pc(stack_full: Stack, browser: Browser) -> None:
+    context = browser.new_context(viewport={"width": 1366, "height": 900})
+    context.set_extra_http_headers({"X-Remote-User-Id": ADULT_USER})
+    page = context.new_page()
+    try:
+        page.goto(stack_full.url + "/?lang=it")
+        expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+        expect(page.locator("#upcoming")).to_be_visible(timeout=5000)
+        page.locator("#view-switch [data-view='list']").click()
+        expect(page.locator("#list-scroll")).to_be_visible(timeout=5000)
+        expect(page.locator("#upcoming")).to_be_hidden()
+        week = page.locator("#week").bounding_box()
+        main = page.locator(".main").bounding_box()
+        assert week and main and week["width"] >= main["width"] - 60, (week, main)
+        page.locator("#view-switch [data-view='week']").click()
+    finally:
+        context.close()
+
+
+def test_the_view_names_fit_on_the_phone_with_a_wider_font(
+    stack_full: Stack, browser: Browser
+) -> None:
+    for width, height in ((390, 844), (360, 780)):
+        context = browser.new_context(viewport={"width": width, "height": height}, has_touch=True)
+        context.set_extra_http_headers({"X-Remote-User-Id": ADULT_USER})
+        page = context.new_page()
+        try:
+            page.goto(stack_full.url + "/?lang=it")
+            expect(page.locator(".chip").first).to_be_visible(timeout=5000)
+            # A font wider than the usual one (as some Android phones have).
+            page.add_style_tag(
+                content="body, button { font-family: 'Courier New', monospace !important;"
+                " letter-spacing: 0.06em !important; }"
+            )
+            fits = page.locator("#view-switch .segment").evaluate_all(
+                "bs => bs.map(b => b.scrollWidth <= b.clientWidth + 1)"
+            )
+            assert all(fits), fits
+            for selector in ("#view-switch", "#next-week", "#this-week"):
+                box = page.locator(selector).bounding_box()
+                assert box and box["x"] + box["width"] <= width + 1, (selector, box)
+            bar = page.locator(".topbar").bounding_box()
+            assert bar and bar["height"] <= height * 0.36, bar
+            _shot(page, f"phone_views_wide_font_{width}")
+        finally:
+            context.close()

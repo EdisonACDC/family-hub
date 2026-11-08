@@ -11,7 +11,11 @@
 - Nuova vista "Elenco" (Settimana | Mese | Elenco): gli appuntamenti dei prossimi 12 mesi divisi per
   mese e per giorno, con ora, titolo, colore del calendario e persone. Filtro persona come nel Mese,
   interruttore "Mostra rifiuti" (spento all'inizio); toccando una riga si apre la scheda dell'evento.
-- Telefono: nel controllo delle viste nomi brevi ("Sett. | Mese | Elenco").
+- Telefono: "Sett. | Mese | Elenco" su una riga propria, larga quanto lo schermo, e sotto ← Oggi →;
+  i nomi stanno nei pulsanti anche con caratteri più larghi.
+- Mese: la prima riga di giorni non resta più sotto il titolo fisso; il mese mostrato resta al suo
+  posto mentre si caricano quelli vicini, e "Oggi" ci torna direttamente.
+- Vista Elenco su tablet e PC: senza il pannello "Prossimi 14 giorni", a tutta larghezza.
 
 ## 0.6.4
 

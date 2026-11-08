@@ -553,6 +553,7 @@
     week.textContent = "";
     var anyEvent;
     if (state.view === "month" || state.view === "list") {
+      if (state.view === "list") $("upcoming").hidden = true;
       if (state.view === "month") renderMonth(week);
       else renderList(week);
       $("empty-note").hidden = true;
@@ -2620,6 +2621,10 @@
     }
     fitToScreen(scroller);
     watchMonths(scroller);
+    // The user scrolls: no month is kept at the top any more.
+    ["wheel", "touchstart", "pointerdown"].forEach(function (type) {
+      scroller.addEventListener(type, function () { state.monthPin = null; }, { passive: true });
+    });
     scroller.addEventListener("keydown", function (e) {
       if (e.key === "PageDown") { e.preventDefault(); jumpMonth(1); }
       if (e.key === "PageUp") { e.preventDefault(); jumpMonth(-1); }
@@ -2676,10 +2681,16 @@
     var next = new Date(month.getFullYear(), month.getMonth() + 1, 1);
     request({ op: "events", start: ymd(month) + " 00:00:00", end: ymd(next) + " 00:00:00" })
       .then(function (events) {
+        var scroller = $("month-scroll");
+        var anchorKey = scroller ? (state.monthPin || monthAtTop()) : null;
+        var anchor = anchorKey && scroller.querySelector(".month-block[data-month='" + anchorKey + "']");
+        var before = anchor ? anchor.getBoundingClientRect().top : 0;
         state.monthLoaded[key] = events;
         delete state.monthLoading[key];
         paintMonthGrid(block.querySelector(".month-view"), month);
         block.classList.add("loaded");
+        // The month in view stays where it was, whatever loads above it.
+        if (anchor) scroller.scrollTop += anchor.getBoundingClientRect().top - before;
       })
       .catch(function () { delete state.monthLoading[key]; });
   }
@@ -2695,7 +2706,10 @@
     var block = scroller && scroller.querySelector(".month-block[data-month='" + key + "']");
     if (!block) return;
     state.monthStart = monthOf(key);
-    scroller.scrollTo({ top: block.offsetTop - scroller.offsetTop, behavior: smooth ? "smooth" : "auto" });
+    // Kept at the top while the months around it are read (until the user scrolls).
+    state.monthPin = smooth ? null : key;
+    var top = scroller.scrollTop + block.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    scroller.scrollTo({ top: top, behavior: smooth ? "smooth" : "auto" });
   }
 
   // The month whose title is at the top now.
@@ -3356,7 +3370,8 @@
       state.dayOffset = 0;
       state.weekStart = viewStart(new Date());
       state.monthStart = firstOfMonth(new Date());
-      if (state.view === "month" && $("month-scroll")) { scrollToMonth(monthKey(state.monthStart), true); return; }
+      // Straight to this month (a smooth scroll would be moved by the months read on the way).
+      if (state.view === "month" && $("month-scroll")) { scrollToMonth(monthKey(state.monthStart), false); return; }
       if (state.view === "list" && $("list-scroll")) { $("list-scroll").scrollTo({ top: 0 }); return; }
       refreshEvents();
     });

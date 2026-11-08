@@ -1142,3 +1142,17 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
   .view-switch .label-short { display: inline; }
   .list-row { grid-template-columns: 72px minmax(0, 1fr); }
 }
+
+/* ---- 0.6.5 fixes ---- */
+/* The hidden panel stays hidden on the PC too (its display rule would show it). */
+.upcoming[hidden] { display: none !important; }
+/* Months stop at their start: the title and the first row of days are both in view. */
+.month-scroll { overflow-anchor: none; }
+/* Phone: "Settimana | Mese | Elenco" on its own row across the width, then <- Oggi ->.
+   Each segment is as wide as its text needs; the row has room for wider fonts too. */
+@media (max-width: 599px) {
+  .weeknav { flex-wrap: wrap; justify-content: center; row-gap: 6px; }
+  .weeknav .view-switch { flex: 1 0 100%; }
+  .weeknav .view-switch .segment { flex: 1 1 auto; min-width: max-content; padding: 0 10px; text-overflow: clip; }
+  .pickups { grid-row: 4; }
+}
