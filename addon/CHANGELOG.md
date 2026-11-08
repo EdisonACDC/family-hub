@@ -7,6 +7,14 @@
 - Nella settimana, se il nome del tipo di rifiuto non sta nella pillola ("Org…"), si vede solo
   l'icona, più grande, nel colore del tipo; toccandola si apre la scheda con il nome intero e il
   titolo del calendario.
+- Vista Mese: gli eventi dei calendari di Home Assistant scelti come fonti (per esempio i vecchi
+  calendar.papa, calendar.mamma) contano come impegni; non contano solo rifiuti, festività e
+  vacanze.
+- Fonti: per ogni calendario di Home Assistant si sceglie a chi appartiene (calendar.mamma ->
+  Mamma), come per i calendari .ics. Il filtro persona del mese, la giornata e l'occupazione usano
+  questa scelta; un calendario senza persone è della famiglia.
+- Lo stesso evento in più calendari (stesso titolo, inizio e fine) compare una volta sola nella
+  settimana, nel mese e nei prossimi 14 giorni, con un puntino per ogni altro calendario.
 
 ## 0.6.2
 

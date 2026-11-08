@@ -1045,3 +1045,8 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
 .event.waste-pill.icon-only .ev-title { font-size: 0; }
 .event.waste-pill.icon-only .waste-icon { width: 28px; height: 28px; }
 .event.waste-pill.icon-only .ev-title .waste-icon { font-size: initial; }
+
+/* ---- 0.6.3: one entry for an event in several calendars, with a dot per extra calendar ---- */
+.cal-dots { display: inline-flex; gap: 3px; margin-left: 6px; flex: 0 0 auto; vertical-align: middle; }
+.cal-dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.85); }
+.cal-persons { grid-column: 1 / -1; }

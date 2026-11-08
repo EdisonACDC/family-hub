@@ -223,6 +223,7 @@ class Hub:
                     "external": True,
                     "type": style.get("type", "altro"),
                     "color": style.get("color", "#64748B"),
+                    "persons": [str(p) for p in style.get("persons", [])],
                     "waste_colors": info["waste_styles"],
                     "waste_types": info["waste_types"],
                 }
@@ -239,6 +240,7 @@ class Hub:
                         "external": True,
                         "type": entry.get("type", "altro"),
                         "color": entry.get("color", "#64748B"),
+                        "persons": [str(p) for p in entry.get("persons", [])],
                         "waste_colors": info["waste_styles"],
                         "waste_types": info["waste_types"],
                     }
@@ -685,7 +687,8 @@ class Hub:
                     "end": raw.get("end", ""),
                     "location": raw.get("location", ""),
                     "record_id": "",
-                    "person_ids": [],
+                    # The persons the calendar belongs to (calendar.mamma -> Mamma).
+                    "person_ids": list(calendar.get("persons", [])),
                     "external": True,
                 }
                 if calendar.get("type") == "rifiuti":

@@ -337,4 +337,49 @@ async def test_styles_of_calendars_that_are_not_chosen_are_dropped(
     )
     reply = await client.receive_json()
     assert reply["success"] is True, reply
-    assert entry.options["sources"]["calendar_styles"] == {"calendar.rifiuti": style}
+    assert entry.options["sources"]["calendar_styles"] == {
+        "calendar.rifiuti": {**style, "persons": []}
+    }
+
+
+async def test_a_home_assistant_calendar_keeps_its_persons(
+    hass: HomeAssistant, hass_ws_client: Any
+) -> None:
+    """calendar.mamma belongs to Mamma: the person is kept with the style; a person that does not
+    exist (any more) is dropped, and a wrong value is refused."""
+    entry = await _entry(hass)
+    hass.states.async_set("calendar.mamma", "off", {"friendly_name": "Mamma"})
+    client = await hass_ws_client(hass)
+
+    async def save(chosen: Any, message_id: int, **extra: Any) -> dict[str, Any]:
+        sources = {
+            "todo": [],
+            "calendars": ["calendar.mamma"],
+            "weather": [],
+            "calendar_styles": {
+                "calendar.mamma": {
+                    "name": "",
+                    "type": "altro",
+                    "color": "#64748B",
+                    "persons": chosen,
+                }
+            },
+        }
+        await client.send_json(
+            {
+                "id": message_id,
+                "type": "family_hub/config/save",
+                "config": _config(sources=sources, **extra),
+            }
+        )
+        return await client.receive_json()
+
+    reply = await save(["placeholder"], 1)
+    assert reply["success"] is True, reply
+    mamma = next(p["id"] for p in entry.options["persons"] if p["name"] == "Mamma")
+    # The persons keep their ids when they are sent back, as the guide does.
+    reply = await save([mamma, "nessuno"], 2, persons=list(entry.options["persons"]))
+    assert reply["success"] is True, reply
+    assert entry.options["sources"]["calendar_styles"]["calendar.mamma"]["persons"] == [mamma]
+    bad = await save("mamma", 3)
+    assert bad["success"] is False and "persons" in bad["error"]["message"]

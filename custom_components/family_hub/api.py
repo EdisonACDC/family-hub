@@ -138,7 +138,9 @@ def _slug(name: str) -> str:
 SOURCE_DOMAINS = {"todo": "todo.", "calendars": "calendar.", "weather": "weather."}
 
 
-def _sources(value: Any, known: Callable[[str], bool]) -> dict[str, Any]:
+def _sources(
+    value: Any, known: Callable[[str], bool], person_ids: set[str] | None = None
+) -> dict[str, Any]:
     raw = _obj(value, "sources")
     result: dict[str, Any] = {}
     for key, prefix in SOURCE_DOMAINS.items():
@@ -154,16 +156,19 @@ def _sources(value: Any, known: Callable[[str], bool]) -> dict[str, Any]:
     if len(result.get("weather", [])) > 1:
         raise ConfigError("sources.weather: choose one weather entity")
     result["calendar_styles"] = _calendar_styles(
-        raw.get("calendar_styles", {}), result["calendars"]
+        raw.get("calendar_styles", {}), result["calendars"], person_ids
     )
     return result
 
 
-def _calendar_styles(value: Any, calendars: list[str]) -> dict[str, dict[str, str]]:
+def _calendar_styles(
+    value: Any, calendars: list[str], person_ids: set[str] | None = None
+) -> dict[str, dict[str, Any]]:
     """How a calendar of Home Assistant looks in Family Hub: its shown name, its type (rubbish,
-    holidays, ...) and its colour. Only the chosen source calendars can have one."""
+    holidays, ...), its colour and the persons it belongs to (calendar.mamma -> Mamma). Only the
+    chosen source calendars can have one. Persons that no longer exist are dropped."""
     raw = _obj(value, "sources.calendar_styles")
-    styles: dict[str, dict[str, str]] = {}
+    styles: dict[str, dict[str, Any]] = {}
     for entity_id, style in raw.items():
         if entity_id not in calendars:
             # A style left over from a calendar that was unticked: dropped, not an error.
@@ -178,8 +183,18 @@ def _calendar_styles(value: Any, calendars: list[str]) -> dict[str, dict[str, st
             "color": _color(
                 style.get("color") or "#64748B", f"sources.calendar_styles.{entity_id}.color"
             ),
+            "persons": _style_persons(style.get("persons", []), entity_id, person_ids),
         }
     return styles
+
+
+def _style_persons(value: Any, entity_id: str, person_ids: set[str] | None) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(p, str) for p in value):
+        raise ConfigError(f"sources.calendar_styles.{entity_id}.persons: a list of person ids")
+    chosen = list(dict.fromkeys(value))
+    if person_ids is not None:
+        chosen = [p for p in chosen if p in person_ids]
+    return chosen
 
 
 def clean_config(
@@ -270,7 +285,9 @@ def clean_config(
         "all_day_reminder": _time(reminders.get("all_day_reminder"), "reminders.all_day_reminder")
         or None,
     }
-    options["sources"] = _sources(config.get("sources", {}), known)
+    options["sources"] = _sources(
+        config.get("sources", {}), known, {str(p["id"]) for p in options[OPT_PERSONS]}
+    )
     options[SETUP_DONE] = True
     return {**current, **options}
 

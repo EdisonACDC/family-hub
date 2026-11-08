@@ -418,11 +418,28 @@
   }
 
   // Events of the visible calendars, grouped by local day and sorted by start.
+  // Events by day. The same event in more than one calendar (same title, start and end) is
+  // listed once, with the colours of all its calendars and the persons of all of them.
   function eventsByDay(source) {
     var byDay = {};
+    var seen = {};
     visibleCalendars().forEach(function (cal) {
       (source[cal.entity_id] || []).forEach(function (ev) {
-        (byDay[dayKey(ev.start)] = byDay[dayKey(ev.start)] || []).push({ ev: ev, color: cal.color });
+        var key = String(ev.summary).trim() + "|" + String(ev.start).slice(0, 16) + "|" + String(ev.end).slice(0, 16);
+        var color = ev.waste_color || cal.color;
+        var twin = seen[key];
+        if (twin) {
+          if (twin.colors.indexOf(color) === -1) twin.colors.push(color);
+          var ids = (twin.ev.person_ids || []).slice();
+          (ev.person_ids || []).forEach(function (id) { if (ids.indexOf(id) === -1) ids.push(id); });
+          // No persons on one copy means the family's: it stays the family's.
+          if (!(twin.ev.person_ids || []).length || !(ev.person_ids || []).length) ids = [];
+          twin.ev = Object.assign({}, twin.ev, { person_ids: ids });
+          return;
+        }
+        var item = { ev: ev, color: cal.color, colors: [color], type: cal.external ? (cal.type || "altro") : "" };
+        seen[key] = item;
+        (byDay[dayKey(ev.start)] = byDay[dayKey(ev.start)] || []).push(item);
       });
     });
     Object.keys(byDay).forEach(function (key) {
@@ -459,6 +476,7 @@
     if (item.ev.waste) row.appendChild(wasteIcon(item.ev.waste_icon || item.ev.waste));
     else if (item.ev.external) row.appendChild(iconSvg("calendar"));
     row.appendChild(el("span", { class: "allday-name", title: item.ev.summary }, shownTitle(item.ev)));
+    if ((item.colors || []).length > 1) row.appendChild(calendarDots(item));
     if (item.ev.waste) {
       row.classList.add("waste-pill");
       row.setAttribute("aria-label", shownTitle(item.ev));
@@ -472,6 +490,16 @@
   // A rubbish pickup is shown as its type ("Organico"), as in the TrashCard; others by title.
   function shownTitle(ev) {
     return ev.waste_label || ev.summary;
+  }
+
+  function calendarDots(item) {
+    var dots = el("span", { class: "cal-dots", "aria-hidden": "true" });
+    (item.colors || []).slice(1).forEach(function (color) {
+      var dot = el("span", { class: "cal-dot" });
+      dot.style.background = color;
+      dots.appendChild(dot);
+    });
+    return dots;
   }
 
   function eventRow(item) {
@@ -488,6 +516,7 @@
     }
     title.appendChild(document.createTextNode(shownTitle(item.ev)));
     row.appendChild(title);
+    if ((item.colors || []).length > 1) row.appendChild(calendarDots(item));
     row.setAttribute("role", "button");
     row.setAttribute("tabindex", "0");
     row.addEventListener("click", function () { openCard(item); });
@@ -1362,6 +1391,19 @@
     var colour = el("input", { type: "color", value: style.color, "aria-label": I.f("icsColor") });
     colour.addEventListener("input", function () { style.color = colour.value; });
     row.appendChild(fieldRow(I.f("icsColor"), colour));
+    var people = (state.draft && state.draft.persons) || [];
+    if (people.length) {
+      if (!Array.isArray(style.persons)) style.persons = [];
+      var who = el("div", { class: "switch-list cal-persons", role: "group", "aria-label": I.f("calPersons") });
+      who.appendChild(el("span", { class: "hint" }, I.f("calPersons")));
+      people.forEach(function (person) {
+        who.appendChild(switchRow(person.name, style.persons.indexOf(person.id) !== -1, function (on) {
+          var rest = style.persons.filter(function (id) { return id !== person.id; });
+          style.persons = on ? rest.concat([person.id]) : rest;
+        }));
+      });
+      row.appendChild(who);
+    }
     return row;
   }
 
@@ -2320,17 +2362,25 @@
   }
 
   // Events with this person, events without persons (the family's), and every external event.
+  var NOT_BUSY = ["rifiuti", "vacanze_scuola", "vacanze_asilo", "festivita"];
+
+  function notBusyType(it) {
+    return NOT_BUSY.indexOf(it.type || "") !== -1;
+  }
+
+  // Rubbish and holidays are everyone's; any other event belongs to its persons, or to the
+  // family when it has none (Home Assistant calendars get theirs in Fonti).
   function forPerson(items) {
     var person = state.monthPerson;
     if (!person) return items;
     return items.filter(function (it) {
       var ids = it.ev.person_ids || [];
-      return it.ev.external || !ids.length || ids.indexOf(person) !== -1;
+      return notBusyType(it) || !ids.length || ids.indexOf(person) !== -1;
     });
   }
 
   function counts(it) {
-    return !it.ev.external && !isAllDay(it.ev.start);
+    return !notBusyType(it) && !isAllDay(it.ev.start);
   }
 
   // Minutes from midnight of the day, kept between 07:00 and 21:00.
@@ -2422,9 +2472,11 @@
       cell.appendChild(bar);
       if (compact) {
         var dots = el("span", { class: "month-dots" });
-        items.slice(0, 4).forEach(function (it) {
+        var colors = [];
+        items.forEach(function (it) { (it.colors || [it.color]).forEach(function (c) { colors.push(c); }); });
+        colors.slice(0, 5).forEach(function (color) {
           var dot = el("span", { class: "month-dot" });
-          dot.style.background = it.ev.waste_color || it.color;
+          dot.style.background = color;
           dots.appendChild(dot);
         });
         cell.appendChild(dots);
@@ -2434,6 +2486,7 @@
           line.style.setProperty("--ev", it.ev.waste_color || it.color);
           var time = isAllDay(it.ev.start) ? "" : timeOf(it.ev.start) + " ";
           line.textContent = time + shownTitle(it.ev);
+          if ((it.colors || []).length > 1) line.appendChild(calendarDots(it));
           cell.appendChild(line);
         });
         if (items.length > 3) {
