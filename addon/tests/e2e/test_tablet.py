@@ -104,7 +104,7 @@ def test_calendar_filter_hides_and_shows_a_calendar(stack_full: Stack, tablet: P
     expect(switch).to_be_checked()
     school.click()
     expect(switch).not_to_be_checked()
-    expect(tablet.locator("#calendars-btn")).to_contain_text("2/3")
+    expect(tablet.locator("#calendars-btn")).to_have_attribute("aria-label", "Calendari (2/3)")
     school.click()
     expect(switch).to_be_checked()
 

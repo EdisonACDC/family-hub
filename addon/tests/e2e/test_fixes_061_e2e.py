@@ -3,6 +3,7 @@ being edited, the time picker's foot, and the "Altri calendari" chip's contrast.
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from playwright.sync_api import Page, expect
@@ -76,7 +77,7 @@ def test_calendars_button_is_readable_and_opens_the_panel(stack_full: Stack, tab
     button = tablet.locator("#calendars-btn")
     expect(button).to_be_visible()
     assert button.evaluate("e => getComputedStyle(e).opacity") == "1"
-    expect(button).to_contain_text("Calendari")
+    expect(button).to_have_attribute("aria-label", re.compile("Calendari"))
     button.click()
     expect(tablet.locator("#filters")).to_be_visible()
     expect(tablet.locator("#filters .cal-switch")).to_have_count(3)

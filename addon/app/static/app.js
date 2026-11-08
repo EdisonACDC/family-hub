@@ -409,10 +409,15 @@
     document.body.setAttribute("data-ready", "1");
   }
 
+  // "Calendari": an icon (the count of the hidden calendars is in its name).
   function paintCalendarsButton() {
     var hidden = state.calendars.filter(function (c) { return state.hidden[c.entity_id]; }).length;
-    var text = I.f("calendarsTitle") + (hidden ? " (" + (state.calendars.length - hidden) + "/" + state.calendars.length + ")" : "") + " ▾";
-    $("calendars-btn").textContent = text;
+    var label = I.f("calendarsTitle") + (hidden ? " (" + (state.calendars.length - hidden) + "/" + state.calendars.length + ")" : "");
+    var btn = $("calendars-btn");
+    btn.textContent = "";
+    btn.appendChild(iconSvg("calendar"));
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
   }
 
   function toggleCalendars(open) {
@@ -2899,12 +2904,14 @@
       var cell = el("button", { type: "button", class: "month-day" + (key === today ? " today" : ""),
         "data-day": key, "data-busy": String(busy),
         "aria-label": day.toLocaleDateString(I.lang, { weekday: "long", day: "numeric", month: "long" }) });
-      cell.appendChild(el("span", { class: "month-num" }, String(day.getDate())));
+      var top = el("span", { class: "month-top" });
+      top.appendChild(el("span", { class: "month-num" }, String(day.getDate())));
       var bar = el("span", { class: "occ", title: f("busyHours").replace("{h}", hoursText(busy)) });
       var fill = el("span", { class: "occ-fill" });
       fill.style.width = Math.round(busy / (DAY_TO - DAY_FROM) * 100) + "%";
       bar.appendChild(fill);
-      cell.appendChild(bar);
+      top.appendChild(bar);
+      cell.appendChild(top);
       if (compact) {
         var dots = el("span", { class: "month-dots" });
         var colors = [];
@@ -2916,11 +2923,8 @@
         });
         cell.appendChild(dots);
       } else {
-        // As many whole lines as the cell has room for (at most 3), then "+N altri".
-        var room = state.cellHeight ? cellHeightFor(month) - 44 : 3 * 19 + 16;
-        var lines = Math.max(0, Math.min(3, Math.floor(room / 19)));
-        if (items.length > lines && lines > 0 && room - lines * 19 < 15) lines -= 1;
-        items.slice(0, lines).forEach(function (it) {
+        // Every event is drawn; fitMonthCells hides the ones that do not fit and counts them.
+        items.forEach(function (it) {
           var line = el("span", { class: "month-ev" + (it.ev.external ? " external" : "") });
           line.style.setProperty("--ev", it.ev.waste_color || it.color);
           var time = isAllDay(it.ev.start) ? "" : timeOf(it.ev.start) + " ";
@@ -2933,9 +2937,9 @@
           });
           cell.appendChild(line);
         });
-        if (items.length > lines) {
-          cell.appendChild(el("span", { class: "month-more" }, f("moreEvents").replace("{n}", String(items.length - lines))));
-        }
+        var more = el("span", { class: "month-more" }, "");
+        more.hidden = true;
+        cell.appendChild(more);
       }
       if (compact && key === state.selectedDay) cell.classList.add("selected");
       cell.addEventListener("click", (function (k) {
@@ -2948,6 +2952,29 @@
       grid.appendChild(cell);
     }
     if (state.cellHeight) grid.style.setProperty("--cell-h", cellHeightFor(month) + "px");
+    if (!compact) window.requestAnimationFrame(function () { fitMonthCells(grid); });
+  }
+
+  // Each day shows as many of its appointments as its cell has room for, then "+N altri" with
+  // the number that are not shown. Measured on the screen, so it fits whatever the font is.
+  function fitMonthCells(grid) {
+    Array.prototype.forEach.call(grid.querySelectorAll(".month-day"), function (cell) {
+      var lines = Array.prototype.slice.call(cell.querySelectorAll(".month-ev"));
+      var more = cell.querySelector(".month-more");
+      if (!more) return;
+      var shown = lines.length;
+      function paint() {
+        lines.forEach(function (line, i) { line.hidden = i >= shown; });
+        var hidden = lines.length - shown;
+        more.hidden = hidden === 0;
+        more.textContent = I.f("moreEvents").replace("{n}", String(hidden));
+      }
+      paint();
+      while (shown > 0 && cell.scrollHeight > cell.clientHeight + 1) {
+        shown -= 1;
+        paint();
+      }
+    });
   }
 
   // The month's weeks fill the screen (then the next month follows).

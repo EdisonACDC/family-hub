@@ -19,11 +19,12 @@ def _load(page: Page, stack: Stack) -> None:
 def test_top_bar_shows_the_next_three_days_beside_the_weather(
     stack_full: Stack, tablet: Page
 ) -> None:
+    # From 1280 px the next three days are in the top bar, beside the current weather.
+    tablet.set_viewport_size({"width": 1366, "height": 768})
     _load(tablet, stack_full)
-    # On a 1024 px tablet the next three days are in the second row (top bar from 1280 px).
-    days = tablet.locator("#weather-days-sub .wx-day")
+    days = tablet.locator("#weather-days .wx-day")
     expect(days).to_have_count(3, timeout=5000)
-    expect(tablet.locator("#weather-days-sub")).to_be_visible()
+    expect(tablet.locator("#weather-days")).to_be_visible()
     expect(days.first.locator(".wx-day-name")).not_to_be_empty()
     expect(days.first.locator(".wx-max")).to_contain_text("°")
     expect(days.first.locator("svg")).to_be_attached()

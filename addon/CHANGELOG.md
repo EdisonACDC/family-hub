@@ -28,6 +28,13 @@ Nuova impaginazione: il calendario ha almeno l'80% dello schermo.
   righe grandi; lo scorrimento laterale cambia giorno. Mese: griglia compatta con puntini e sotto il
   giorno scelto con appuntamenti e spazi liberi. Il + da 56 px sta sopra le schede e niente resta
   coperto. Calendari, Prossimi ritiri, Procedura guidata, Avvisi e Turni sono nel Menu.
+- Seconda riga del tablet: prima le persone (tutte visibili anche con quattro persone a 894 px);
+  "Calendari" è un'icona; i prossimi ritiri sono icone colorate con il giorno. I tre giorni di
+  meteo stanno nella barra in alto accanto al meteo attuale da 1280 px, sotto si nascondono.
+- Mese: ogni giorno mostra prima gli appuntamenti che ci stanno (almeno due a 894x727), poi
+  "+N altri" con il numero di quelli nascosti.
+- Telefono: il + sta al centro della barra inferiore, dentro la barra: non copre più le
+  intestazioni dei giorni.
 - Suono dei promemoria sul telefono, per persona in Avvisi (Normale / Importante, predefinito /
   Critico) e per evento in "Avvisa su". Importante: su iPhone suono e "time-sensitive"; su Android
   priorità alta, ttl 0 e canale "Promemoria Family Hub". Critico: su iPhone avviso critico (serve

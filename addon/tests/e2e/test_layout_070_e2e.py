@@ -8,6 +8,7 @@ above them that never covers an event, everything at least 44x44 px and within t
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, timedelta
@@ -166,7 +167,10 @@ def test_phone_bars_tabs_and_the_plus_never_covers_an_event(
             assert box and box["width"] >= 44 and box["height"] >= 44, box
         plus = page.locator("#add-btn").bounding_box()
         assert plus and abs(plus["width"] - 56) <= 1 and abs(plus["height"] - 56) <= 1, plus
-        assert plus["y"] + plus["height"] <= bar["y"] - 4, (plus, bar)
+        assert plus["y"] >= bar["y"] and plus["y"] + plus["height"] <= bar["y"] + bar["height"], (
+            plus,
+            bar,
+        )
         for selector in ("#menu-btn", "#period-title"):
             box = page.locator(selector).bounding_box()
             assert box and box["height"] >= 44 - 1, (selector, box)
@@ -184,7 +188,7 @@ def test_phone_bars_tabs_and_the_plus_never_covers_an_event(
         page.wait_for_timeout(200)
         last = page.locator("#week .event").last.bounding_box()
         plus = page.locator("#add-btn").bounding_box()
-        assert last and plus and last["y"] + last["height"] <= plus["y"] + 1, (last, plus)
+        assert last and plus and last["y"] + last["height"] <= bar["y"] + 1, (last, plus)
         # Month: compact grid, and the chosen day below with its events and free time.
         _view(page, "month")
         expect(page.locator(".week.month.compact #month-scroll")).to_be_visible()
@@ -249,13 +253,97 @@ def test_events_in_the_month_and_the_day_open_their_card(stack_full: Stack, tabl
 
 def test_a_tap_on_the_free_part_of_a_day_opens_a_new_event(stack_full: Stack, tablet: Page) -> None:
     _ready(tablet, stack_full)
-    day = tablet.locator("#week .day").nth(2)
-    key = day.get_attribute("aria-label")
+    # The days are drawn again when the events arrive: wait for them, then tap by the day's name.
+    expect(tablet.locator("#week .day")).to_have_count(7, timeout=5000)
+    key = tablet.locator("#week .day").nth(2).get_attribute("aria-label")
     assert key
-    box = day.bounding_box()
-    assert box
-    tablet.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] - 30)
-    expect(tablet.locator("#event-overlay")).to_be_visible()
+    day = tablet.locator(f"#week .day[aria-label='{key}']")
+    day.click(position={"x": 40, "y": 420})
+    expect(tablet.locator("#event-overlay")).to_be_visible(timeout=5000)
     expect(tablet.locator("#event-title")).to_have_text("Nuovo evento")
     expected = date.fromisoformat(key).strftime("%d/%m/%Y")
     expect(tablet.locator("#event-form input[name='date']")).to_have_value(expected)
+
+
+@contextmanager
+def _four_persons(stack: Stack) -> Iterator[None]:
+    """Four people in the family besides the default ones: the second row must hold them all."""
+    extra = [
+        {"id": "papa", "name": "Papà", "role": "adult", "ha_user_id": "", "color": "#16A34A"},
+        {
+            "id": "cristian",
+            "name": "Cristian",
+            "role": "adult",
+            "ha_user_id": "",
+            "color": "#F59E0B",
+        },
+        {"id": "aurora", "name": "Aurora", "role": "child", "ha_user_id": "", "color": "#A855F7"},
+    ]
+    saved = []
+    for state in stack.fake.states:
+        if state["entity_id"].startswith("calendar.family_hub_"):
+            old = copy.deepcopy(state["attributes"].get("persons", []))
+            saved.append((state, old))
+            state["attributes"]["persons"] = old + extra
+    try:
+        yield
+    finally:
+        for state, old in saved:
+            state["attributes"]["persons"] = old
+
+
+def test_second_row_keeps_every_person_whole_at_894(stack_full: Stack, browser: Browser) -> None:
+    with _four_persons(stack_full), _screen(browser, 894, 727) as page:
+        _ready(page, stack_full)
+        chips = page.locator("#persons-bar .person-chip")
+        expect(chips).to_have_count(6, timeout=5000)  # Tutti and five people
+        bar = page.locator("#persons-bar").bounding_box()
+        assert bar
+        for i in range(6):
+            box = chips.nth(i).bounding_box()
+            assert (
+                box
+                and bar["x"] - 1 <= box["x"]
+                and box["x"] + box["width"] <= bar["x"] + bar["width"] + 1
+            ), (
+                i,
+                box,
+                bar,
+            )
+        assert page.locator("#persons-bar").evaluate("e => e.scrollWidth <= e.clientWidth + 1")
+        cal = page.locator("#calendars-btn").bounding_box()
+        assert cal and cal["width"] <= 44, cal
+        _shot(page, "layout_894_four_persons")
+
+
+def test_a_day_shows_as_many_events_as_fit_then_how_many_are_hidden(
+    stack_full: Stack, browser: Browser
+) -> None:
+    today = date.today()
+    day = today if today.day < 25 else today - timedelta(days=3)
+    added = [
+        stored_event(title, f"{day} {hour:02d}:00:00", f"{day} {hour + 1:02d}:00:00", "mamma")
+        for title, hour in (("Dentista", 9), ("Calcio", 17), ("Riunione", 20))
+    ]
+    stack_full.fake.events[FAMILY].extend(added)
+    try:
+        with _screen(browser, 894, 727) as page:
+            _ready(page, stack_full)
+            _view(page, "month")
+            cell = page.locator(f".month-day[data-day='{day.isoformat()}']")
+            expect(cell).to_be_visible(timeout=5000)
+            expect(cell.locator(".month-ev").first).to_be_attached(timeout=5000)
+            page.wait_for_timeout(200)
+            shown = cell.locator(".month-ev:not([hidden])").count()
+            assert shown >= 2, shown
+            more = cell.locator(".month-more")
+            if shown < 3:
+                expect(more).to_have_text(f"+{3 - shown} altri")
+            else:
+                expect(more).to_be_hidden()
+            fits = cell.evaluate("c => c.scrollHeight <= c.clientHeight + 1")
+            assert fits
+            _shot(page, "layout_894_month_day")
+    finally:
+        for event in added:
+            stack_full.fake.events[FAMILY].remove(event)

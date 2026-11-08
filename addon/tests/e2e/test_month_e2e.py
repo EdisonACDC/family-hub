@@ -66,7 +66,9 @@ def test_busy_bar_counts_hours_and_not_rubbish(stack_full: Stack, tablet: Page) 
         width = cell.locator(".occ-fill").evaluate("e => e.style.width")
         assert width == "64%", width
         # As many lines as the cell has room for, the rest in "+N altri" (4 events that day).
-        lines = cell.locator(".month-ev").count()
+        # The lines that fit are chosen once the month is drawn: wait for that to settle.
+        tablet.wait_for_timeout(300)
+        lines = cell.locator(".month-ev:not([hidden])").count()
         assert lines >= 1
         expect(cell.locator(".month-more")).to_have_text(f"+{4 - lines} altri")
         _shot(tablet, "tablet_month")

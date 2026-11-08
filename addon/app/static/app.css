@@ -1159,7 +1159,9 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
 
 /* ==== 0.7.0: the layout. Tablet and PC: one top bar of 64 px and a second row of 40 px, so
    the calendar has at least 80% of the height. Phone: a short bar, tabs at the bottom. ==== */
-#tabbar, #menu-calendars, #menu-pickups, .weather-days-sub { display: none; }
+#menu-calendars, #menu-pickups, .weather-days-sub { display: none; }
+#tabbar { display: contents; }
+.tab { display: none; }
 .subbar { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; box-sizing: border-box; min-width: 0; }
 .subbar-btn { min-height: 36px; height: 36px; padding: 0 14px; font-size: 15px; flex: 0 0 auto; }
 .filters.calendars-panel {
@@ -1328,3 +1330,45 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
   .subbar .subbar-btn, .subbar .person-chip { min-height: 40px; height: 40px; }
   .subbar .pickup-chip { min-height: 40px; }
 }
+
+/* ---- 0.7.0 review: the second row, the top bar's three days, the month's lines, the + in the bar ---- */
+@media (min-width: 600px) {
+  .subbar .persons-bar { flex: 0 0 auto; max-width: 62%; min-width: 0; overflow-x: auto; }
+  .subbar .person-chip { font-size: 13px; padding: 0 10px; gap: 5px; }
+  .subbar .person-dot { width: 8px; height: 8px; }
+  .subbar #calendars-btn { flex: 0 0 auto; margin-left: auto; width: 40px; min-width: 40px; padding: 0; justify-content: center; }
+  .subbar #calendars-btn .wx-icon { width: 22px; height: 22px; }
+  .subbar .pickups { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .subbar .pickups-title { display: none; }
+  .subbar .pickup-chip .pickup-day { font-size: 13px; font-weight: 700; text-transform: capitalize; }
+  .weather-days-sub { display: none !important; }
+  .topbar .weather-days .wx-day-name { display: none; }
+}
+@media (min-width: 600px) and (max-width: 1279px) { .tb-right #weather-days { display: none !important; } }
+@media (min-width: 1280px) { .tb-right #weather-days:not([hidden]) { display: flex; } }
+.month-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.month-top .occ { flex: 1 1 auto; height: 5px; margin: 0; }
+.month-top .month-num { font-size: 15px; line-height: 1.2; }
+.month-day { padding: 4px 5px; }
+.month-ev[hidden], .month-more[hidden] { display: none !important; }
+.month-more { font-size: 12px; line-height: 14px; }
+@media (max-width: 599px) {
+  #tabbar {
+    display: grid; grid-template-columns: 1fr 1fr 64px 1fr 1fr; align-items: center;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+    height: calc(64px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+    box-sizing: border-box;
+  }
+  .tab { display: flex; }
+  #add-btn {
+    position: static !important; grid-column: 3; grid-row: 1; justify-self: center; align-self: center;
+    width: 56px; height: 56px; min-height: 56px; margin: 0; padding: 0; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 30px;
+    top: auto; right: auto; bottom: auto; left: auto; z-index: auto;
+  }
+  .main .week { padding-bottom: calc(64px + 12px + env(safe-area-inset-bottom)); }
+}
+/* Month cells: two appointments and "+N altri" fit in a cell of about 75 px (893 x 727). */
+.month-day { gap: 1px; padding: 3px 5px; }
+.month-ev { line-height: 16px; padding: 0 6px; }
+.month-more { line-height: 13px; }
