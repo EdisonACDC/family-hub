@@ -1,5 +1,12 @@
 # Changelog: Family Hub UI (add-on)
 
+## Non ancora rilasciato
+
+- "Importa dai vecchi calendari" (Fonti, solo adulti): si sceglie un calendario di Home
+  Assistant, il calendario Family Hub e la persona, si vede l'anteprima (primi 10 eventi) e poi si
+  copiano gli eventi degli ultimi 30 giorni e quelli futuri. Gli eventi già presenti (stesso titolo,
+  inizio e fine) vengono saltati: ripetere l'importazione non crea duplicati.
+
 ## 0.6.0
 
 - Evento: toccandolo si apre una scheda con titolo, calendario, data e ora, persone e promemoria,
@@ -36,8 +43,7 @@
 - La settimana e il mini calendario partono dal primo giorno scelto nelle impostazioni
   (lunedì o domenica).
 
-Non ancora incluso (rimandato): "Importa dai vecchi calendari" e i promemoria della sera prima e
-della mattina per i calendari di Home Assistant scelti come fonti (rifiuti). Il nome, il tipo e il colore
+Non ancora incluso (rimandato): i promemoria della sera prima e della mattina per i calendari di Home Assistant scelti come fonti (rifiuti). Il nome, il tipo e il colore
 si impostano già in Fonti; i promemoria per questi calendari non sono ancora attivi.
 
 ## 0.5.2

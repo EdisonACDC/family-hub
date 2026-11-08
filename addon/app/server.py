@@ -21,6 +21,7 @@ from typing import Any
 
 from aiohttp import WSMsgType, web
 
+from . import importer
 from .access import (
     ADULT,
     CHILD,
@@ -717,6 +718,8 @@ class Hub:
                 return {"ok": True, "result": await self.candidate_entities()}
             if op in ("todo_items", "todo_add", "todo_update", "todo_remove"):
                 return {"ok": True, "result": await self.todo(identity, op, request)}
+            if op in ("import_sources", "import_preview", "import_run"):
+                return {"ok": True, "result": await self.import_op(identity, op, request)}
             return {"ok": False, "error": "bad_request"}
         except PermissionError:
             return {"ok": False, "error": "forbidden"}
@@ -846,6 +849,57 @@ class Hub:
             service_data={"entity_id": entity_id, "item": [str(request["item"])]},
         )
         return None
+
+    # ---- importing old calendars (adults only) ----
+
+    async def import_op(self, identity: Identity, op: str, request: dict[str, Any]) -> Any:
+        """Copy an old Home Assistant calendar into a Family Hub category. Preview first; the
+        copy skips events that are already in the category, so it can be repeated safely."""
+        if identity.role != ADULT:
+            raise PermissionError(op)
+        if op == "import_sources":
+            return [c for c in await self.candidate_entities() if c["domain"] == "calendar"]
+        entity_id = str(request["entity_id"])
+        if not entity_id.startswith("calendar.") or entity_id.startswith(CALENDAR_PREFIX):
+            raise ValueError("entity_id")
+        category_id = str(request["category_id"])
+        target = next(
+            (c for c in await self.family_calendars() if c["category_id"] == category_id), None
+        )
+        if target is None:
+            raise LookupError(category_id)
+        person = str(request.get("person") or "")
+        if person and person not in {str(p["id"]) for p in await self.persons()}:
+            raise LookupError(person)
+        now = datetime.now()
+        start = (now - timedelta(days=importer.PAST_DAYS)).strftime("%Y-%m-%d 00:00:00")
+        end = (now + timedelta(days=365 * importer.FUTURE_YEARS)).strftime("%Y-%m-%d 00:00:00")
+        source = await self._events_of(entity_id, start, end)
+        existing = await self._events_of(target["entity_id"], start, end)
+        to_copy, skipped = importer.plan(source, existing)
+        if op == "import_preview":
+            return {
+                "total": len(to_copy),
+                "skipped": skipped,
+                "items": [
+                    {
+                        "summary": e.get("summary", ""),
+                        "start": e.get("start", ""),
+                        "end": e.get("end", ""),
+                    }
+                    for e in to_copy[: importer.PREVIEW_COUNT]
+                ],
+            }
+        persons = [person] if person else []
+        for event in to_copy:
+            # One event at a time: if one fails, the rest stays to copy and nothing repeats.
+            await self.ha.call(
+                "call_service",
+                domain=DOMAIN,
+                service="add_event",
+                service_data=importer.service_data(event, category_id, persons),
+            )
+        return {"copied": len(to_copy), "skipped": skipped}
 
     async def service(self, identity: Identity, service: str, data: Any) -> None:
         if service not in ALLOWED_SERVICES:

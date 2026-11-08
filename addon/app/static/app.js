@@ -1295,6 +1295,76 @@
     }).catch(function (err) {
       status.textContent = errorText(err);
     });
+    if (state.role === "adult") buildImportCard(box);
+  }
+
+  // Old calendars (Home Assistant calendars that are not Family Hub's) are copied into a
+  // category, once: a preview first, then the copy. Events already there are skipped, so the
+  // copy can be repeated. Adults only.
+  function buildImportCard(box) {
+    var f = I.f;
+    var card = el("fieldset", { class: "card" });
+    card.appendChild(el("legend", {}, f("importTitle")));
+    card.appendChild(el("p", { class: "hint" }, f("importHint")));
+    var body = el("div", {});
+    var out = el("p", { class: "hint" });
+    var list = el("ul", { class: "import-list" });
+    var run = button(f("importRun"), "btn btn-primary", function () { doImport(); });
+    run.hidden = true;
+    var choice = { entity: "", category: "", person: "" };
+    card.appendChild(body);
+    box.appendChild(card);
+
+    function clearPreview() {
+      out.textContent = "";
+      list.textContent = "";
+      run.hidden = true;
+    }
+
+    function preview() {
+      clearPreview();
+      out.textContent = f("loading");
+      request({ op: "import_preview", entity_id: choice.entity, category_id: choice.category, person: choice.person })
+        .then(function (r) {
+          out.textContent = r.total ? f("importCount").replace("{n}", r.total).replace("{s}", r.skipped) : f("importNone");
+          r.items.forEach(function (item) {
+            list.appendChild(el("li", {}, item.summary + " · " + showDate(item.start.slice(0, 10))));
+          });
+          if (r.total > r.items.length) list.appendChild(el("li", {}, f("importMore").replace("{n}", r.total - r.items.length)));
+          run.hidden = r.total === 0;
+        })
+        .catch(function (err) { out.textContent = errorText(err); });
+    }
+
+    function doImport() {
+      request({ op: "import_run", entity_id: choice.entity, category_id: choice.category, person: choice.person })
+        .then(function (r) {
+          showStatusNote(f("importDone").replace("{n}", r.copied).replace("{s}", r.skipped));
+          preview();
+        })
+        .catch(function (err) { out.textContent = errorText(err); });
+    }
+
+    Promise.all([request({ op: "import_sources" }), request({ op: "calendars" }), request({ op: "config_get" })])
+      .then(function (res) {
+        var sources = res[0];
+        var categories = res[1].filter(function (c) { return !c.external; });
+        var persons = res[2].persons || [];
+        if (!sources.length) {
+          body.appendChild(el("p", { class: "hint" }, f("importNoSource")));
+          return;
+        }
+        choice.entity = sources[0].entity_id;
+        choice.category = categories.length ? categories[0].category_id : "";
+        body.appendChild(fieldRow(f("importSource"), selectInput(sources.map(function (s) { return [s.entity_id, s.name]; }), choice.entity, function (v) { choice.entity = v; clearPreview(); })));
+        body.appendChild(fieldRow(f("importCategory"), selectInput(categories.map(function (c) { return [c.category_id, c.name]; }), choice.category, function (v) { choice.category = v; clearPreview(); })));
+        body.appendChild(fieldRow(f("importPerson"), selectInput([["", f("importNobody")]].concat(persons.map(function (p) { return [p.id, p.name]; })), "", function (v) { choice.person = v; clearPreview(); })));
+        body.appendChild(button(f("importPreview"), "btn", preview));
+        body.appendChild(out);
+        body.appendChild(list);
+        body.appendChild(run);
+      })
+      .catch(function (err) { body.appendChild(el("p", { class: "hint" }, errorText(err))); });
   }
 
   // The menu opens under the Menu button, over the page, never over the top bar.
