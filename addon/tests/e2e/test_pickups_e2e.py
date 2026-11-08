@@ -4,15 +4,17 @@ A Home Assistant calendar marked as rubbish counts too."""
 
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 from typing import Any
 
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e.conftest import Stack
 from tests.e2e.test_external_e2e import _add_rubbish_calendar, _remove_rubbish_calendar
 from tests.e2e.test_tablet import _shot
 from tests.fake_ha import WASTE
+from tests.helpers import ADULT_USER
 
 
 def _pickup(summary: str, day: date) -> dict[str, Any]:
@@ -78,3 +80,53 @@ def test_a_home_assistant_rubbish_calendar_feeds_the_row(stack_full: Stack, tabl
     finally:
         styles.pop(WASTE, None)
         stack_full.fake.events[WASTE] = old
+
+
+def test_pickups_stay_on_one_line_that_scrolls_on_the_phone(
+    stack_full: Stack, browser: Browser
+) -> None:
+    today = date.today()
+    key = "calendar.family_hub_ext_riga"
+    titles = ["Abfuhr: Bioabfall", "Abfuhr: Papierabfall", "Abfuhr: Gelbe Tonne"]
+    _add_rubbish_calendar(
+        stack_full,
+        key,
+        "riga",
+        [_pickup(titles[i % 3], today + timedelta(days=i)) for i in range(6)],
+    )
+    context = browser.new_context(viewport={"width": 390, "height": 844}, has_touch=True)
+    context.set_extra_http_headers({"X-Remote-User-Id": ADULT_USER})
+    page = context.new_page()
+    try:
+        page.goto(stack_full.url + "/?lang=it")
+        chips = page.locator("#pickups .pickup-chip")
+        expect(chips).to_have_count(6, timeout=5000)
+        tops = {round(chips.nth(i).bounding_box()["y"]) for i in range(6)}  # type: ignore[index]
+        assert len(tops) == 1, tops  # one line, never one under the other
+        row = page.locator("#pickups")
+        assert row.evaluate("e => e.scrollWidth > e.clientWidth")
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        _shot(page, "phone_next_pickups")
+    finally:
+        context.close()
+        _remove_rubbish_calendar(stack_full, key, "riga")
+
+
+def test_a_type_name_that_does_not_fit_shows_only_the_icon(stack_full: Stack, tablet: Page) -> None:
+    today = date.today()
+    key = "calendar.family_hub_ext_pillola"
+    _add_rubbish_calendar(stack_full, key, "pillola", [_pickup("Abfuhr: Restabfall", today)])
+    try:
+        tablet.goto(stack_full.url + "/?lang=it")
+        pill = tablet.locator(".event.waste-pill[aria-label='Indifferenziato']")
+        expect(pill).to_have_class(re.compile(r"\bicon-only\b"), timeout=5000)
+        expect(pill.locator(".allday-name")).to_be_hidden()
+        icon = pill.locator(".waste-icon").bounding_box()
+        assert icon and icon["width"] >= 27
+        _shot(tablet, "tablet_icon_only_pill")
+        pill.click()
+        card = tablet.locator("#card-overlay")
+        expect(card.locator(".card-title")).to_have_text("Indifferenziato")
+        expect(card.locator(".card-raw")).to_have_text("Abfuhr: Restabfall")
+    finally:
+        _remove_rubbish_calendar(stack_full, key, "pillola")

@@ -459,6 +459,10 @@
     if (item.ev.waste) row.appendChild(wasteIcon(item.ev.waste_icon || item.ev.waste));
     else if (item.ev.external) row.appendChild(iconSvg("calendar"));
     row.appendChild(el("span", { class: "allday-name", title: item.ev.summary }, shownTitle(item.ev)));
+    if (item.ev.waste) {
+      row.classList.add("waste-pill");
+      row.setAttribute("aria-label", shownTitle(item.ev));
+    }
     row.setAttribute("role", "button");
     row.setAttribute("tabindex", "0");
     row.addEventListener("click", function () { openCard(item); });
@@ -477,13 +481,30 @@
     if (item.ev.external) row.classList.add("external");
     row.appendChild(el("span", { class: "ev-time" }, timeOf(item.ev.start)));
     var title = el("span", { class: "ev-title" });
-    if (item.ev.waste) title.appendChild(wasteIcon(item.ev.waste_icon || item.ev.waste));
+    if (item.ev.waste) {
+      title.appendChild(wasteIcon(item.ev.waste_icon || item.ev.waste));
+      row.classList.add("waste-pill");
+      row.setAttribute("aria-label", shownTitle(item.ev));
+    }
     title.appendChild(document.createTextNode(shownTitle(item.ev)));
     row.appendChild(title);
     row.setAttribute("role", "button");
     row.setAttribute("tabindex", "0");
     row.addEventListener("click", function () { openCard(item); });
     return row;
+  }
+
+  // A rubbish pill whose type name does not fit ("Org…") shows only a big icon in its colour;
+  // the whole name is in its label and on the card that a tap opens.
+  function fitWastePills(root) {
+    Array.prototype.forEach.call(root.querySelectorAll(".event.waste-pill"), function (row) {
+      row.classList.remove("icon-only");
+      var name = row.querySelector(".allday-name, .ev-title");
+      if (name && name.scrollWidth > name.clientWidth + 1) {
+        row.classList.add("icon-only");
+        row.setAttribute("title", row.getAttribute("aria-label") || name.textContent);
+      }
+    });
   }
 
   function renderWeek() {
@@ -495,6 +516,7 @@
       $("empty-note").hidden = true;
       return;
     }
+    window.requestAnimationFrame(function () { fitWastePills(week); });
     if (state.mode === "phone") {
       week.className = "week agenda";
       anyEvent = renderAgenda(week);
@@ -925,7 +947,10 @@
     var ev = item.ev;
     var box = $("card-body");
     box.textContent = "";
-    box.appendChild(el("h2", { class: "card-title" }, ev.summary));
+    box.appendChild(el("h2", { class: "card-title" }, shownTitle(ev)));
+    if (ev.waste_label && ev.waste_label !== ev.summary) {
+      box.appendChild(el("p", { class: "hint card-raw" }, ev.summary));
+    }
     box.appendChild(el("p", { class: "hint" }, (ev.calendar || "") + " · " + cardWhen(ev)));
     if (ev.location) box.appendChild(el("p", {}, ev.location));
     if (ev.description) box.appendChild(el("p", { class: "card-text" }, ev.description));
@@ -2886,6 +2911,7 @@
     });
     updateClock();
     window.setInterval(updateClock, 15000);
+    window.addEventListener("resize", function () { fitWastePills($("week")); });
     window.addEventListener("resize", function () {
       var mode = layoutMode();
       if (mode !== state.mode) {

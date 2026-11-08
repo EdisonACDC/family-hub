@@ -1,5 +1,13 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.6.3
+
+- "Prossimi ritiri" sta su una sola riga che scorre in orizzontale, sul tablet e sul telefono:
+  i chip non vanno più uno sotto l'altro.
+- Nella settimana, se il nome del tipo di rifiuto non sta nella pillola ("Org…"), si vede solo
+  l'icona, più grande, nel colore del tipo; toccandola si apre la scheda con il nome intero e il
+  titolo del calendario.
+
 ## 0.6.2
 
 - Dopo un riavvio di Home Assistant il tablet riconosce di nuovo chi lo usa: un tablet avviato

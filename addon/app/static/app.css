@@ -1033,3 +1033,15 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
   border: 2px dashed rgba(255,255,255,.85); background: rgba(139,195,74,.35); color: #fff; cursor: pointer; text-align: left;
 }
 .free-slot:disabled { cursor: default; opacity: .8; }
+
+/* ---- 0.6.3: next pickups on one line that scrolls; rubbish pills that only show the icon ---- */
+.pickups {
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; min-width: 0; max-width: 100%;
+  scrollbar-width: thin; -webkit-overflow-scrolling: touch; padding-bottom: 2px;
+}
+.pickups-title, .pickup-chip { flex: 0 0 auto; white-space: nowrap; }
+.event.waste-pill.icon-only { justify-content: center; padding-left: 4px; padding-right: 4px; }
+.event.waste-pill.icon-only .allday-name { display: none; }
+.event.waste-pill.icon-only .ev-title { font-size: 0; }
+.event.waste-pill.icon-only .waste-icon { width: 28px; height: 28px; }
+.event.waste-pill.icon-only .ev-title .waste-icon { font-size: initial; }

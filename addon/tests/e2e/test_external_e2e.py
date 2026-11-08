@@ -323,8 +323,13 @@ def test_all_day_rubbish_is_one_compact_row_with_dots(stack_full: Stack, tablet:
         # Glass is not one of the default types: it is "Altro", the raw title in the tooltip.
         row = tablet.locator(".event.allday", has_text="Altro")
         expect(row).to_be_visible(timeout=5000)
-        height = row.bounding_box()["height"]
-        assert height < 40, height  # one line
+        # One line. The week is drawn again when the weather and the calendars arrive, so the
+        # height is checked once the drawing has settled, not on the very first frame.
+        tablet.wait_for_function(
+            """() => [...document.querySelectorAll('.event.allday')].some(
+                e => e.textContent.includes('Altro') && e.getBoundingClientRect().height < 40)""",
+            timeout=5000,
+        )
         assert row.locator(".allday-name").evaluate("e => e.scrollWidth > e.clientWidth") in (
             True,
             False,
