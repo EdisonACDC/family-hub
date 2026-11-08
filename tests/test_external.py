@@ -191,8 +191,8 @@ async def test_rubbish_is_announced_the_evening_before_and_the_morning_of(
     async_fire_time_changed(hass, datetime.fromisoformat("2026-11-09 07:00:00+01:00"))
     await hass.async_block_till_done()
     messages = [c.data["message"] for c in calls]
-    assert "Domani: Restmüll" in messages
-    assert "Oggi: Restmüll" in messages
+    assert "Domani: Indifferenziato" in messages
+    assert "Oggi: Indifferenziato" in messages
 
 
 async def test_holidays_are_only_announced_when_asked_for_the_return(
@@ -292,8 +292,13 @@ def test_waste_kinds_are_recognised_from_the_title() -> None:
         "Gelbe Tonne": "gelb",
         "Gelber Sack": "gelb",
         "Wertstoff": "gelb",
-        "Glas": "glas",
-        "Abfuhr": None,
+        "Abfuhr: Restabfall": "restmuell",
+        "Abfuhr: Bioabfall": "bio",
+        "Abfuhr: Papierabfall": "papier",
+        "Abfuhr: Gelbe Tonne": "gelb",
+        # Anything else is "Altro", the type without a text to look for.
+        "Glas": "altro",
+        "Abfuhr": "altro",
     }
     for title, kind in cases.items():
         assert waste_kind(title) == kind, title
@@ -306,7 +311,7 @@ async def test_two_pickups_on_one_day_make_one_reminder(hass: HomeAssistant, fre
     async_fire_time_changed(hass, datetime.fromisoformat("2026-11-08 19:00:00+01:00"))
     await hass.async_block_till_done()
     messages = [c.data["message"] for c in calls]
-    assert [m for m in messages if "Restm" in m] == ["Domani: Restmüll, Biotonne"]
+    assert [m for m in messages if "Indiff" in m] == ["Domani: Indifferenziato, Organico"]
 
 
 async def test_fatto_on_the_evening_also_ends_the_morning_reminder(
@@ -320,7 +325,7 @@ async def test_fatto_on_the_evening_also_ends_the_morning_reminder(
     freezer.move_to("2026-11-09 07:00:00+01:00")
     async_fire_time_changed(hass, datetime.fromisoformat("2026-11-09 07:00:00+01:00"))
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in calls if "Restm" in c.data["message"]] == []
+    assert [c.data["message"] for c in calls if "Indiff" in c.data["message"]] == []
 
 
 async def test_snooze_one_hour_sends_it_again(hass: HomeAssistant, freezer: Any) -> None:
@@ -330,12 +335,12 @@ async def test_snooze_one_hour_sends_it_again(hass: HomeAssistant, freezer: Any)
     freezer.move_to("2026-11-08 19:00:00+01:00")
     async_fire_time_changed(hass, datetime.fromisoformat("2026-11-08 19:00:00+01:00"))
     await hass.async_block_till_done()
-    assert len([c for c in calls if "Restm" in c.data["message"]]) == 1
+    assert len([c for c in calls if "Indiff" in c.data["message"]]) == 1
     await manager.async_action("snooze", "ext-rest-2026-11-09", 60)
     freezer.move_to("2026-11-08 20:00:00+01:00")
     async_fire_time_changed(hass, datetime.fromisoformat("2026-11-08 20:00:00+01:00"))
     await hass.async_block_till_done()
-    assert len([c for c in calls if "Restm" in c.data["message"]]) == 2
+    assert len([c for c in calls if "Indiff" in c.data["message"]]) == 2
 
 
 async def test_the_entity_keeps_its_id_and_takes_the_chosen_name(hass: HomeAssistant) -> None:
@@ -398,8 +403,63 @@ async def test_a_home_assistant_rubbish_calendar_is_announced_like_an_ics_file(
     async_fire_time_changed(hass, datetime.fromisoformat("2026-11-09 07:00:00+01:00"))
     await hass.async_block_till_done()
     messages = [c.data["message"] for c in calls]
-    assert "Domani: Restmüll" in messages
-    assert "Oggi: Restmüll" in messages
+    assert "Domani: Indifferenziato" in messages
+    assert "Oggi: Indifferenziato" in messages
     # Only the rubbish calendar is read, for the evening's day and the morning's.
     assert {entity for entity, _ in asked} == {"calendar.rifiuti_bianco"}
     assert ("calendar.rifiuti_bianco", "2026-11-09") in asked
+
+
+def test_rubbish_types_are_checked_and_colour_names_accepted() -> None:
+    from custom_components.family_hub.waste import WasteTypeError, clean_types, type_of
+
+    types = clean_types(
+        [
+            {"label": "Organico", "icon": "mdi:flower", "pattern": "Bio", "color": "light-green"},
+            {"label": "Altro", "icon": "mdi:dump-truck", "pattern": "", "color": "#9c27b0"},
+        ]
+    )
+    assert types[0] == {
+        "id": "organico",
+        "label": "Organico",
+        "icon": "mdi:flower",
+        "pattern": "Bio",
+        "color": "#8BC34A",
+    }
+    assert type_of("Abfuhr: Bioabfall", types)["label"] == "Organico"
+    assert type_of("Sperrmüll", types)["label"] == "Altro"
+    for bad in (
+        [],
+        [{"label": "", "icon": "mdi:flower", "color": "#000000"}],
+        [{"label": "X", "icon": "flower", "color": "#000000"}],
+        [{"label": "X", "icon": "mdi:flower", "color": "verde"}],
+    ):
+        with pytest.raises(WasteTypeError):
+            clean_types(bad)
+
+
+async def test_rubbish_types_are_saved_by_an_admin_and_listed(
+    hass: HomeAssistant, hass_ws_client: Any, hass_read_only_access_token: str
+) -> None:
+    entry = await _setup(hass, [], {})
+    client = await hass_ws_client(hass)
+    types = [
+        {"label": "Umido", "icon": "mdi:leaf", "pattern": "Bio, Umido", "color": "#00AA00"},
+        {"label": "Altro", "icon": "mdi:dump-truck", "pattern": "", "color": "#9C27B0"},
+    ]
+    await client.send_json({"id": 1, "type": "family_hub/ics/waste_types", "types": types})
+    reply = await client.receive_json()
+    assert reply["success"] is True, reply
+    assert [t["label"] for t in entry.options["waste_types"]] == ["Umido", "Altro"]
+    await client.send_json({"id": 2, "type": "family_hub/ics/list"})
+    listed = (await client.receive_json())["result"]
+    assert listed["waste_types"][0]["icon"] == "mdi:leaf"
+    assert listed["waste_styles"]["umido"] == "#00AA00"
+    await client.send_json(
+        {"id": 3, "type": "family_hub/ics/waste_types", "types": [{"label": ""}]}
+    )
+    bad = await client.receive_json()
+    assert bad["success"] is False and "label" in bad["error"]["message"]
+    readonly = await hass_ws_client(hass, hass_read_only_access_token)
+    await readonly.send_json({"id": 4, "type": "family_hub/ics/waste_types", "types": types})
+    assert (await readonly.receive_json())["success"] is False

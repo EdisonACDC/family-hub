@@ -309,3 +309,32 @@ async def test_external_sources_are_checked_and_stored(
         "weather": [],
         "calendar_styles": {},
     }
+
+
+async def test_styles_of_calendars_that_are_not_chosen_are_dropped(
+    hass: HomeAssistant, hass_ws_client: Any
+) -> None:
+    """The guide may send a style for a calendar that was unticked: it is left out, and the
+    rest of the configuration is saved (it used to refuse the whole save)."""
+    entry = await _entry(hass)
+    hass.states.async_set("calendar.rifiuti", "off", {"friendly_name": "Rifiuti"})
+    hass.states.async_set("calendar.festivi", "off", {"friendly_name": "Festivi"})
+    client = await hass_ws_client(hass)
+    style = {"name": "", "type": "rifiuti", "color": "#64748B"}
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "family_hub/config/save",
+            "config": _config(
+                sources={
+                    "todo": [],
+                    "calendars": ["calendar.rifiuti"],
+                    "weather": [],
+                    "calendar_styles": {"calendar.rifiuti": style, "calendar.festivi": style},
+                }
+            ),
+        }
+    )
+    reply = await client.receive_json()
+    assert reply["success"] is True, reply
+    assert entry.options["sources"]["calendar_styles"] == {"calendar.rifiuti": style}

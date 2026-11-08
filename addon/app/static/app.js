@@ -17,6 +17,9 @@
     events: {},
     weekFromToday: true,
     weekStart: viewStart(new Date()),
+    view: loadView(),
+    monthStart: firstOfMonth(new Date()),
+    monthPerson: "",
     popups: [],
     wizardStep: 0,
     mode: layoutMode(),
@@ -155,21 +158,25 @@
     } else if (msg.type === "identity") {
       state.role = msg.role;
       state.me = msg;
-      // Guests only read: no add button for them.
-      $("add-btn").hidden = msg.role === "guest";
+      // Guests only read: no add button for them. Until Home Assistant answers (pending), the
+      // tablet offers nothing either, and it is told again once the connection is there.
+      var limited = msg.role === "guest" || msg.role === "pending";
+      $("add-btn").hidden = limited;
       $("wizard-start").hidden = msg.role !== "adult";
       $("menu-wizard").hidden = msg.role !== "adult";
-      $("menu-shifts").hidden = msg.role === "guest";
-      $("menu-notify").hidden = msg.role === "guest";
+      $("menu-shifts").hidden = limited;
+      $("menu-notify").hidden = limited;
       $("menu-ics").hidden = msg.role !== "adult";
-      $("menu-btn").hidden = msg.role === "guest";
+      $("menu-btn").hidden = limited;
       if (msg.role === "adult") openGuideIfNeeded();
-      // A guest is told why nothing can be changed, instead of finding buttons missing.
+      // A guest is told why nothing can be changed; while waiting for Home Assistant, that.
       var guestNote = $("guest-note");
-      guestNote.hidden = msg.role !== "guest";
-      guestNote.textContent = msg.role === "guest"
-        ? I.f("guestNote").replace("{name}", msg.user_name || "Home Assistant")
-        : "";
+      guestNote.hidden = !limited;
+      guestNote.textContent = msg.role === "pending"
+        ? I.f("connecting")
+        : msg.role === "guest"
+          ? I.f("guestNote").replace("{name}", msg.user_name || "Home Assistant")
+          : "";
     } else if (msg.type === "theme") {
       applyTheme(msg.theme);
       if (msg.time_format) state.timeFormat = msg.time_format;
@@ -255,6 +262,15 @@
   function refreshEvents() {
     var now = new Date();
     var start, end;
+    if (state.view === "month") {
+      // The whole grid of the month: six weeks.
+      var first = monthGridStart(state.monthStart);
+      loadPickups();
+      request({ op: "events", start: ymd(first) + " 00:00:00", end: ymd(addDays(first, 42)) + " 00:00:00" })
+        .then(function (events) { state.events = events; renderWeek(); })
+        .catch(function () { renderWeek(); });
+      return;
+    }
     if (state.mode === "phone") {
       start = ymd(addDays(now, state.dayOffset)) + " 00:00:00";
       end = ymd(addDays(now, state.dayOffset + 2)) + " 00:00:00";
@@ -262,11 +278,53 @@
       start = ymd(state.weekStart) + " 00:00:00";
       end = ymd(addDays(state.weekStart, 7)) + " 00:00:00";
     }
+    loadPickups();
     request({ op: "events", start: start, end: end }).then(function (events) {
       state.events = events;
       if (state.mode === "pc") refreshUpcoming();
       else renderWeek();
     }).catch(function () { renderWeek(); });
+  }
+
+  // Rubbish pickups of the next seven days, as the TrashCard shows them.
+  function loadPickups() {
+    var today = new Date();
+    var start = ymd(today) + " 00:00:00";
+    var end = ymd(addDays(today, 7)) + " 00:00:00";
+    request({ op: "events", start: start, end: end }).then(function (events) {
+      var found = [];
+      Object.keys(events).forEach(function (entity) {
+        (events[entity] || []).forEach(function (ev) { if (ev.waste) found.push(ev); });
+      });
+      found.sort(function (a, b) { return String(a.start).localeCompare(String(b.start)); });
+      renderPickups(found);
+    }).catch(function () { renderPickups([]); });
+  }
+
+  function renderPickups(list) {
+    var box = $("pickups");
+    if (!box) return;
+    box.textContent = "";
+    box.hidden = list.length === 0;
+    if (!list.length) return;
+    box.appendChild(el("span", { class: "pickups-title" }, I.f("pickupsTitle")));
+    var today = new Date(ymd(new Date()) + "T00:00:00");
+    var seen = {};
+    list.forEach(function (ev) {
+      var day = String(ev.start).slice(0, 10);
+      var key = day + "|" + (ev.waste_label || ev.summary);
+      if (seen[key]) return;
+      seen[key] = true;
+      var days = Math.round((new Date(day + "T00:00:00") - today) / 86400000);
+      var when = days <= 0 ? I.f("pickupToday") : days === 1 ? I.f("pickupTomorrow")
+        : I.f("pickupInDays").replace("{n}", String(days));
+      var chip = el("span", { class: "pickup-chip" + (days <= 0 ? " soon" : "") });
+      chip.style.setProperty("--ev", ev.waste_color || "#9C27B0");
+      chip.appendChild(wasteIcon(ev.waste_icon || ev.waste));
+      chip.appendChild(el("span", { class: "pickup-label" }, ev.waste_label || ev.summary));
+      chip.appendChild(el("span", { class: "pickup-when" }, when));
+      box.appendChild(chip);
+    });
   }
 
   function refreshUpcoming() {
@@ -398,13 +456,18 @@
     var phone = state.mode === "phone";
     var row = el("div", { class: "event allday" + (phone ? " allday-wrap" : "") });
     row.style.setProperty("--ev", item.ev.waste_color || item.color);
-    if (item.ev.waste) row.appendChild(wasteIcon(item.ev.waste));
+    if (item.ev.waste) row.appendChild(wasteIcon(item.ev.waste_icon || item.ev.waste));
     else if (item.ev.external) row.appendChild(iconSvg("calendar"));
-    row.appendChild(el("span", { class: "allday-name", title: item.ev.summary }, item.ev.summary));
+    row.appendChild(el("span", { class: "allday-name", title: item.ev.summary }, shownTitle(item.ev)));
     row.setAttribute("role", "button");
     row.setAttribute("tabindex", "0");
     row.addEventListener("click", function () { openCard(item); });
     return row;
+  }
+
+  // A rubbish pickup is shown as its type ("Organico"), as in the TrashCard; others by title.
+  function shownTitle(ev) {
+    return ev.waste_label || ev.summary;
   }
 
   function eventRow(item) {
@@ -414,8 +477,8 @@
     if (item.ev.external) row.classList.add("external");
     row.appendChild(el("span", { class: "ev-time" }, timeOf(item.ev.start)));
     var title = el("span", { class: "ev-title" });
-    if (item.ev.waste) title.appendChild(wasteIcon(item.ev.waste));
-    title.appendChild(document.createTextNode(item.ev.summary));
+    if (item.ev.waste) title.appendChild(wasteIcon(item.ev.waste_icon || item.ev.waste));
+    title.appendChild(document.createTextNode(shownTitle(item.ev)));
     row.appendChild(title);
     row.setAttribute("role", "button");
     row.setAttribute("tabindex", "0");
@@ -427,6 +490,11 @@
     var week = $("week");
     week.textContent = "";
     var anyEvent;
+    if (state.view === "month") {
+      renderMonth(week);
+      $("empty-note").hidden = true;
+      return;
+    }
     if (state.mode === "phone") {
       week.className = "week agenda";
       anyEvent = renderAgenda(week);
@@ -1020,7 +1088,7 @@
     box.appendChild(channels);
     box.appendChild(fieldRow(f("quietStart"), timeInput(rem.quiet_start, f("quietStart"), function (v) { rem.quiet_start = v; })));
     box.appendChild(fieldRow(f("quietEnd"), timeInput(rem.quiet_end, f("quietEnd"), function (v) { rem.quiet_end = v; })));
-    box.appendChild(fieldRow(f("snooze"), segmented([["5", "5"], ["10", "10"], ["15", "15"], ["30", "30"], ["60", "60"]],
+    box.appendChild(fieldRow(f("snooze"), segmented(snoozeChoices(rem.snooze_minutes),
       String(rem.snooze_minutes), function (v) { rem.snooze_minutes = Number(v); })));
     box.appendChild(fieldRow(f("morning"), timeInput(rem.morning_summary, f("morning"), function (v) { rem.morning_summary = v || null; })));
     box.appendChild(fieldRow(f("evening"), timeInput(rem.evening_summary, f("evening"), function (v) { rem.evening_summary = v || null; })));
@@ -1113,8 +1181,17 @@
       persons: state.draft.persons,
       categories: state.draft.categories.filter(function (c) { return c.name; }),
       reminders: state.draft.reminders,
-      sources: state.draft.sources
+      sources: sourcesForSave(state.draft.sources)
     };
+  }
+
+  function sourcesForSave(sources) {
+    var chosen = sources.calendars || [];
+    var styles = {};
+    Object.keys(sources.calendar_styles || {}).forEach(function (id) {
+      if (chosen.indexOf(id) !== -1) styles[id] = sources.calendar_styles[id];
+    });
+    return Object.assign({}, sources, { calendar_styles: styles });
   }
 
   function saveWizard() {
@@ -1126,8 +1203,12 @@
       // The add-on subscribes to the new calendars a moment after the save.
       window.setTimeout(refreshCalendars, 2500);
     }).catch(function (err) {
-      $("wizard-error").textContent = I.f("saveError") + errorText(err);
-      $("wizard-error").hidden = false;
+      var box = $("wizard-error");
+      box.textContent = I.f("saveError") + errorText(err);
+      if (err && err.message && err.message !== err.code) {
+        box.appendChild(el("span", { class: "error-detail" }, err.message));
+      }
+      box.hidden = false;
     });
   }
 
@@ -1242,18 +1323,14 @@
 
   var ICS_TYPES = ["rifiuti", "vacanze_scuola", "vacanze_asilo", "festivita", "altro"];
 
-  function calendarStyle(sources, entityId) {
-    sources.calendar_styles = sources.calendar_styles || {};
-    if (!sources.calendar_styles[entityId]) {
-      sources.calendar_styles[entityId] = { name: "", type: "altro", color: "#64748B" };
-    }
-    return sources.calendar_styles[entityId];
-  }
-
   // The name shown, its type (rubbish, holidays, ...) and colour of a calendar from Home Assistant.
   function calendarStyleRow(entity, sources) {
-    var style = calendarStyle(sources, entity.entity_id);
+    // Not created here: only a calendar that is ticked gets a style (the integration refuses
+    // styles of calendars that are not chosen).
+    var kept = sources.calendar_styles && sources.calendar_styles[entity.entity_id];
+    var style = kept || { name: "", type: "altro", color: "#64748B" };
     var row = el("div", { class: "cal-style" });
+    row.styleObj = style;
     row.appendChild(fieldRow(I.f("icsName"), textInput(style.name, function (v) { style.name = v; }, { placeholder: entity.name, maxlength: 60 })));
     var types = ICS_TYPES.map(function (k) { return [k, icsTypeName(k)]; });
     row.appendChild(fieldRow(I.f("icsType"), selectInput(types, style.type, function (v) { style.type = v; })));
@@ -1295,7 +1372,10 @@
               if (styleBox) {
                 styleBox.hidden = !input.checked;
                 if (!input.checked && sources.calendar_styles) delete sources.calendar_styles[entity.entity_id];
-                if (input.checked) calendarStyle(sources, entity.entity_id);
+                if (input.checked) {
+                  if (!sources.calendar_styles) sources.calendar_styles = {};
+                  sources.calendar_styles[entity.entity_id] = styleBox.styleObj;
+                }
               }
               if (group[0] === "weather" && input.checked) {
                 // One weather entity at a time: the others are unticked.
@@ -1544,6 +1624,16 @@
     return input;
   }
 
+  // The name of a time field, without its error message or its control: "Inizio".
+  function fieldTitle(input) {
+    if (input.getAttribute("aria-label")) return input.getAttribute("aria-label");
+    var label = input.labels && input.labels[0];
+    if (!label) return "";
+    var copy = label.cloneNode(true);
+    copy.querySelectorAll(".field-error, input, select, textarea, button").forEach(function (n) { n.remove(); });
+    return copy.textContent.trim();
+  }
+
   // A glass picker for touch screens: hours 00 to 23, minutes in steps of 5, and "Fatto".
   function openTimePicker(input, format, check) {
     var parsed = parseTime(input.value) || "09:00";
@@ -1554,25 +1644,44 @@
     var columns = el("div", { class: "timepick-columns" });
     var hours = el("div", { class: "timepick-col" });
     var minutes = el("div", { class: "timepick-col" });
-    function paint() {
-      hours.textContent = "";
-      minutes.textContent = "";
-      for (var h = 0; h < 24; h++) {
-        hours.appendChild(pickCell(pad(h), h === hour, function (value) { hour = value; paint(); }, h));
-      }
-      for (var m = 0; m < 60; m += 5) {
-        minutes.appendChild(pickCell(pad(m), m === minute, function (value) { minute = value; paint(); }, m));
-      }
+    var hourCells = [];
+    var minuteCells = [];
+    // The cells are built once; a tap only moves the "on" mark, so the columns keep their scroll.
+    function mark() {
+      hourCells.forEach(function (b, h) { setOn(b, h === hour); });
+      minuteCells.forEach(function (b, i) { setOn(b, i * 5 === minute); });
     }
-    function pickCell(text, selected, onPick, value) {
-      var b = el("button", { type: "button", class: "timepick-cell" + (selected ? " on" : ""), "aria-pressed": selected ? "true" : "false" }, text);
-      b.addEventListener("click", function () { onPick(value); });
+    function setOn(b, selected) {
+      b.classList.toggle("on", selected);
+      b.setAttribute("aria-pressed", selected ? "true" : "false");
+    }
+    function pickCell(text, onPick) {
+      var b = el("button", { type: "button", class: "timepick-cell", "aria-pressed": "false" }, text);
+      b.addEventListener("click", function () { onPick(); mark(); });
       return b;
     }
+    for (var h = 0; h < 24; h++) {
+      hourCells.push(pickCell(pad(h), (function (value) { return function () { hour = value; }; })(h)));
+      hours.appendChild(hourCells[h]);
+    }
+    for (var m = 0; m < 60; m += 5) {
+      minuteCells.push(pickCell(pad(m), (function (value) { return function () { minute = value; }; })(m)));
+      minutes.appendChild(minuteCells[minuteCells.length - 1]);
+    }
+    mark();
+    // The values already written are shown selected, and scrolled into view.
+    function scrollTo(col, cell) {
+      if (!cell) return;
+      var c = col.getBoundingClientRect();
+      var b = cell.getBoundingClientRect();
+      col.scrollTop += b.top - c.top - (c.height - b.height) / 2;
+    }
+    scrollTo(hours, hourCells[hour]);
+    scrollTo(minutes, minuteCells[minute / 5]);
     columns.appendChild(hours);
     columns.appendChild(minutes);
     // Title, the two columns, and the buttons in a foot below them (never over the columns).
-    var titleText = input.getAttribute("aria-label") || (input.labels && input.labels[0] ? input.labels[0].textContent : "");
+    var titleText = fieldTitle(input);
     panel.appendChild(el("h2", {}, titleText));
     panel.appendChild(columns);
     var cancel = button(t("cancel"), "btn", function () {
@@ -1591,7 +1700,8 @@
     panel.appendChild(foot);
     box.appendChild(panel);
     document.body.appendChild(box);
-    paint();
+    scrollTo(hours, hourCells[hour]);
+    scrollTo(minutes, minuteCells[minute / 5]);
   }
 
   // Models of the chosen person: one compact row each (name, start, end, calendar, remove).
@@ -1791,6 +1901,13 @@
 
   function wasteIcon(kind) {
     var span = el("span", { class: "wx-icon waste-icon", "aria-hidden": "true" });
+    var mdi = window.FH_MDI || {};
+    if (String(kind).indexOf("mdi:") === 0) {
+      span.classList.add("mdi");
+      span.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="' +
+        (mdi[kind] || mdi["mdi:trash-can-outline"]) + '"/></svg>';
+      return span;
+    }
     var icon = WASTE_ICON[kind] || "trash";
     span.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
       'stroke-linecap="round" stroke-linejoin="round">' + (WASTE_PATHS[icon] || WASTE_PATHS.trash) + "</svg>";
@@ -1822,6 +1939,7 @@
       state.icsCalendars = both[0].calendars || [];
       state.icsStyles = both[0].waste_styles || {};
       state.icsKinds = both[0].waste_kinds || {};
+      state.icsTypes = (both[0].waste_types || []).map(function (t) { return Object.assign({}, t); });
       state.icsPersons = both[1].persons || [];
       renderIcs();
     }).catch(showIcsError);
@@ -1840,8 +1958,8 @@
     state.icsCalendars.forEach(function (cal) { box.appendChild(icsCard(cal)); });
     box.appendChild(el("h3", {}, I.f("icsAddCalendar")));
     box.appendChild(icsForm());
-    box.appendChild(el("h3", {}, I.f("icsWasteColors")));
-    box.appendChild(wasteColorsForm());
+    box.appendChild(el("h3", {}, I.f("wasteTypesTitle")));
+    box.appendChild(wasteTypesForm());
   }
 
   // A glass button that opens the file chooser, with the chosen file's name beside it.
@@ -1932,6 +2050,17 @@
   }
 
   // iOS-style segmented control: "Da link" | "Da file".
+  // 5, 10, 15, 30 and 60 minutes. A value saved before (for example 105 from the old number
+  // field) is added as one more choice, "105 min", so it is seen and can be changed.
+  function snoozeChoices(current) {
+    var choices = [["5", "5"], ["10", "10"], ["15", "15"], ["30", "30"], ["60", "60"]];
+    var value = Number(current);
+    if (value > 0 && !choices.some(function (c) { return Number(c[0]) === value; })) {
+      choices.push([String(value), value + " min"]);
+    }
+    return choices;
+  }
+
   function segmented(options, value, onChange) {
     var group = el("div", { class: "segmented", role: "group" });
     options.forEach(function (opt) {
@@ -2012,7 +2141,79 @@
     return form;
   }
 
-  // The colour of each rubbish kind (the icons are fixed; the colours can be changed).
+  // The rubbish types, for the ICS calendars and the Home Assistant ones alike: label, icon
+  // (Material Design icons included in the add-on), the text to look for in the title, colour.
+  // "Importa da TrashCard" fills the list from a TrashCard on a dashboard; "Salva tipi" keeps it.
+  var WASTE_ICON_CHOICES = ["mdi:trash-can-outline", "mdi:trash-can", "mdi:flower", "mdi:leaf",
+    "mdi:sprout", "mdi:tree", "mdi:recycle", "mdi:newspaper-variant", "mdi:package-variant-closed",
+    "mdi:bottle-wine-outline", "mdi:glass-fragile", "mdi:dump-truck"];
+
+  function wasteTypesForm() {
+    var f = I.f;
+    var form = el("div", { class: "notify-card ics-form waste-types" });
+    form.appendChild(el("p", { class: "hint" }, f("wtHint")));
+    var list = el("div", { class: "waste-type-list" });
+    form.appendChild(list);
+    function paint() {
+      list.textContent = "";
+      state.icsTypes.forEach(function (type, index) { list.appendChild(wasteTypeRow(type, index, paint)); });
+    }
+    paint();
+    var actions = el("div", { class: "actions" });
+    actions.appendChild(button(f("wtAdd"), "btn", function () {
+      state.icsTypes.push({ id: "", label: "", icon: "mdi:trash-can-outline", pattern: "", color: "#9C27B0" });
+      paint();
+    }));
+    actions.appendChild(button(f("wtImport"), "btn", function () {
+      request({ op: "trashcard_import" }).then(function (r) {
+        if (!r.types || !r.types.length) { showStatusNote(f("wtNoCard")); return; }
+        state.icsTypes = r.types;
+        paint();
+        showStatusNote(f("wtImported"));
+      }).catch(showIcsError);
+    }));
+    actions.appendChild(button(f("wtSave"), "btn btn-primary", function () {
+      request({ op: "ics_waste_types", types: state.icsTypes }).then(function () {
+        showStatusNote(f("wtSaved"));
+        loadIcs();
+        refreshCalendars();
+        refreshEvents();
+      }).catch(function (err) {
+        $("ics-error").textContent = errorText(err) + (err.message && err.message !== err.code ? " " + err.message : "");
+        $("ics-error").hidden = false;
+      });
+    }));
+    form.appendChild(actions);
+    return form;
+  }
+
+  function wasteTypeRow(type, index, repaint) {
+    var f = I.f;
+    var row = el("div", { class: "waste-type" });
+    row.style.setProperty("--ev", type.color);
+    var preview = wasteIcon(type.icon);
+    preview.classList.add("waste-preview");
+    row.appendChild(preview);
+    row.appendChild(fieldRow(f("wtLabel"), textInput(type.label, function (v) { type.label = v; }, { maxlength: 30 })));
+    var icons = WASTE_ICON_CHOICES.slice();
+    if (icons.indexOf(type.icon) === -1) icons.push(type.icon);
+    row.appendChild(fieldRow(f("wtIcon"), selectInput(icons.map(function (i) { return [i, i.slice(4)]; }), type.icon, function (v) {
+      type.icon = v;
+      repaint();
+    })));
+    row.appendChild(fieldRow(f("wtPattern"), textInput(type.pattern, function (v) { type.pattern = v; }, { maxlength: 200, placeholder: "Bioabfall, Bio" })));
+    row.appendChild(fieldRow(f("wtColor"), colorInput(type.color, function (v) {
+      type.color = v;
+      row.style.setProperty("--ev", v);
+    })));
+    row.appendChild(button(f("wtRemove"), "btn", function () {
+      state.icsTypes.splice(index, 1);
+      repaint();
+    }));
+    return row;
+  }
+
+  // The colour of each rubbish kind (kept for older integrations without types).
   function wasteColorsForm() {
     var f = I.f;
     var form = el("form", { class: "notify-card ics-form" });
@@ -2038,6 +2239,268 @@
       }).catch(showIcsError);
     }));
     return form;
+  }
+
+
+  // ---- month view: find the free time --------------------------------------------
+  // "Settimana | Mese" in the top bar; the choice stays on this screen. Each day of the month
+  // shows up to three appointments and a bar of how busy it is between 07:00 and 21:00.
+  // Rubbish, holidays and other external calendars are shown but do not count; shifts do.
+  // A person filter keeps that person's events, their shifts and the family's (no persons).
+  // Tapping a day opens it hour by hour, with the free slots of 30 minutes or more; tapping a
+  // free slot opens "Nuovo evento" with the date and time filled in.
+
+  var DAY_FROM = 7 * 60;
+  var DAY_TO = 21 * 60;
+  var MIN_FREE = 30;
+
+  function loadView() {
+    try {
+      return window.localStorage.getItem("fh_view") === "month" ? "month" : "week";
+    } catch (err) {
+      return "week";
+    }
+  }
+
+  function saveView(view) {
+    try {
+      window.localStorage.setItem("fh_view", view);
+    } catch (err) {
+      /* a private window: the choice lasts this visit only */
+    }
+  }
+
+  function firstOfMonth(d) {
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  }
+
+  // The 6 weeks shown for the month, starting on the family's first day of the week.
+  function monthGridStart(month) {
+    return addDays(month, -weekdayOffset(month));
+  }
+
+  function setView(view) {
+    state.view = view;
+    saveView(view);
+    paintViewSwitch();
+    refreshEvents();
+  }
+
+  function paintViewSwitch() {
+    var box = $("view-switch");
+    if (!box) return;
+    Array.prototype.forEach.call(box.querySelectorAll("[data-view]"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-view") === state.view ? "true" : "false");
+    });
+  }
+
+  // Events with this person, events without persons (the family's), and every external event.
+  function forPerson(items) {
+    var person = state.monthPerson;
+    if (!person) return items;
+    return items.filter(function (it) {
+      var ids = it.ev.person_ids || [];
+      return it.ev.external || !ids.length || ids.indexOf(person) !== -1;
+    });
+  }
+
+  function counts(it) {
+    return !it.ev.external && !isAllDay(it.ev.start);
+  }
+
+  // Minutes from midnight of the day, kept between 07:00 and 21:00.
+  function minutesIn(key, iso) {
+    var dayStart = new Date(key + "T00:00:00").getTime();
+    var m = Math.round((new Date(iso).getTime() - dayStart) / 60000);
+    return Math.max(DAY_FROM, Math.min(DAY_TO, m));
+  }
+
+  // The busy stretches of a day (merged), between 07:00 and 21:00.
+  function busyIntervals(items, key) {
+    var spans = items.filter(counts).map(function (it) {
+      return [minutesIn(key, it.ev.start), minutesIn(key, it.ev.end || it.ev.start)];
+    }).filter(function (s) { return s[1] > s[0]; }).sort(function (a, b) { return a[0] - b[0]; });
+    var merged = [];
+    spans.forEach(function (s) {
+      var last = merged[merged.length - 1];
+      if (last && s[0] <= last[1]) last[1] = Math.max(last[1], s[1]);
+      else merged.push([s[0], s[1]]);
+    });
+    return merged;
+  }
+
+  function busyMinutes(items, key) {
+    return busyIntervals(items, key).reduce(function (sum, s) { return sum + s[1] - s[0]; }, 0);
+  }
+
+  // Free stretches of at least 30 minutes between the busy ones.
+  function freeSlots(items, key) {
+    var slots = [];
+    var at = DAY_FROM;
+    busyIntervals(items, key).forEach(function (s) {
+      if (s[0] - at >= MIN_FREE) slots.push([at, s[0]]);
+      at = Math.max(at, s[1]);
+    });
+    if (DAY_TO - at >= MIN_FREE) slots.push([at, DAY_TO]);
+    return slots;
+  }
+
+  function hhmm(minutes) {
+    return pad(Math.floor(minutes / 60)) + ":" + pad(minutes % 60);
+  }
+
+  function hoursText(minutes) {
+    var h = minutes / 60;
+    return (Math.round(h * 10) / 10).toLocaleString(I.lang);
+  }
+
+  function personFilter() {
+    var f = I.f;
+    var options = [["", f("personAll")]].concat(personList().map(function (p) { return [p.id, p.name]; }));
+    var select = selectInput(options, state.monthPerson || "", function (v) {
+      state.monthPerson = v;
+      renderWeek();
+    }, { id: "month-person", "aria-label": f("personFilter") });
+    return fieldRow(f("personFilter"), select);
+  }
+
+  function renderMonth(week) {
+    var f = I.f;
+    var compact = state.mode === "phone";
+    var month = state.monthStart;
+    week.className = "week month" + (compact ? " compact" : "");
+    var head = el("div", { class: "month-head" });
+    head.appendChild(el("h2", { class: "month-title" },
+      month.toLocaleDateString(I.lang, { month: "long", year: "numeric" })));
+    head.appendChild(personFilter());
+    week.appendChild(head);
+    var grid = el("div", { class: "month-view" });
+    orderedDays(t("days")).forEach(function (name) {
+      grid.appendChild(el("div", { class: "month-dow" }, name));
+    });
+    var first = monthGridStart(month);
+    var byDay = eventsByDay(state.events);
+    var today = ymd(new Date());
+    for (var i = 0; i < 42; i++) {
+      var day = addDays(first, i);
+      var key = ymd(day);
+      var items = forPerson(byDay[key] || []);
+      var busy = busyMinutes(items, key);
+      var cls = "month-day" + (day.getMonth() !== month.getMonth() ? " other" : "") + (key === today ? " today" : "");
+      var cell = el("button", { type: "button", class: cls, "data-day": key, "data-busy": String(busy),
+        "aria-label": day.toLocaleDateString(I.lang, { weekday: "long", day: "numeric", month: "long" }) });
+      cell.appendChild(el("span", { class: "month-num" }, String(day.getDate())));
+      var bar = el("span", { class: "occ", title: f("busyHours").replace("{h}", hoursText(busy)) });
+      var fill = el("span", { class: "occ-fill" });
+      fill.style.width = Math.round(busy / (DAY_TO - DAY_FROM) * 100) + "%";
+      bar.appendChild(fill);
+      cell.appendChild(bar);
+      if (compact) {
+        var dots = el("span", { class: "month-dots" });
+        items.slice(0, 4).forEach(function (it) {
+          var dot = el("span", { class: "month-dot" });
+          dot.style.background = it.ev.waste_color || it.color;
+          dots.appendChild(dot);
+        });
+        cell.appendChild(dots);
+      } else {
+        items.slice(0, 3).forEach(function (it) {
+          var line = el("span", { class: "month-ev" + (it.ev.external ? " external" : "") });
+          line.style.setProperty("--ev", it.ev.waste_color || it.color);
+          var time = isAllDay(it.ev.start) ? "" : timeOf(it.ev.start) + " ";
+          line.textContent = time + shownTitle(it.ev);
+          cell.appendChild(line);
+        });
+        if (items.length > 3) {
+          cell.appendChild(el("span", { class: "month-more" }, f("moreEvents").replace("{n}", String(items.length - 3))));
+        }
+      }
+      cell.addEventListener("click", (function (k) { return function () { openDay(k); }; })(key));
+      grid.appendChild(cell);
+    }
+    week.appendChild(grid);
+  }
+
+  function canAdd() {
+    return state.role === "adult" || state.role === "shared" || state.role === "child";
+  }
+
+  // One day, hour by hour from 07:00 to 21:00: busy blocks and free slots.
+  function openDay(key) {
+    var f = I.f;
+    var old = document.querySelector(".day-overlay");
+    if (old) old.remove();
+    var items = forPerson(eventsByDay(state.events)[key] || []);
+    var box = el("div", { class: "overlay day-overlay", role: "dialog", "aria-label": key });
+    var panel = el("div", { class: "dialog dayview" });
+    panel.appendChild(el("h2", {}, new Date(key + "T12:00:00").toLocaleDateString(I.lang,
+      { weekday: "long", day: "numeric", month: "long" })));
+    var body = el("div", { class: "dialog-body dayview-body" });
+    // All-day and external events: shown, but they do not take time.
+    items.filter(function (it) { return !counts(it); }).forEach(function (it) {
+      var line = el("div", { class: "day-note" });
+      line.style.setProperty("--ev", it.ev.waste_color || it.color);
+      if (it.ev.waste) line.appendChild(wasteIcon(it.ev.waste_icon || it.ev.waste));
+      line.appendChild(document.createTextNode((isAllDay(it.ev.start) ? "" : timeOf(it.ev.start) + " ") + shownTitle(it.ev)));
+      body.appendChild(line);
+    });
+    var timed = items.filter(counts);
+    var free = freeSlots(items, key);
+    var busy = busyIntervals(items, key);
+    var parts = busy.map(function (s) { return { kind: "busy", from: s[0], to: s[1] }; })
+      .concat(free.map(function (s) { return { kind: "free", from: s[0], to: s[1] }; }))
+      .sort(function (a, b) { return a.from - b.from; });
+    if (!free.length) body.appendChild(el("p", { class: "hint" }, f("noFreeSlot")));
+    else if (canAdd()) body.appendChild(el("p", { class: "hint" }, f("dayHint")));
+    var timeline = el("div", { class: "timeline" });
+    parts.forEach(function (part) {
+      var height = Math.max(44, Math.round((part.to - part.from) * 0.45)) + "px";
+      var range = showTime(hhmm(part.from), state.timeFormat) + "–" + showTime(hhmm(part.to), state.timeFormat);
+      if (part.kind === "busy") {
+        var block = el("div", { class: "busy-block" });
+        block.style.minHeight = height;
+        block.appendChild(el("span", { class: "slot-time" }, range));
+        timed.filter(function (it) {
+          return minutesIn(key, it.ev.start) < part.to && minutesIn(key, it.ev.end || it.ev.start) > part.from;
+        }).forEach(function (it) {
+          var name = el("span", { class: "busy-name" }, timeOf(it.ev.start) + " " + shownTitle(it.ev));
+          name.style.setProperty("--ev", it.color);
+          block.appendChild(name);
+        });
+        timeline.appendChild(block);
+      } else {
+        var slot = el("button", { type: "button", class: "free-slot", "data-from": hhmm(part.from), "data-to": hhmm(part.to) },
+          f("freeSlot") + " " + range);
+        slot.style.minHeight = height;
+        if (!canAdd()) slot.disabled = true;
+        slot.addEventListener("click", function () {
+          box.remove();
+          openFormAt(key, part.from, Math.min(part.from + 60, part.to));
+        });
+        timeline.appendChild(slot);
+      }
+    });
+    body.appendChild(timeline);
+    panel.appendChild(body);
+    var foot = el("div", { class: "dialog-foot actions" });
+    foot.appendChild(button(f("cardClose"), "btn", function () { box.remove(); }));
+    panel.appendChild(foot);
+    box.appendChild(panel);
+    box.addEventListener("click", function (e) { if (e.target === box) box.remove(); });
+    document.body.appendChild(box);
+  }
+
+  // "Nuovo evento" for a free slot: the date and times are filled in (and the person chosen).
+  function openFormAt(key, from, to) {
+    openForm(null);
+    var form = $("event-form");
+    form.elements.all_day.checked = false;
+    form.elements.all_day.dispatchEvent(new Event("change"));
+    form.elements.date.value = showDate(key);
+    form.elements.start_time.value = showTime(hhmm(from), state.timeFormat);
+    form.elements.end_time.value = showTime(hhmm(to), state.timeFormat);
+    if (state.monthPerson) renderEventPersons([state.monthPerson]);
+    loadDayCache(parseLocalDay(key)).then(function () { updateDayInfo(form); });
   }
 
   // ---- weather -------------------------------------------------------------------
@@ -2366,6 +2829,9 @@
   function applyTexts() {
     document.documentElement.lang = I.lang;
     $("this-week").textContent = t("today");
+    document.querySelector("#view-switch [data-view='week']").textContent = I.f("viewWeek");
+    document.querySelector("#view-switch [data-view='month']").textContent = I.f("viewMonth");
+    $("view-switch").setAttribute("aria-label", I.f("viewChoice"));
     $("todo-btn").textContent = I.f("listsButton");
     $("menu-btn").textContent = I.f("menu");
     $("menu-wizard").textContent = t("wizardStart");
@@ -2430,7 +2896,9 @@
 
     // On the phone the arrows step one day; on the tablet and PC they step one week.
     function step(direction) {
-      if (state.mode === "phone") state.dayOffset += direction;
+      if (state.view === "month") {
+        state.monthStart = new Date(state.monthStart.getFullYear(), state.monthStart.getMonth() + direction, 1);
+      } else if (state.mode === "phone") state.dayOffset += direction;
       else state.weekStart = addDays(state.weekStart, 7 * direction);
       refreshEvents();
     }
@@ -2439,8 +2907,13 @@
     $("this-week").addEventListener("click", function () {
       state.dayOffset = 0;
       state.weekStart = viewStart(new Date());
+      state.monthStart = firstOfMonth(new Date());
       refreshEvents();
     });
+    Array.prototype.forEach.call(document.querySelectorAll("#view-switch [data-view]"), function (b) {
+      b.addEventListener("click", function () { setView(b.getAttribute("data-view")); });
+    });
+    paintViewSwitch();
     $("todo-btn").addEventListener("click", openTodos);
     $("todos-close").addEventListener("click", closeTodos);
     $("menu-btn").addEventListener("click", function () { toggleMenu($("menu").hidden); });

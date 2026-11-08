@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from app.ha_link import HAClient
 
@@ -181,6 +182,14 @@ def test_only_family_hub_calendar_changes_are_forwarded() -> None:
     _run(scenario)
 
 
+async def _next_of_type(ws: Any, kind: str, seconds: float) -> dict[str, Any]:
+    """The next message of one type (identity messages may come first)."""
+    while True:
+        msg = await ws.receive_json(timeout=seconds)
+        if msg.get("type") == kind:
+            return dict(msg)
+
+
 def test_server_reports_when_home_assistant_drops_and_comes_back() -> None:
     async def scenario() -> None:
         fake = FakeHA()
@@ -188,9 +197,10 @@ def test_server_reports_when_home_assistant_drops_and_comes_back() -> None:
         try:
             ws = await connect(client, ADULT_USER)
             await fake.drop_connections()
-            down = await ws.receive_json(timeout=5)
+            # Each change is followed by the browser's identity again: skip those.
+            down = await _next_of_type(ws, "connection", 5)
             assert down == {"type": "connection", "connected": False}
-            up = await ws.receive_json(timeout=10)
+            up = await _next_of_type(ws, "connection", 10)
             assert up == {"type": "connection", "connected": True}
             assert isinstance(ha, HAClient) and ha.connected
             await ws.close()

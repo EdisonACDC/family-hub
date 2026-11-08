@@ -32,6 +32,10 @@ class Identity:
 
 
 GUEST_IDENTITY = Identity(GUEST, None)
+# Home Assistant is not reachable yet (for example the add-on starts before it): nobody can be
+# told who is in front of the screen. The tablet says so, and is told again once it is.
+PENDING = "pending"
+PENDING_IDENTITY = Identity(PENDING, None)
 
 
 def identify(

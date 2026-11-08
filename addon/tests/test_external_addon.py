@@ -198,7 +198,9 @@ def test_rubbish_pickups_carry_their_kind_and_colour() -> None:
             )
             item = events["result"][key][0]
             assert item["waste"] == "restmuell"
-            assert item["waste_color"] == "#374151"
+            assert item["waste_label"] == "Indifferenziato"
+            assert item["waste_icon"] == "mdi:trash-can-outline"
+            assert item["waste_color"] == "#9E9E9E"
             await guest.close()
         finally:
             await shutdown(ha_server, client)

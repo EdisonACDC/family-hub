@@ -12,6 +12,34 @@
   massima e minima).
 - Opzione dello schermo "La settimana parte da oggi" (predefinita sì sul tablet): la vista mostra
   oggi e i sei giorni seguenti; le frecce spostano di 7 giorni, "Oggi" torna a partire da oggi.
+- Dopo un riavvio di Home Assistant il tablet riconosce di nuovo chi lo usa: un tablet avviato
+  mentre Home Assistant non risponde mostra "Collegamento a Home Assistant…" e non diventa
+  ospite; appena il collegamento c'è, la sua identità viene ricalcolata senza ricaricare.
+- Il nome dei calendari Family Hub nel tablet è quello della categoria, non il nome che Home
+  Assistant mostra (che può contenere anche il nome del dispositivo).
+- Selettore dell'ora: il titolo è il nome del campo (mai il messaggio di errore), l'orario già
+  scritto è selezionato e la colonna scorre fino a lui.
+- La settimana non resta più vuota se un calendario di Home Assistant è di tipo rifiuti: i colori
+  dei rifiuti valgono anche per lui, e un calendario che non si riesce a leggere non svuota gli altri
+  (l'errore va nel log).
+- Procedura guidata: si salvano solo gli stili dei calendari spuntati; l'integrazione scarta gli
+  stili dei calendari non scelti invece di rifiutare tutto. Sotto "Non salvato" si legge il motivo
+  dato da Home Assistant (campo e causa).
+- Posticipo: un valore salvato prima che non è tra 5/10/15/30/60 (per esempio 105) compare come
+  scelta in più ("105 min").
+- Tipi di rifiuti come nella TrashCard: Indifferenziato, Organico, Plastica, Carta, Altro, con
+  icone Material Design incluse nell'add-on e colori. Nella settimana, nell'agenda e nei promemoria
+  si vede l'etichetta con l'icona, non il titolo grezzo ("Abfuhr: Bioabfall" diventa "Organico").
+  L'elenco si modifica nella pagina dei calendari esterni (etichetta, icona, testo da cercare,
+  colore) e vale per i calendari .ics e per quelli di Home Assistant. "Importa da TrashCard" legge
+  i tipi di una custom:trash-card in una plancia e li propone.
+- Fila "Prossimi ritiri" nella barra in alto: icona, etichetta e "oggi" / "domani" / "tra N giorni"
+  per i ritiri dei prossimi 7 giorni.
+- Vista "Mese" (controllo "Settimana | Mese" nella barra in alto; la scelta resta sullo schermo):
+  fino a 3 appuntamenti per giorno e "+N altri", una barretta di occupazione tra le 7 e le 21
+  (rifiuti, festività e vacanze non contano, i turni sì), filtro per persona. Toccando un giorno si
+  vede la giornata con gli spazi liberi di almeno 30 minuti; toccando uno spazio libero si apre
+  "Nuovo evento" con data e ora già scritte. Sul telefono il mese è compatto, con puntini.
 - Promemoria della sera prima e della mattina per i calendari di Home Assistant scelti come
   rifiuti in Fonti (come per i file .ics). Gli orari sono le 19:00 e le 7:00.
 

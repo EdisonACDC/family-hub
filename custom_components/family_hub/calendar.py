@@ -154,6 +154,9 @@ class FamilyHubCalendar(CalendarEntity):
         """The category id, so the tablet add-on can pass it to family_hub.add_event."""
         return {
             "category_id": self.category_id,
+            # The family's name for it. The friendly name is Home Assistant's and may add the
+            # device's name, so the tablet shows this one.
+            "category_name": str(self._attr_name or ""),
             "persons": [
                 {
                     "id": person["id"],

@@ -12,6 +12,7 @@ import uuid
 from typing import Any
 
 from aiohttp import WSMsgType, web
+from app.waste import DEFAULT_WASTE_TYPES
 
 TOKEN = "test-token"
 
@@ -165,7 +166,10 @@ class FakeHA:
         self.notify_tests: list[dict[str, Any]] = []
         # External calendars (ICS): id -> the calendar as the integration keeps it.
         self.ics: dict[str, dict[str, Any]] = {}
-        self.waste_styles: dict[str, str] = {k: v["color"] for k, v in WASTE_KINDS.items()}
+        self.waste_types: list[dict[str, str]] = [dict(t) for t in DEFAULT_WASTE_TYPES]
+        self.waste_styles: dict[str, str] = {t["id"]: t["color"] for t in self.waste_types}
+        # Dashboards (url_path -> configuration); None is the default dashboard.
+        self.dashboards: dict[str | None, dict[str, Any]] = {None: {"views": []}}
         self.notify_services: list[str] = list(NOTIFY_SERVICES)
         self.echos: list[str] = list(ECHO_SPEAKERS)
         self.config: dict[str, Any] = default_config(configured=calendars)
@@ -318,8 +322,18 @@ class FakeHA:
             "family_hub/ics/replace",
             "family_hub/ics/remove",
             "family_hub/ics/styles",
+            "family_hub/ics/waste_types",
         ):
             await self._ics(ws, msg)
+        elif kind == "lovelace/dashboards/list":
+            listed = [{"url_path": p, "mode": "storage"} for p in self.dashboards if p]
+            await self._reply(ws, msg_id, True, listed)
+        elif kind == "lovelace/config":
+            config = self.dashboards.get(msg.get("url_path"))
+            if config is None:
+                await self._reply(ws, msg_id, False, None, "No config found.", "config_not_found")
+            else:
+                await self._reply(ws, msg_id, True, copy.deepcopy(config))
         elif kind == "family_hub/notify/test":
             await self._notify_test(ws, msg)
         elif kind == "config/entity_registry/list":
@@ -371,6 +385,7 @@ class FakeHA:
                     "state": "off",
                     "attributes": {
                         "friendly_name": category["name"],
+                        "category_name": category["name"],
                         "category_id": category["id"],
                         "persons": copy.deepcopy(config["persons"]),
                         "shared_users": list(config.get("shared_users", [])),
@@ -428,8 +443,9 @@ class FakeHA:
                 {
                     "calendars": copy.deepcopy(calendars),
                     "waste_styles": dict(self.waste_styles),
+                    "waste_types": copy.deepcopy(self.waste_types),
                     "waste_kinds": {
-                        k: {"label": v["label"], "icon": v["icon"]} for k, v in WASTE_KINDS.items()
+                        t["id"]: {"label": t["label"], "icon": t["icon"]} for t in self.waste_types
                     },
                 },
             )
@@ -437,6 +453,17 @@ class FakeHA:
         if kind == "family_hub/ics/styles":
             self.waste_styles.update(msg["styles"])
             await self._reply(ws, msg_id, True, {"saved": True})
+            return
+        if kind == "family_hub/ics/waste_types":
+            types = msg["types"]
+            if not types or any(not t.get("label") for t in types):
+                await self._reply(ws, msg_id, False, None, "types[0].label: 1 to 30", "bad_type")
+                return
+            self.waste_types = [
+                {**t, "id": t.get("id") or t["label"].lower()} for t in copy.deepcopy(types)
+            ]
+            self.waste_styles = {t["id"]: t["color"] for t in self.waste_types}
+            await self._reply(ws, msg_id, True, {"saved": True, "types": self.waste_types})
             return
         if kind == "family_hub/ics/add":
             content = msg.get("content")

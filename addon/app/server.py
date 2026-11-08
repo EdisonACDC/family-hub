@@ -27,6 +27,7 @@ from .access import (
     CHILD,
     GUEST,
     GUEST_IDENTITY,
+    PENDING_IDENTITY,
     Identity,
     can_change,
     can_see,
@@ -35,7 +36,7 @@ from .access import (
 )
 from .ha_link import HAClient, HAError
 from .notify import echo_speakers, phone_services, settings_of
-from .waste import WASTE_KINDS, waste_kind
+from .waste import DEFAULT_WASTE_TYPES, type_of, types_from_trashcard
 
 LOGGER = logging.getLogger(__name__)
 
@@ -84,6 +85,9 @@ class Hub:
                 await self.ha.subscribe("subscribe_events", self.on_reminder, event_type=event_type)
             await self.sync_entities()
         await self.broadcast({"type": "connection", "connected": connected})
+        # Who each browser is depends on Home Assistant: tell every browser again.
+        for ws, user in list(self.browsers.items()):
+            await self.send_identity(ws, user)
 
     def schedule_resync(self) -> None:
         """Calendars created by the guide appear after the entry reloads: subscribe to them soon."""
@@ -185,7 +189,10 @@ class Hub:
             found.append(
                 {
                     "entity_id": entity_id,
-                    "name": attributes.get("friendly_name", entity_id),
+                    # The family's own name for the category: Home Assistant's friendly name
+                    # may carry the device's name too.
+                    "name": attributes.get("category_name")
+                    or attributes.get("friendly_name", entity_id),
                     "category_id": attributes.get("category_id", ""),
                     "external": False,
                     "persons": list(attributes.get("persons", [])),
@@ -198,6 +205,8 @@ class Hub:
         found = await self.family_calendars()
         external = (await self.sources())["calendars"]
         styles = await self.calendar_styles()
+        # The colours of the rubbish kinds apply to every rubbish calendar: ICS and Home Assistant.
+        info = await self.ics_info()
         names = {
             s["entity_id"]: s.get("attributes", {}).get("friendly_name")
             for s in await self._states()
@@ -214,10 +223,11 @@ class Hub:
                     "external": True,
                     "type": style.get("type", "altro"),
                     "color": style.get("color", "#64748B"),
+                    "waste_colors": info["waste_styles"],
+                    "waste_types": info["waste_types"],
                 }
             )
         # Calendars from ICS files or links (read only): calendar.family_hub_ext_<id>.
-        info = await self.ics_info()
         for entry in info["calendars"]:
             entity_id = f"{EXT_PREFIX}{entry['id']}"
             if entity_id in names:
@@ -230,6 +240,7 @@ class Hub:
                         "type": entry.get("type", "altro"),
                         "color": entry.get("color", "#64748B"),
                         "waste_colors": info["waste_styles"],
+                        "waste_types": info["waste_types"],
                     }
                 )
         return found
@@ -237,13 +248,23 @@ class Hub:
     async def ics_info(self) -> dict[str, Any]:
         """The external calendars Family Hub keeps, and the colour of each rubbish kind.
         Empty if Home Assistant cannot say."""
+        defaults = [dict(t) for t in DEFAULT_WASTE_TYPES]
         try:
             result = await self.ha.call("family_hub/ics/list")
         except HAError:
-            return {"calendars": [], "waste_styles": {}}
-        styles = {k: str(v["color"]) for k, v in WASTE_KINDS.items()}
+            return {
+                "calendars": [],
+                "waste_styles": {t["id"]: t["color"] for t in defaults},
+                "waste_types": defaults,
+            }
+        types = [dict(t) for t in result.get("waste_types") or defaults]
+        styles = {t["id"]: t["color"] for t in types}
         styles.update({str(k): str(v) for k, v in dict(result.get("waste_styles", {})).items()})
-        return {"calendars": list(result.get("calendars", [])), "waste_styles": styles}
+        return {
+            "calendars": list(result.get("calendars", [])),
+            "waste_styles": styles,
+            "waste_types": types,
+        }
 
     # ---- external calendars (ICS): adults only ----
 
@@ -256,6 +277,13 @@ class Hub:
             return await self.ha.call("family_hub/ics/list")
         if op == "ics_styles":
             return await self.ha.call("family_hub/ics/styles", styles=dict(request["styles"]))
+        if op == "ics_waste_types":
+            types = request["types"]
+            if not isinstance(types, list):
+                raise TypeError("types must be a list")
+            return await self.ha.call("family_hub/ics/waste_types", types=types)
+        if op == "trashcard_import":
+            return {"types": await self.trashcard_types()}
         if op == "ics_remove":
             result = await self.ha.call(
                 "family_hub/ics/remove", calendar_id=str(request["calendar_id"])
@@ -292,6 +320,25 @@ class Hub:
                 )
         self.schedule_resync()
         return result
+
+    async def trashcard_types(self) -> list[dict[str, str]]:
+        """The rubbish types of a TrashCard on one of the dashboards, to propose them."""
+        configs: list[Any] = []
+        paths: list[str | None] = [None]
+        try:
+            dashboards = await self.ha.call("lovelace/dashboards/list")
+            paths += [d.get("url_path") for d in dashboards if d.get("url_path")]
+        except HAError:
+            pass
+        for path in paths:
+            try:
+                if path is None:
+                    configs.append(await self.ha.call("lovelace/config"))
+                else:
+                    configs.append(await self.ha.call("lovelace/config", url_path=path))
+            except HAError:
+                continue  # a dashboard in YAML mode or without a configuration
+        return types_from_trashcard(configs)
 
     async def candidate_entities(self) -> list[dict[str, str]]:
         """To-do lists and calendars (not Family Hub's own) that the guide may offer."""
@@ -525,7 +572,7 @@ class Hub:
         administrator of Home Assistant is an adult, linked to a person or not (so the family's
         own tablet, logged in as the admin, is never a guest). Everyone else is a guest."""
         if not self.ha.connected:
-            return GUEST_IDENTITY
+            return PENDING_IDENTITY
         try:
             states = await self._states()
             calendar = next((s for s in states if s["entity_id"].startswith(CALENDAR_PREFIX)), {})
@@ -539,7 +586,16 @@ class Hub:
                 return Identity(ADULT, None)
             return GUEST_IDENTITY
         except HAError:
-            return GUEST_IDENTITY
+            return PENDING_IDENTITY
+
+    async def send_identity(self, ws: web.WebSocketResponse, user_id: str | None) -> None:
+        """Tell one browser who it is. Sent on connect, and again when Home Assistant
+        (re)connects or drops, so a tablet that started early is not left as a guest."""
+        identity = await self.identity_for(user_id)
+        await self._send(
+            ws,
+            {"type": "identity", **identity.as_dict(), "user_name": await self.user_name(user_id)},
+        )
 
     async def weather(self) -> dict[str, Any] | None:
         """The weather entity the guide chose: its state now and the daily forecast.
@@ -605,51 +661,66 @@ class Hub:
         result: dict[str, list[dict[str, Any]]] = {}
         for calendar in await self.calendars():
             entity_id = calendar["entity_id"]
-            visible = []
-            if calendar["external"]:
-                # External calendars are shown to everyone and never changed from here.
-                # Rubbish pickups carry their kind and colour, read from the title.
-                for raw in await self._events_of(entity_id, start, end):
-                    item: dict[str, Any] = {
-                        "summary": raw.get("summary", ""),
-                        "start": raw.get("start", ""),
-                        "end": raw.get("end", ""),
-                        "location": raw.get("location", ""),
-                        "record_id": "",
-                        "person_ids": [],
-                        "external": True,
-                    }
-                    if calendar.get("type") == "rifiuti":
-                        kind = waste_kind(str(raw.get("summary", "")))
-                        if kind is not None:
-                            item["waste"] = kind
-                            item["waste_color"] = calendar["waste_colors"].get(
-                                kind, calendar["color"]
-                            )
-                    visible.append(item)
-                result[entity_id] = visible
-                continue
-            for raw in await self._events_of(entity_id, start, end):
-                owners = _owners(raw)
-                if not can_see(identity, owners):
-                    continue
-                visible.append(
-                    {
-                        "summary": raw.get("summary", ""),
-                        "start": raw.get("start", ""),
-                        "end": raw.get("end", ""),
-                        "location": raw.get("location", ""),
-                        "record_id": raw.get("record_id", ""),
-                        "person_ids": owners,
-                        "shift_id": raw.get("shift_id", ""),
-                        "description": raw.get("description") or "",
-                        "reminder_offsets": raw.get("reminder_offsets", "default"),
-                        "category_id": calendar.get("category_id", ""),
-                        "calendar": calendar.get("name", ""),
-                    }
-                )
-            result[entity_id] = visible
+            try:
+                result[entity_id] = await self._calendar_events(calendar, start, end, identity)
+            except (HAError, KeyError, TypeError, ValueError, TimeoutError) as err:
+                # One calendar that cannot be read must not empty the whole week.
+                LOGGER.warning("Could not read the events of %s: %r", entity_id, err)
+                result[entity_id] = []
         return result
+
+    async def _calendar_events(
+        self, calendar: dict[str, Any], start: str, end: str, identity: Identity
+    ) -> list[dict[str, Any]]:
+        """The events of one calendar that this person may see."""
+        entity_id = calendar["entity_id"]
+        visible: list[dict[str, Any]] = []
+        if calendar["external"]:
+            # External calendars are shown to everyone and never changed from here.
+            # Rubbish pickups carry their kind, label, icon and colour, read from the title.
+            for raw in await self._events_of(entity_id, start, end):
+                item: dict[str, Any] = {
+                    "summary": raw.get("summary", ""),
+                    "start": raw.get("start", ""),
+                    "end": raw.get("end", ""),
+                    "location": raw.get("location", ""),
+                    "record_id": "",
+                    "person_ids": [],
+                    "external": True,
+                }
+                if calendar.get("type") == "rifiuti":
+                    # Shown as the type's label and icon ("Organico" with a flower).
+                    types = calendar.get("waste_types") or DEFAULT_WASTE_TYPES
+                    kind = type_of(str(raw.get("summary", "")), types)
+                    if kind is not None:
+                        item["waste"] = kind["id"]
+                        item["waste_label"] = kind["label"]
+                        item["waste_icon"] = kind["icon"]
+                        item["waste_color"] = calendar.get("waste_colors", {}).get(
+                            kind["id"], kind["color"]
+                        )
+                visible.append(item)
+            return visible
+        for raw in await self._events_of(entity_id, start, end):
+            owners = _owners(raw)
+            if not can_see(identity, owners):
+                continue
+            visible.append(
+                {
+                    "summary": raw.get("summary", ""),
+                    "start": raw.get("start", ""),
+                    "end": raw.get("end", ""),
+                    "location": raw.get("location", ""),
+                    "record_id": raw.get("record_id", ""),
+                    "person_ids": owners,
+                    "shift_id": raw.get("shift_id", ""),
+                    "description": raw.get("description") or "",
+                    "reminder_offsets": raw.get("reminder_offsets", "default"),
+                    "category_id": calendar.get("category_id", ""),
+                    "calendar": calendar.get("name", ""),
+                }
+            )
+        return visible
 
     async def owner_ids(self, uid: str) -> list[str] | None:
         """The persons of one event, or None if the event does not exist."""
@@ -713,6 +784,8 @@ class Hub:
                 "ics_replace",
                 "ics_remove",
                 "ics_styles",
+                "ics_waste_types",
+                "trashcard_import",
             ):
                 return {"ok": True, "result": await self.ics_op(identity, op, request)}
             if op in ("notify_get", "notify_save", "notify_test", "shared_save"):
@@ -968,10 +1041,7 @@ async def _ws_handler(request: web.Request) -> web.WebSocketResponse:
     await ws.prepare(request)
     user_id = _user_of(request)
     hub.browsers[ws] = user_id
-    identity = await hub.identity_for(user_id)
-    await ws.send_json(
-        {"type": "identity", **identity.as_dict(), "user_name": await hub.user_name(user_id)}
-    )
+    await hub.send_identity(ws, user_id)
     await ws.send_json({"type": "connection", "connected": hub.ha.connected})
     await ws.send_json(
         {

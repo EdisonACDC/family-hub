@@ -166,7 +166,8 @@ def _calendar_styles(value: Any, calendars: list[str]) -> dict[str, dict[str, st
     styles: dict[str, dict[str, str]] = {}
     for entity_id, style in raw.items():
         if entity_id not in calendars:
-            raise ConfigError(f"sources.calendar_styles: {entity_id} is not a chosen calendar")
+            # A style left over from a calendar that was unticked: dropped, not an error.
+            continue
         style = _obj(style, f"sources.calendar_styles.{entity_id}")
         kind = str(style.get("type") or "altro")
         if kind not in ICS_TYPES:

@@ -43,6 +43,9 @@ async def test_user_flow_creates_entry_with_default_categories(hass: HomeAssista
     assert [c["id"] for c in entry.options[OPT_CATEGORIES]] == [c["id"] for c in DEFAULT_CATEGORIES]
     await hass.async_block_till_done()
     assert hass.states.get("calendar.family_hub_famiglia") is not None
+    # The tablet shows the family's own name for the category, whatever Home Assistant calls it.
+    state = hass.states.get("calendar.family_hub_famiglia")
+    assert state is not None and state.attributes["category_name"] == "Famiglia"
 
 
 async def test_user_flow_rejects_blank_name(hass: HomeAssistant) -> None:

@@ -29,12 +29,12 @@ from .external import (
     OPT_EXTERNAL,
     OPT_WASTE_STYLE,
     TYPES,
-    WASTE_KINDS,
     ExternalError,
     check_url,
     download,
     parse,
 )
+from .waste import OPT_WASTE_TYPES, WasteTypeError, clean_types  # noqa: E402
 
 FIELDS = ("name", "type", "color", "icon", "remind_at", "morning_at", "return_notice")
 
@@ -134,8 +134,9 @@ async def ws_ics_list(
         {
             "calendars": [_status_of(manager, s) for s in entry.options.get(OPT_EXTERNAL, [])],
             "waste_styles": manager.waste_styles(),
+            "waste_types": manager.waste_types(),
             "waste_kinds": {
-                k: {"label": v["label"], "icon": v["icon"]} for k, v in WASTE_KINDS.items()
+                k["id"]: {"label": k["label"], "icon": k["icon"]} for k in manager.waste_types()
             },
         },
     )
@@ -153,24 +154,55 @@ async def ws_ics_list(
 async def ws_ics_styles(
     hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    """Colour of each rubbish kind (the defaults stay for kinds not sent)."""
-    entry = _entry(hass, msg.get("entry_id"))
-    if entry is None:
+    """Colour of each rubbish type (the others keep theirs)."""
+    found = await _manager(hass, msg.get("entry_id"))
+    if found is None:
         connection.send_error(msg["id"], "not_found", "Family Hub is not set up")
         return
+    entry, manager = found
+    types = manager.waste_types()
+    known = {kind["id"]: kind for kind in types}
     chosen = dict(entry.options.get(OPT_WASTE_STYLE, {}))
-    for kind, color in msg["styles"].items():
-        if kind not in WASTE_KINDS:
+    for kind_id, color in msg["styles"].items():
+        if kind_id not in known:
             connection.send_error(msg["id"], "bad_type", "Unknown rubbish kind")
             return
         if not isinstance(color, str) or not re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
             connection.send_error(msg["id"], "bad_color", "Invalid colour")
             return
-        chosen[kind] = color
-    hass.config_entries.async_update_entry(
-        entry, options={**entry.options, OPT_WASTE_STYLE: chosen}
-    )
+        known[kind_id]["color"] = color.upper()
+        chosen[kind_id] = color
+    options = {**entry.options, OPT_WASTE_STYLE: chosen}
+    if OPT_WASTE_TYPES in entry.options:
+        options[OPT_WASTE_TYPES] = types
+    hass.config_entries.async_update_entry(entry, options=options)
     connection.send_result(msg["id"], {"saved": True})
+
+
+@require_admin
+@websocket_command(
+    {
+        vol.Required("type"): "family_hub/ics/waste_types",
+        vol.Optional("entry_id"): str,
+        vol.Required("types"): list,
+    }
+)
+@async_response
+async def ws_ics_waste_types(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """The whole list of rubbish types: label, icon, text to look for, colour."""
+    entry = _entry(hass, msg.get("entry_id"))
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Family Hub is not set up")
+        return
+    try:
+        types = clean_types(msg["types"])
+    except WasteTypeError as err:
+        connection.send_error(msg["id"], "bad_type", str(err))
+        return
+    hass.config_entries.async_update_entry(entry, options={**entry.options, OPT_WASTE_TYPES: types})
+    connection.send_result(msg["id"], {"saved": True, "types": types})
 
 
 @require_admin
@@ -353,5 +385,6 @@ def async_register_external_commands(hass: HomeAssistant) -> None:
         ws_ics_replace,
         ws_ics_remove,
         ws_ics_styles,
+        ws_ics_waste_types,
     ):
         async_register_command(hass, command)

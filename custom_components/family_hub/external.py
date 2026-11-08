@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-import unicodedata
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
@@ -38,6 +37,7 @@ from ical.calendar_stream import IcsCalendarStream
 
 from .const import CONF_LANGUAGE, DOMAIN, OPT_PERSONS, OPT_REMINDERS
 from .notifier import Delivery, async_dismiss, async_send
+from .waste import DEFAULT_WASTE_TYPES, labels_for, type_of, types_from_options
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -57,40 +57,11 @@ OPT_WASTE_STYLE = "waste_styles"
 WASTE_UID_PREFIX = "ext-"
 SNOOZE_MINUTES = 60
 
-# Rubbish kinds, recognised in the title (lower case, umlauts written out). Icons are drawn in
-# the tablet; the colour can be changed per kind in the "Calendari esterni" page.
-WASTE_KINDS: dict[str, dict[str, Any]] = {
-    "restmuell": {
-        "keys": ["restmull", "restabfall"],
-        "label": "Restmüll",
-        "color": "#374151",
-        "icon": "trash",
-    },
-    "bio": {"keys": ["bio"], "label": "Bio", "color": "#8B5A2B", "icon": "leaf"},
-    "papier": {"keys": ["papier"], "label": "Papier", "color": "#2563EB", "icon": "paper"},
-    "gelb": {
-        "keys": ["gelb", "wertstoff"],
-        "label": "Gelber Sack",
-        "color": "#EAB308",
-        "icon": "bag",
-    },
-    "glas": {"keys": ["glas"], "label": "Glas", "color": "#16A34A", "icon": "bottle"},
-}
-
-
-def _plain(text: str) -> str:
-    """Lower case, without accents or umlauts: Restmüll and Restmull match."""
-    replaced = text.lower().replace("ß", "ss").replace("ä", "a").replace("ö", "o").replace("ü", "u")
-    return unicodedata.normalize("NFKD", replaced).encode("ascii", "ignore").decode("ascii")
-
 
 def waste_kind(title: str) -> str | None:
-    """The rubbish kind named in a title, or None."""
-    plain = _plain(title)
-    for kind, info in WASTE_KINDS.items():
-        if any(key in plain for key in info["keys"]):
-            return kind
-    return None
+    """The id of the default rubbish type a title belongs to ("altro" when none matches)."""
+    kind = type_of(title, DEFAULT_WASTE_TYPES)
+    return kind["id"] if kind else None
 
 
 TEXTS: dict[str, dict[str, str]] = {
@@ -275,10 +246,13 @@ class ExternalManager:
     def sources(self) -> list[dict[str, Any]]:
         return [dict(s) for s in self._entry.options.get(OPT_EXTERNAL, [])]
 
+    def waste_types(self) -> list[dict[str, str]]:
+        """The rubbish types (label, icon, text to look for, colour): the family's or defaults."""
+        return types_from_options(dict(self._entry.options))
+
     def waste_styles(self) -> dict[str, str]:
-        """The colour of each rubbish kind: the defaults, with the family's changes."""
-        chosen = self._entry.options.get(OPT_WASTE_STYLE, {})
-        return {kind: str(chosen.get(kind) or info["color"]) for kind, info in WASTE_KINDS.items()}
+        """The colour of each rubbish type, by id."""
+        return {kind["id"]: kind["color"] for kind in self.waste_types()}
 
     def status(self, source_id: str) -> dict[str, Any]:
         return dict(self.data["status"].get(source_id, {}))
@@ -426,7 +400,8 @@ class ExternalManager:
             # Rubbish: one reminder for all the pickups of the day, the evening before and the
             # morning of it. The uid is the pickup day, so "Fatto" closes both.
             pickup = today + timedelta(days=1) if kind == "evening" else today
-            names = await self._names_on(source, pickup)
+            # The labels of the types ("Organico, Carta"), not the raw titles.
+            names = labels_for(await self._names_on(source, pickup), self.waste_types())
             if not names:
                 return
             label = text_for["tomorrow"] if kind == "evening" else text_for["today"]

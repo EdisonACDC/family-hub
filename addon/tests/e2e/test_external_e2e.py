@@ -140,11 +140,12 @@ def test_rubbish_pickups_show_their_icon_and_colour_in_the_week(
     ]
     try:
         tablet.goto(stack_full.url + "/?lang=it")
-        event = tablet.locator(".event", has_text="Restmüll")
+        # Shown as the type, as in the TrashCard: "Indifferenziato" with its icon.
+        event = tablet.locator(".event", has_text="Indifferenziato")
         expect(event).to_be_visible(timeout=5000)
-        expect(event.locator(".waste-icon svg")).to_have_count(1)
+        expect(event.locator(".waste-icon.mdi svg path")).to_have_count(1)
         assert (
-            event.evaluate("e => getComputedStyle(e).getPropertyValue('--ev').trim()") == "#374151"
+            event.evaluate("e => getComputedStyle(e).getPropertyValue('--ev').trim()") == "#9E9E9E"
         )
         _shot(tablet, "tablet_rubbish_week")
     finally:
@@ -203,7 +204,7 @@ def _remove_rubbish_calendar(stack: Stack, key: str, source: str) -> None:
     stack.fake.states[:] = [s for s in stack.fake.states if s["entity_id"] != key]
 
 
-def test_waste_colours_section_lists_five_kinds_and_saving_changes_the_week(
+def test_rubbish_types_are_edited_and_the_week_shows_the_new_label(
     stack_full: Stack, tablet: Page
 ) -> None:
     from datetime import date
@@ -216,7 +217,7 @@ def test_waste_colours_section_lists_five_kinds_and_saving_changes_the_week(
         "farben",
         [
             {
-                "summary": "Biotonne",
+                "summary": "Abfuhr: Bioabfall",
                 "start": today,
                 "end": today,
                 "location": "",
@@ -226,34 +227,74 @@ def test_waste_colours_section_lists_five_kinds_and_saving_changes_the_week(
             }
         ],
     )
+    saved = [dict(t) for t in stack_full.fake.waste_types]
     try:
         _open(tablet, stack_full)
-        section = tablet.locator("#ics-body form.ics-form").last
-        rows = section.locator(".waste-row")
+        rows = tablet.locator("#ics-body .waste-type")
         expect(rows).to_have_count(5)
         for i in range(5):
-            expect(rows.nth(i).locator(".waste-icon svg")).to_have_count(1)
-        expect(rows.nth(1).locator("input[type='color']")).to_have_value("#8b5a2b")
-        rows.nth(1).locator("input[type='color']").fill("#112233")
-        section.get_by_role("button", name="Salva colori").click()
-        expect(tablet.locator("#status-note")).to_contain_text("Colori salvati", timeout=3000)
-        assert stack_full.fake.waste_styles["bio"] == "#112233"
+            expect(rows.nth(i).locator(".waste-icon.mdi svg path")).to_have_count(1)
+        organico = rows.nth(1)
+        expect(organico.get_by_label("Etichetta")).to_have_value("Organico")
+        organico.get_by_label("Etichetta").fill("Umido")
+        organico.locator("input[type='color']").fill("#112233")
+        _shot(tablet, "tablet_rubbish_types")
+        tablet.locator("#ics-body").get_by_role("button", name="Salva tipi").click()
+        expect(tablet.locator("#status-note")).to_contain_text(
+            "Tipi di rifiuti salvati", timeout=3000
+        )
+        assert stack_full.fake.waste_types[1]["label"] == "Umido"
         tablet.locator("#ics-close").click()
-        event = tablet.locator(".event.allday", has_text="Biotonne")
+        event = tablet.locator(".event.allday", has_text="Umido")
         expect(event).to_be_visible(timeout=5000)
         assert (
             event.evaluate("e => getComputedStyle(e).getPropertyValue('--ev').trim()") == "#112233"
         )
     finally:
         _remove_rubbish_calendar(stack_full, key, "farben")
-        stack_full.fake.waste_styles.update(
+        stack_full.fake.waste_types = saved
+        stack_full.fake.waste_styles = {t["id"]: t["color"] for t in saved}
+
+
+def test_trashcard_types_are_proposed_from_a_dashboard(stack_full: Stack, tablet: Page) -> None:
+    stack_full.fake.dashboards["casa"] = {
+        "views": [
             {
-                k: v["color"]
-                for k, v in __import__(
-                    "tests.fake_ha", fromlist=["WASTE_KINDS"]
-                ).WASTE_KINDS.items()
+                "cards": [
+                    {
+                        "type": "vertical-stack",
+                        "cards": [
+                            {
+                                "type": "custom:trash-card",
+                                "entities": ["calendar.rifiuti"],
+                                "pattern": [
+                                    {
+                                        "label": "Bio",
+                                        "icon": "mdi:flower",
+                                        "pattern": "Bioabfall",
+                                        "color": "light-green",
+                                        "type": "organic",
+                                    },
+                                    {"label": "Resto", "type": "waste", "pattern": "Rest"},
+                                ],
+                            }
+                        ],
+                    }
+                ]
             }
-        )
+        ]
+    }
+    try:
+        _open(tablet, stack_full)
+        tablet.locator("#ics-body").get_by_role("button", name="Importa da TrashCard").click()
+        expect(tablet.locator("#status-note")).to_contain_text("TrashCard", timeout=3000)
+        rows = tablet.locator("#ics-body .waste-type")
+        expect(rows).to_have_count(2)
+        expect(rows.nth(0).get_by_label("Etichetta")).to_have_value("Bio")
+        expect(rows.nth(0).locator("input[type='color']")).to_have_value("#8bc34a")
+        expect(rows.nth(1).get_by_label("Icona")).to_have_value("mdi:trash-can-outline")
+    finally:
+        stack_full.fake.dashboards.pop("casa", None)
 
 
 def test_all_day_rubbish_is_one_compact_row_with_dots(stack_full: Stack, tablet: Page) -> None:
@@ -279,7 +320,8 @@ def test_all_day_rubbish_is_one_compact_row_with_dots(stack_full: Stack, tablet:
     )
     try:
         tablet.goto(stack_full.url + "/?lang=it")
-        row = tablet.locator(".event.allday", has_text="Glascontainer")
+        # Glass is not one of the default types: it is "Altro", the raw title in the tooltip.
+        row = tablet.locator(".event.allday", has_text="Altro")
         expect(row).to_be_visible(timeout=5000)
         height = row.bounding_box()["height"]
         assert height < 40, height  # one line
