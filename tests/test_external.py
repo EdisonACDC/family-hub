@@ -70,7 +70,10 @@ def _source(**overrides: Any) -> dict[str, Any]:
 
 
 async def _setup(
-    hass: HomeAssistant, sources: list[dict[str, Any]], text: dict[str, str]
+    hass: HomeAssistant,
+    sources: list[dict[str, Any]],
+    text: dict[str, str],
+    extra: dict[str, Any] | None = None,
 ) -> MockConfigEntry:
     await hass.config.async_set_time_zone("Europe/Berlin")
     entry = MockConfigEntry(
@@ -85,6 +88,7 @@ async def _setup(
             OPT_CATEGORIES: [dict(c) for c in DEFAULT_CATEGORIES],
             OPT_EXTERNAL: sources,
             OPT_REMINDERS: {"channels": ["tablet"], "quiet_start": None, "quiet_end": None},
+            **(extra or {}),
         },
     )
     entry.add_to_hass(hass)
@@ -358,3 +362,44 @@ async def test_waste_colours_can_be_changed_by_an_admin_only(
         {"id": 3, "type": "family_hub/ics/styles", "styles": {"bio": "#000000"}}
     )
     assert (await readonly.receive_json())["success"] is False
+
+
+async def test_a_home_assistant_rubbish_calendar_is_announced_like_an_ics_file(
+    hass: HomeAssistant, freezer: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A calendar from Home Assistant, chosen as rubbish in Fonti, gets the evening and morning
+    reminders too. Its events for the day come from _ha_names_on, which asks calendar.get_events;
+    here that read is replaced, because the test has no calendar integration to answer it."""
+    calls = async_mock_service(hass, "persistent_notification", "create")
+    asked: list[tuple[str, str]] = []
+
+    async def names_on(self: Any, entity_id: str, day: Any) -> list[str]:
+        asked.append((entity_id, day.isoformat()))
+        return ["Restmüll"] if day.isoformat() == "2026-11-09" else []
+
+    monkeypatch.setattr(external.ExternalManager, "_ha_names_on", names_on)
+    await _setup(
+        hass,
+        [],
+        {},
+        {
+            "sources": {
+                "calendar_styles": {
+                    "calendar.rifiuti_bianco": {"name": "", "type": "rifiuti", "color": "#64748B"},
+                    "calendar.festa": {"name": "", "type": "altro", "color": "#64748B"},
+                }
+            }
+        },
+    )
+    freezer.move_to("2026-11-08 19:00:00+01:00")
+    async_fire_time_changed(hass, datetime.fromisoformat("2026-11-08 19:00:00+01:00"))
+    await hass.async_block_till_done()
+    freezer.move_to("2026-11-09 07:00:00+01:00")
+    async_fire_time_changed(hass, datetime.fromisoformat("2026-11-09 07:00:00+01:00"))
+    await hass.async_block_till_done()
+    messages = [c.data["message"] for c in calls]
+    assert "Domani: Restmüll" in messages
+    assert "Oggi: Restmüll" in messages
+    # Only the rubbish calendar is read, for the evening's day and the morning's.
+    assert {entity for entity, _ in asked} == {"calendar.rifiuti_bianco"}
+    assert ("calendar.rifiuti_bianco", "2026-11-09") in asked

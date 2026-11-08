@@ -24,6 +24,7 @@ from urllib.parse import urlsplit
 import aiohttp
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import (
     async_track_point_in_time,
@@ -301,6 +302,56 @@ class ExternalManager:
         for source in self.sources():
             if source.get("type") == "rifiuti" or source.get("return_notice"):
                 self._schedule_reminders(source)
+        # Home Assistant calendars chosen as rubbish in the guide's Fonti step.
+        for source in self.home_assistant_rubbish():
+            self._schedule_reminders(source)
+
+    def home_assistant_rubbish(self) -> list[dict[str, Any]]:
+        """A reminder source for each Home Assistant calendar whose type is rubbish. Its id has
+        no "_" or "." (the reminder buttons are parsed by "_")."""
+        styles = self._entry.options.get("sources", {}).get("calendar_styles", {})
+        found = []
+        for entity_id, style in styles.items():
+            if style.get("type") != "rifiuti":
+                continue
+            slug = entity_id.split(".", 1)[-1].replace("_", "-")
+            found.append({"id": f"ha-{slug}", "type": "rifiuti", "calendar": entity_id})
+        return found
+
+    async def _names_on(self, source: dict[str, Any], day: date) -> list[str]:
+        """The titles of one source's events on a day: from the external file, or from the
+        Home Assistant calendar the guide chose."""
+        entity_id = source.get("calendar")
+        if entity_id:
+            return await self._ha_names_on(str(entity_id), day)
+        calendar = self.entities.get(source["id"])
+        if calendar is None or calendar.calendar is None:
+            return []
+        return [str(e.summary) for e in _on_day(calendar.calendar, day)]
+
+    async def _ha_names_on(self, entity_id: str, day: date) -> list[str]:
+        zone = dt_util.get_default_time_zone()
+        start = datetime.combine(day, datetime.min.time(), zone)
+        try:
+            response = await self._hass.services.async_call(
+                "calendar",
+                "get_events",
+                {
+                    "entity_id": entity_id,
+                    "start_date_time": start.isoformat(),
+                    "end_date_time": (start + timedelta(days=1)).isoformat(),
+                },
+                blocking=True,
+                return_response=True,
+            )
+        except HomeAssistantError as err:
+            LOGGER.warning("Could not read the events of %s for a reminder: %s", entity_id, err)
+            return []
+        found = (response or {}).get(entity_id)
+        events: Any = found.get("events", []) if isinstance(found, dict) else []
+        if not isinstance(events, list):
+            return []
+        return [str(e["summary"]) for e in events if isinstance(e, dict) and e.get("summary")]
 
     @callback
     def async_stop(self) -> None:
@@ -370,21 +421,22 @@ class ExternalManager:
     async def async_remind(self, source: dict[str, Any], kind: str) -> None:
         """Send the reminders of one source for this moment: evening or morning."""
         text_for = TEXTS.get(self._entry.options.get(CONF_LANGUAGE, "en"), TEXTS["en"])
-        calendar = self.entities.get(source["id"])
-        if calendar is None or calendar.calendar is None:
-            return
         today = dt_util.as_local(dt_util.now()).date()
         if source.get("type") == "rifiuti":
             # Rubbish: one reminder for all the pickups of the day, the evening before and the
             # morning of it. The uid is the pickup day, so "Fatto" closes both.
             pickup = today + timedelta(days=1) if kind == "evening" else today
-            names = [str(e.summary) for e in _on_day(calendar.calendar, pickup)]
+            names = await self._names_on(source, pickup)
             if not names:
                 return
             label = text_for["tomorrow"] if kind == "evening" else text_for["today"]
             uid = f"{WASTE_UID_PREFIX}{source['id']}-{pickup.isoformat()}"
             await self._send(source, uid, f"{label}: {', '.join(names)}", text_for["title"], kind)
-        elif source.get("return_notice") and kind == "evening":
+            return
+        calendar = self.entities.get(source["id"])
+        if calendar is None or calendar.calendar is None:
+            return
+        if source.get("return_notice") and kind == "evening":
             # Holidays: the evening before the day they end (the return).
             for event in _on_day(calendar.calendar, today):
                 if event.end == today + timedelta(days=1):

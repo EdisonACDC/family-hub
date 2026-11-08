@@ -582,7 +582,7 @@
         events[entity].forEach(function (ev) {
           var key = dayKey(ev.start);
           (dayCache[key] = dayCache[key] || []).push({
-            summary: ev.summary, start: ev.start, end: ev.end,
+            uid: ev.record_id, summary: ev.summary, start: ev.start, end: ev.end,
             allDay: isAllDay(ev.start), color: cal ? cal.color : "#64748B"
           });
         });
@@ -658,8 +658,10 @@
       var start = parseTime(form.elements.start_time.value);
       var end = parseTime(form.elements.end_time.value) || (start ? addOneHour(start) : null);
       if (start && end) {
+        // The event being edited is not an overlap of itself.
+        var editingUid = state.editing ? state.editing.ev.record_id : null;
         var overlap = items.filter(function (it) {
-          if (it.allDay) return false;
+          if (it.allDay || (editingUid && it.uid === editingUid)) return false;
           var a = new Date(it.start).getTime();
           var b = new Date(it.end || it.start).getTime();
           var s = new Date(day + "T" + start + ":00").getTime();
@@ -1569,15 +1571,24 @@
     }
     columns.appendChild(hours);
     columns.appendChild(minutes);
+    // Title, the two columns, and the buttons in a foot below them (never over the columns).
+    var titleText = input.getAttribute("aria-label") || (input.labels && input.labels[0] ? input.labels[0].textContent : "");
+    panel.appendChild(el("h2", {}, titleText));
     panel.appendChild(columns);
+    var cancel = button(t("cancel"), "btn", function () {
+      box.remove();
+      input.focus();
+    });
     var done = button(I.f("timeDone"), "btn btn-primary", function () {
       input.value = showTime(pad(hour) + ":" + pad(minute), format);
       check();
       box.remove();
       input.focus();
     });
-    panel.appendChild(el("div", { class: "dialog-foot actions" }, null));
-    panel.lastChild.appendChild(done);
+    var foot = el("div", { class: "dialog-foot actions timepick-foot" });
+    foot.appendChild(cancel);
+    foot.appendChild(done);
+    panel.appendChild(foot);
     box.appendChild(panel);
     document.body.appendChild(box);
     paint();

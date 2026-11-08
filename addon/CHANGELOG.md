@@ -1,13 +1,26 @@
 # Changelog: Family Hub UI (add-on)
 
-## Non ancora rilasciato
+## 0.6.1
+
+- Nuovo evento: il titolo del modulo è "Nuovo evento" (in tutte e tre le lingue). Un test verifica
+  che ogni testo usato dal tablet esista in italiano, tedesco e inglese.
+- Avviso di sovrapposizione: modificando un evento non segnala più l'evento stesso.
+- Selettore dell'ora: il titolo e i pulsanti Annulla e Fatto stanno in un piede fisso sotto le
+  due colonne, e non più sopra la colonna dei minuti.
+- "Altri calendari (N)": ha lo stesso aspetto dei chip, non più sbiadito, con contrasto oltre 4,5:1.
+- Meteo: nella barra in alto, accanto al meteo attuale, i prossimi tre giorni (giorno, icona,
+  massima e minima).
+- Opzione dello schermo "La settimana parte da oggi" (predefinita sì sul tablet): la vista mostra
+  oggi e i sei giorni seguenti; le frecce spostano di 7 giorni, "Oggi" torna a partire da oggi.
+- Promemoria della sera prima e della mattina per i calendari di Home Assistant scelti come
+  rifiuti in Fonti (come per i file .ics). Gli orari sono le 19:00 e le 7:00.
+
+## 0.6.0
 
 - "Importa dai vecchi calendari" (Fonti, solo adulti): si sceglie un calendario di Home
   Assistant, il calendario Family Hub e la persona, si vede l'anteprima (primi 10 eventi) e poi si
   copiano gli eventi degli ultimi 30 giorni e quelli futuri. Gli eventi già presenti (stesso titolo,
   inizio e fine) vengono saltati: ripetere l'importazione non crea duplicati.
-
-## 0.6.0
 
 - Evento: toccandolo si apre una scheda con titolo, calendario, data e ora, persone e promemoria,
   con Modifica (stesso modulo, già compilato) ed Elimina (con conferma). Gli eventi esterni
