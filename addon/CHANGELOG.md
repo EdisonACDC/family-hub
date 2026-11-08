@@ -1,17 +1,7 @@
 # Changelog: Family Hub UI (add-on)
 
-## 0.6.1
+## 0.6.2
 
-- Nuovo evento: il titolo del modulo è "Nuovo evento" (in tutte e tre le lingue). Un test verifica
-  che ogni testo usato dal tablet esista in italiano, tedesco e inglese.
-- Avviso di sovrapposizione: modificando un evento non segnala più l'evento stesso.
-- Selettore dell'ora: il titolo e i pulsanti Annulla e Fatto stanno in un piede fisso sotto le
-  due colonne, e non più sopra la colonna dei minuti.
-- "Altri calendari (N)": ha lo stesso aspetto dei chip, non più sbiadito, con contrasto oltre 4,5:1.
-- Meteo: nella barra in alto, accanto al meteo attuale, i prossimi tre giorni (giorno, icona,
-  massima e minima).
-- Opzione dello schermo "La settimana parte da oggi" (predefinita sì sul tablet): la vista mostra
-  oggi e i sei giorni seguenti; le frecce spostano di 7 giorni, "Oggi" torna a partire da oggi.
 - Dopo un riavvio di Home Assistant il tablet riconosce di nuovo chi lo usa: un tablet avviato
   mentre Home Assistant non risponde mostra "Collegamento a Home Assistant…" e non diventa
   ospite; appena il collegamento c'è, la sua identità viene ricalcolata senza ricaricare.
@@ -40,6 +30,19 @@
   (rifiuti, festività e vacanze non contano, i turni sì), filtro per persona. Toccando un giorno si
   vede la giornata con gli spazi liberi di almeno 30 minuti; toccando uno spazio libero si apre
   "Nuovo evento" con data e ora già scritte. Sul telefono il mese è compatto, con puntini.
+
+## 0.6.1
+
+- Nuovo evento: il titolo del modulo è "Nuovo evento" (in tutte e tre le lingue). Un test verifica
+  che ogni testo usato dal tablet esista in italiano, tedesco e inglese.
+- Avviso di sovrapposizione: modificando un evento non segnala più l'evento stesso.
+- Selettore dell'ora: il titolo e i pulsanti Annulla e Fatto stanno in un piede fisso sotto le
+  due colonne, e non più sopra la colonna dei minuti.
+- "Altri calendari (N)": ha lo stesso aspetto dei chip, non più sbiadito, con contrasto oltre 4,5:1.
+- Meteo: nella barra in alto, accanto al meteo attuale, i prossimi tre giorni (giorno, icona,
+  massima e minima).
+- Opzione dello schermo "La settimana parte da oggi" (predefinita sì sul tablet): la vista mostra
+  oggi e i sei giorni seguenti; le frecce spostano di 7 giorni, "Oggi" torna a partire da oggi.
 - Promemoria della sera prima e della mattina per i calendari di Home Assistant scelti come
   rifiuti in Fonti (come per i file .ics). Gli orari sono le 19:00 e le 7:00.
 
