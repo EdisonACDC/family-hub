@@ -16,8 +16,11 @@ from homeassistant.helpers import config_validation as cv
 
 from .calendar import FamilyHubCalendar, deserialize_time, localize
 from .const import (
+    ATTR_ALEXA_TARGET,
+    ATTR_ALEXA_VOLUME,
     ATTR_ALL_DAY_REMINDER,
     ATTR_CATEGORY,
+    ATTR_CHANNELS,
     ATTR_DESCRIPTION,
     ATTR_END,
     ATTR_ENTRY_ID,
@@ -30,6 +33,7 @@ from .const import (
     ATTR_SUMMARY,
     ATTR_UID,
     DOMAIN,
+    EVENT_CHANNELS,
     OPT_PERSONS,
     SERVICE_ADD_EVENT,
     SERVICE_DELETE_EVENT,
@@ -66,6 +70,33 @@ PERSONS = vol.All(cv.ensure_list, [cv.string])
 # Minutes before the start, e.g. [30, 10]. Empty list = no reminders for this event.
 REMINDER_OFFSETS = vol.All(cv.ensure_list, [cv.positive_int])
 
+# The event's own notification channels (see ATTR_CHANNELS). None in update_event goes back
+# to the persons' own settings.
+CHANNELS = vol.Any(None, vol.All(cv.ensure_list, [vol.In(EVENT_CHANNELS)]))
+ALEXA_TARGET = vol.Any(None, cv.string)
+ALEXA_VOLUME = vol.Any(None, vol.All(vol.Coerce(int), vol.Range(min=0, max=100)))
+NOTIFY_FIELDS = {
+    vol.Optional(ATTR_CHANNELS): CHANNELS,
+    vol.Optional(ATTR_ALEXA_TARGET): ALEXA_TARGET,
+    vol.Optional(ATTR_ALEXA_VOLUME): ALEXA_VOLUME,
+}
+
+
+def _notify_of(data: dict[str, Any]) -> dict[str, Any] | None:
+    """The event's own channels from the action data, or None (the persons' settings)."""
+    channels = data.get(ATTR_CHANNELS)
+    if channels is None:
+        return None
+    target = data.get(ATTR_ALEXA_TARGET) or None
+    if target is not None and target != "all" and not str(target).startswith("media_player."):
+        raise ServiceValidationError("alexa_target must be 'all' or a media_player entity")
+    return {
+        "channels": [c for c in EVENT_CHANNELS if c in channels],
+        "alexa_target": target,
+        "alexa_volume": data.get(ATTR_ALEXA_VOLUME),
+    }
+
+
 ADD_EVENT_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_ENTRY_ID): cv.string,
@@ -79,6 +110,7 @@ ADD_EVENT_SCHEMA = vol.Schema(
         vol.Optional(ATTR_REMINDER_OFFSETS): REMINDER_OFFSETS,
         vol.Optional(ATTR_ALL_DAY_REMINDER): HH_MM,
         vol.Optional(ATTR_SHIFT_ID): cv.string,
+        **NOTIFY_FIELDS,
     }
 )
 
@@ -94,6 +126,7 @@ UPDATE_EVENT_SCHEMA = vol.Schema(
         vol.Optional(ATTR_PERSONS): PERSONS,
         vol.Optional(ATTR_REMINDER_OFFSETS): REMINDER_OFFSETS,
         vol.Optional(ATTR_ALL_DAY_REMINDER): HH_MM,
+        **NOTIFY_FIELDS,
     }
 )
 
@@ -195,6 +228,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             reminder_offsets=call.data.get(ATTR_REMINDER_OFFSETS),
             all_day_reminder=call.data.get(ATTR_ALL_DAY_REMINDER),
             shift_id=call.data.get(ATTR_SHIFT_ID),
+            notify=_notify_of(dict(call.data)),
         )
 
     async def update_event(call: ServiceCall) -> None:
@@ -213,6 +247,8 @@ def async_register_services(hass: HomeAssistant) -> None:
             changes[ATTR_REMINDER_OFFSETS] = call.data[ATTR_REMINDER_OFFSETS]
         if ATTR_ALL_DAY_REMINDER in call.data:
             changes[ATTR_ALL_DAY_REMINDER] = call.data[ATTR_ALL_DAY_REMINDER]
+        if ATTR_CHANNELS in call.data:
+            changes["notify"] = _notify_of(dict(call.data))
         await calendar.async_update_event(call.data[ATTR_UID], changes)
 
     async def delete_event(call: ServiceCall) -> None:

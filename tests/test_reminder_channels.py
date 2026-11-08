@@ -158,3 +158,113 @@ async def test_popup_is_skipped_quietly_without_browser_mod(
 
     # No browser_mod service: nothing is sent and nothing raises.
     await _tick(hass, freezer, local(14, 30))
+
+
+async def test_an_event_uses_its_own_channels_echo_and_volume(
+    hass: HomeAssistant, freezer: Any
+) -> None:
+    """ "Avvisa su" on the event: only Alexa, on the kitchen Echo at 80 %, instead of Sofia's
+    phone; the event's choice is kept and shown to the tablet as text."""
+    freezer.move_to(local(10))
+    _echo(hass, "cucina")
+    _echo(hass, "salotto")
+    entry = await _setup(
+        hass,
+        [
+            {
+                **SOFIA,
+                CONF_PHONE_NOTIFY: "mobile_app_sofia",
+                CONF_ALEXA_NOTIFY: "media_player.salotto",
+                "channels": ["phone", "tablet"],
+            }
+        ],
+        reminders={"channels": ["phone", "tablet"]},
+    )
+    phone = async_mock_service(hass, "notify", "mobile_app_sofia")
+    alexa = async_mock_service(hass, "notify", "alexa_media")
+    async_mock_service(hass, "media_player", "volume_set")
+    tablet = async_mock_service(hass, "persistent_notification", "create")
+    await hass.services.async_call(
+        DOMAIN,
+        "add_event",
+        {
+            "category": "famiglia",
+            "summary": "Dentista",
+            "start": "2026-11-10 15:00:00",
+            "persons": ["sofia"],
+            "channels": ["alexa"],
+            "alexa_target": "media_player.cucina",
+            "alexa_volume": 80,
+        },
+        blocking=True,
+    )
+    (record,) = entry.runtime_data.store.events.values()
+    assert record["notify"] == {
+        "channels": ["alexa"],
+        "alexa_target": "media_player.cucina",
+        "alexa_volume": 80,
+    }
+    state = hass.states.get("calendar.family_hub_famiglia")
+    assert state is not None
+
+    await _tick(hass, freezer, local(14, 30))
+    assert phone == []
+    assert tablet == []
+    assert len(alexa) == 1
+    assert alexa[0].data["target"] == ["media_player.cucina"]
+
+    # Back to the persons' own settings: the phone again.
+    await hass.services.async_call(
+        DOMAIN, "update_event", {"uid": record["uid"], "channels": None}, blocking=True
+    )
+    assert record["notify"] is None
+    await _tick(hass, freezer, local(14, 50))
+    assert len(phone) == 1
+
+
+async def test_quiet_hours_still_apply_to_the_event_channels(
+    hass: HomeAssistant, freezer: Any
+) -> None:
+    freezer.move_to(local(10))
+    _echo(hass, "cucina")
+    await _setup(
+        hass,
+        [{**SOFIA, "quiet_start": "14:00", "quiet_end": "16:00"}],
+        reminders={"channels": ["phone", "tablet"]},
+    )
+    alexa = async_mock_service(hass, "notify", "alexa_media")
+    await hass.services.async_call(
+        DOMAIN,
+        "add_event",
+        {
+            "category": "famiglia",
+            "summary": "Dentista",
+            "start": "2026-11-10 15:00:00",
+            "persons": ["sofia"],
+            "channels": ["alexa"],
+            "alexa_target": "all",
+        },
+        blocking=True,
+    )
+    await _tick(hass, freezer, local(14, 30))
+    assert alexa == []
+
+
+async def test_a_wrong_echo_is_refused(hass: HomeAssistant) -> None:
+    import pytest
+    from homeassistant.exceptions import ServiceValidationError
+
+    await _setup(hass, [SOFIA])
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "add_event",
+            {
+                "category": "famiglia",
+                "summary": "X",
+                "start": "2026-11-10 15:00:00",
+                "channels": ["alexa"],
+                "alexa_target": "light.cucina",
+            },
+            blocking=True,
+        )

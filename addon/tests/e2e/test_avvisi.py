@@ -149,7 +149,9 @@ def test_default_volume_sends_no_volume_and_labels_are_plain(
     expect(mamma.locator("label", has_text="(ID)")).to_have_count(0)
     expect(mamma.locator("label", has_text="notify.")).to_have_count(0)
     mamma.locator(".switch", has_text="predefinito").locator("input").check()
-    expect(mamma.locator("input[type='range']")).to_be_disabled()
+    # Greyed out but still touchable: touching it turns "predefinito" off (0.6.4).
+    expect(mamma.locator(".volume")).to_have_class("volume is-default")
+    expect(mamma.locator("input[type='range']")).to_be_enabled()
     tablet.get_by_role("button", name="Salva avvisi").click()
     expect(tablet.locator("#status-note")).to_contain_text("Avvisi salvati", timeout=3000)
     assert stack_full.fake.config["persons"][1].get("alexa_volume") is None

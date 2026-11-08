@@ -31,6 +31,20 @@ def _offsets_text(offsets: Any) -> str:
     return ",".join(str(int(o)) for o in offsets)
 
 
+def notify_text(notify: dict[str, Any] | None) -> str:
+    """An event's own channels as text for the tablet: "phone,alexa|all|80", or ""."""
+    if not notify:
+        return ""
+    volume = notify.get("alexa_volume")
+    return "|".join(
+        [
+            ",".join(notify.get("channels", [])),
+            str(notify.get("alexa_target") or ""),
+            "" if volume is None else str(int(volume)),
+        ]
+    )
+
+
 @dataclass
 class FamilyHubEvent(CalendarEvent):
     """A calendar event plus the family fields the tablet add-on needs.
@@ -45,6 +59,9 @@ class FamilyHubEvent(CalendarEvent):
     shift_id: str = ""
     # Minutes before the start, comma separated; "" for none; "default" for the family's own.
     reminder_offsets: str = "default"
+    # The event's own notification channels, as text: "phone,alexa|media_player.x|80";
+    # "" when the persons' own settings apply.
+    notify: str = ""
 
 
 SUPPORTED_FEATURES = (
@@ -179,6 +196,7 @@ class FamilyHubCalendar(CalendarEntity):
             record_id=record["uid"],
             shift_id=record.get("shift_id", ""),
             reminder_offsets=_offsets_text(record.get("reminder_offsets")),
+            notify=notify_text(record.get("notify")),
             uid=record["uid"],
             summary=record["summary"],
             start=deserialize_time(record["start"], all_day),
@@ -272,6 +290,8 @@ class FamilyHubCalendar(CalendarEntity):
             record["reminder_offsets"] = event["reminder_offsets"]
         if "all_day_reminder" in event:
             record["all_day_reminder"] = event["all_day_reminder"]
+        if "notify" in event:
+            record["notify"] = event["notify"]
         await self._async_save_and_refresh()
 
     async def async_delete_event(
@@ -301,6 +321,7 @@ class FamilyHubCalendar(CalendarEntity):
         reminder_offsets: list[int] | None = None,
         all_day_reminder: str | None = None,
         shift_id: str | None = None,
+        notify: dict[str, Any] | None = None,
     ) -> str:
         """Store a new event and return its uid."""
         start = localize(start)
@@ -320,6 +341,7 @@ class FamilyHubCalendar(CalendarEntity):
             "reminder_offsets": None if reminder_offsets is None else list(reminder_offsets),
             "all_day_reminder": all_day_reminder or None,
             "shift_id": shift_id or "",
+            "notify": notify,
         }
         await self._async_save_and_refresh()
         return uid

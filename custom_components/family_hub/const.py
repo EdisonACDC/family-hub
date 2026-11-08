@@ -112,6 +112,12 @@ ALEXA_PLATFORM: Final = "alexa_media"
 ECHO_RESTORE_SECONDS: Final = 20
 CONF_ALL_DAY_REMINDER: Final = "all_day_reminder"
 ATTR_ALL_DAY_REMINDER: Final = "all_day_reminder"
+# How one event's reminders go out, instead of its persons' own settings: the channels
+# ("phone", "alexa", "tablet"), the Echo ("all" or a media_player) and its volume.
+ATTR_CHANNELS: Final = "channels"
+ATTR_ALEXA_TARGET: Final = "alexa_target"
+ATTR_ALEXA_VOLUME: Final = "alexa_volume"
+EVENT_CHANNELS: Final[list[str]] = ["phone", "alexa", "tablet"]
 
 # Entry options: reminder settings, read by reminders.py.
 OPT_REMINDERS: Final = "reminders"

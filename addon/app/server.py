@@ -719,6 +719,8 @@ class Hub:
                     "shift_id": raw.get("shift_id", ""),
                     "description": raw.get("description") or "",
                     "reminder_offsets": raw.get("reminder_offsets", "default"),
+                    # "Avvisa su": the event's own channels as text, "" for the persons' own.
+                    "notify": raw.get("notify") or "",
                     "category_id": calendar.get("category_id", ""),
                     "calendar": calendar.get("name", ""),
                 }

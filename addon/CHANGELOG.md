@@ -1,5 +1,15 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.6.4
+
+- Volume Alexa in Avvisi: il cursore non è più bloccato; toccandolo o trascinandolo "predefinito" si spegne e il
+  volume si vede in %. Accendendo "predefinito" il cursore torna grigio.
+- "Avvisa su" nel modulo evento (sotto Persone): Telefono, Alexa (con Echo e volume), Finestra sul tablet.
+  Precompilato dalle persone scelte; se non lo cambi valgono le loro impostazioni. Salvato sull'evento
+  (channels, alexa_target, alexa_volume) e usato dai suoi promemoria; gli orari di silenzio valgono sempre.
+  La scheda evento mostra "Avvisa su: ...".
+- Vista Mese: tolta l'opzione vuota in più nel filtro Persona.
+
 ## 0.6.3
 
 - "Prossimi ritiri" sta su una sola riga che scorre in orizzontale, sul tablet e sul telefono:

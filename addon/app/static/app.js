@@ -805,12 +805,17 @@
   // The same window creates an event (state.editing is null) or changes one (state.editing is
   // the event). Changing keeps the calendar: a Family Hub update cannot move an event.
 
+  // The family's persons, from Family Hub's own calendars. (Calendars from Home Assistant list
+  // only person ids, which are not persons to choose.)
   function personList() {
     var seen = {};
     var list = [];
     state.calendars.forEach(function (cal) {
+      if (cal.external) return;
       (cal.persons || []).forEach(function (p) {
-        if (!seen[p.id]) { seen[p.id] = true; list.push(p); }
+        if (!p || typeof p !== "object" || !p.id || seen[p.id]) return;
+        seen[p.id] = true;
+        list.push(p);
       });
     });
     return list;
@@ -844,6 +849,13 @@
       if (cat) form.elements.category.value = cat.category_id;
     }
     renderEventPersons(editing ? (ev.person_ids || []) : []);
+    state.eventNotify = null;
+    renderEventNotify();
+    ensureNotifyData().then(function () {
+      state.eventNotify = editing && ev.notify ? parseNotify(ev.notify)
+        : notifyFromPersons(editing ? (ev.person_ids || []) : chosenEventPersons());
+      renderEventNotify();
+    });
     $("event-overlay").hidden = false;
     form.elements.summary.focus();
     var day = parseDate(form.elements.date.value);
@@ -859,8 +871,111 @@
     var box = $("event-persons");
     box.textContent = "";
     personList().forEach(function (p) {
-      box.appendChild(switchRow(p.name, chosen.indexOf(p.id) !== -1, function () {}, "event-person"));
+      box.appendChild(switchRow(p.name, chosen.indexOf(p.id) !== -1, function () {
+        // Until "Avvisa su" is changed by hand, it follows the persons chosen.
+        if (state.eventNotify && !state.eventNotify.touched) {
+          state.eventNotify = notifyFromPersons(chosenEventPersons());
+          renderEventNotify();
+        }
+      }, "event-person"));
     });
+  }
+
+  // ---- "Avvisa su": how this event's reminders go out --------------------------------
+  // Filled in from the chosen persons' own settings. Sent with the event only when changed
+  // here; otherwise the persons' settings apply, as before. Quiet hours always apply.
+
+  function parseNotify(text) {
+    var parts = String(text || "").split("|");
+    return {
+      touched: true,
+      channels: parts[0] ? parts[0].split(",") : [],
+      alexa_target: parts[1] || "",
+      alexa_volume: parts[2] === undefined || parts[2] === "" ? null : Number(parts[2])
+    };
+  }
+
+  function notifyFromPersons(ids) {
+    var persons = (state.notifyData && state.notifyData.persons) || [];
+    var chosen = persons.filter(function (p) { return ids.indexOf(p.id) !== -1; });
+    var channels = [];
+    chosen.forEach(function (p) {
+      (p.channels || []).forEach(function (c) { if (channels.indexOf(c) === -1) channels.push(c); });
+    });
+    if (!chosen.length) channels = ["tablet"];
+    var echo = chosen.filter(function (p) { return p.alexa_notify; })[0];
+    return {
+      touched: false,
+      channels: channels,
+      alexa_target: echo ? echo.alexa_notify : "",
+      alexa_volume: echo && echo.alexa_volume != null ? echo.alexa_volume : null
+    };
+  }
+
+  function renderEventNotify() {
+    var box = $("event-notify");
+    if (!box) return;
+    box.textContent = "";
+    var n = state.eventNotify;
+    box.hidden = !n;
+    if (!n) return;
+    var f = I.f;
+    box.appendChild(el("h3", { class: "notify-title" }, f("notifyOn")));
+    box.appendChild(el("p", { class: "hint" }, f("notifyOnHint")));
+    function touch() { n.touched = true; }
+    var list = el("div", { class: "switch-list" });
+    [["phone", f("chPhone")], ["alexa", f("chAlexa")], ["tablet", f("chTablet")]].forEach(function (c) {
+      list.appendChild(switchRow(c[1], n.channels.indexOf(c[0]) !== -1, function (on) {
+        touch();
+        n.channels = n.channels.filter(function (x) { return x !== c[0]; });
+        if (on) n.channels.push(c[0]);
+        renderEventNotify();
+      }, "notify-" + c[0]));
+    });
+    box.appendChild(list);
+    if (n.channels.indexOf("alexa") !== -1 && state.notifyServices) {
+      var echo = echoSelect(n.alexa_target, function (v) { touch(); n.alexa_target = v; });
+      echo.setAttribute("name", "alexa_target");
+      box.appendChild(fieldRow(f("alexa"), echo));
+      box.appendChild(fieldRow(f("alexaVolume"), volumeControl(n.alexa_volume, function (v) {
+        touch();
+        n.alexa_volume = v;
+      })));
+    }
+  }
+
+  // "Telefono · Alexa Cucina 80% · Finestra sul tablet"
+  function notifySummary(text) {
+    var n = parseNotify(text);
+    var f = I.f;
+    var parts = [];
+    if (n.channels.indexOf("phone") !== -1) parts.push(f("chPhone"));
+    if (n.channels.indexOf("alexa") !== -1) {
+      var name = f("chAlexa");
+      if (n.alexa_target === "all") name += " " + f("allEchos");
+      else if (n.alexa_target) name += " " + echoName(n.alexa_target);
+      if (n.alexa_volume != null) name += " " + n.alexa_volume + "%";
+      parts.push(name);
+    }
+    if (n.channels.indexOf("tablet") !== -1) parts.push(f("chTablet"));
+    return parts.length ? parts.join(" · ") : f("notifyNone");
+  }
+
+  function echoName(entityId) {
+    var list = (state.notifyServices && state.notifyServices.alexa) || [];
+    var found = list.filter(function (s) { return s.entity_id === entityId; })[0];
+    if (found) return found.name;
+    var bare = String(entityId).split(".").pop().replace(/_/g, " ");
+    return bare.charAt(0).toUpperCase() + bare.slice(1);
+  }
+
+  // Persons' settings and the Echo list, once, for the form (guests never open it).
+  function ensureNotifyData() {
+    if (state.notifyData && state.notifyServices) return Promise.resolve();
+    return request({ op: "notify_get" }).then(function (data) {
+      state.notifyData = data;
+      loadNotifyOptions(data);
+    }).catch(function () { /* no settings to read: the form still works */ });
   }
 
   function chosenEventPersons() {
@@ -920,6 +1035,13 @@
       return;
     }
     if (reminders !== null) data.reminder_offsets = reminders;
+    var n = state.eventNotify;
+    if (n && n.touched) {
+      var alexa = n.channels.indexOf("alexa") !== -1;
+      data.channels = n.channels.slice();
+      data.alexa_target = alexa && n.alexa_target ? n.alexa_target : null;
+      data.alexa_volume = alexa ? n.alexa_volume : null;
+    }
     var editing = state.editing;
     var call;
     if (editing) {
@@ -986,6 +1108,7 @@
     if (ev.description) box.appendChild(el("p", { class: "card-text" }, ev.description));
     var names = (ev.person_ids || []).map(personName);
     if (names.length) box.appendChild(el("p", {}, I.f("evPersons") + ": " + names.join(", ")));
+    if (ev.notify) box.appendChild(el("p", { class: "card-notify" }, I.f("notifyOn") + ": " + notifySummary(ev.notify)));
     // Family events have reminders of their own; calendars from outside do not.
     if (ev.reminder_offsets !== undefined) {
       var reminders = ev.reminder_offsets === "default" ? I.f("cardRemindersDefault")
@@ -2578,7 +2701,13 @@
     form.elements.date.value = showDate(key);
     form.elements.start_time.value = showTime(hhmm(from), state.timeFormat);
     form.elements.end_time.value = showTime(hhmm(to), state.timeFormat);
-    if (state.monthPerson) renderEventPersons([state.monthPerson]);
+    if (state.monthPerson) {
+      renderEventPersons([state.monthPerson]);
+      ensureNotifyData().then(function () {
+        state.eventNotify = notifyFromPersons([state.monthPerson]);
+        renderEventNotify();
+      });
+    }
     loadDayCache(parseLocalDay(key)).then(function () { updateDayInfo(form); });
   }
 
@@ -2732,23 +2861,33 @@
     var sliderRow = el("div", { class: "volume-slider" });
     sliderRow.appendChild(slider);
     sliderRow.appendChild(readout);
+    var defaultSwitch = null;
     function paint() {
       slider.value = String(level);
-      slider.disabled = isDefault;
-      readout.textContent = isDefault ? "—" : level + " %";
+      wrap.classList.toggle("is-default", isDefault);
+      readout.textContent = level + " %";
+      if (defaultSwitch) {
+        defaultSwitch.checked = isDefault;
+        defaultSwitch.setAttribute("aria-checked", isDefault ? "true" : "false");
+      }
     }
-    slider.addEventListener("input", function () {
+    // Touching or dragging the slider means a volume of its own: "predefinito" goes off.
+    function own() {
       level = Number(slider.value);
-      isDefault = false;
+      if (isDefault) isDefault = false;
       paint();
       onChange(level);
-    });
+    }
+    slider.addEventListener("input", own);
+    slider.addEventListener("pointerdown", function () { if (isDefault) { isDefault = false; paint(); onChange(level); } });
     wrap.appendChild(sliderRow);
-    wrap.appendChild(switchRow(I.f("volumeDefault"), isDefault, function (on) {
+    var row = switchRow(I.f("volumeDefault"), isDefault, function (on) {
       isDefault = on;
       paint();
       onChange(on ? null : level);
-    }));
+    });
+    defaultSwitch = row.querySelector("input");
+    wrap.appendChild(row);
     paint();
     return wrap;
   }

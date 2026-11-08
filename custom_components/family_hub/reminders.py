@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable, Coroutine
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -227,6 +228,44 @@ class ReminderManager:
             )
         return targets
 
+    def with_event_channels(
+        self, targets: list[Target], notify: dict[str, Any] | None
+    ) -> list[Target]:
+        """An event's own channels, Echo and volume replace the persons' settings ("Avvisa su").
+        Quiet hours still apply. An event without persons reaches the chosen Echo and the tablet,
+        quiet during the family's quiet hours."""
+        if not notify:
+            return targets
+        channels = frozenset(notify.get("channels", []))
+        echo = notify.get("alexa_target") or None
+        volume = notify.get("alexa_volume")
+        if not targets:
+            settings = self.settings
+            now = dt_util.as_local(dt_util.now()).time()
+            quiet = in_quiet_hours(
+                now, _clock(settings["quiet_start"]), _clock(settings["quiet_end"])
+            )
+            return [
+                Target(
+                    name="",
+                    phone_notify=None,
+                    speaker=None,
+                    alexa_notify=echo,
+                    quiet=quiet,
+                    channels=channels,
+                    alexa_volume=volume,
+                )
+            ]
+        return [
+            replace(
+                target,
+                channels=channels,
+                alexa_notify=echo or target.alexa_notify,
+                alexa_volume=target.alexa_volume if volume is None else volume,
+            )
+            for target in targets
+        ]
+
     async def async_fire(
         self,
         uid: str,
@@ -250,7 +289,13 @@ class ReminderManager:
             when = dt_util.as_local(datetime.fromisoformat(record["start"])).strftime("%H:%M")
             message = f"{when} · {record['summary']}"
         person_ids = [only] if only is not None else record.get("persons", [])
-        targets = self.targets_for(person_ids)
+        notify = record.get("notify")
+        targets = self.with_event_channels(self.targets_for(person_ids), notify)
+        channels = frozenset(settings["channels"])
+        if notify:
+            # The event's own choice also opens the family-wide channel (Alexa is "speaker").
+            names = {"phone": "phone", "alexa": "speaker", "tablet": "tablet"}
+            channels = frozenset(names[c] for c in notify.get("channels", []) if c in names)
         await async_send(
             self._hass,
             Delivery(
@@ -258,7 +303,7 @@ class ReminderManager:
                 message=message,
                 notification_id=f"{NOTIFICATION_PREFIX}{uid}",
                 targets=[target for target in targets if not target.quiet],
-                channels=frozenset(settings["channels"]),
+                channels=channels,
                 tts_entity=settings["tts_entity"],
                 tablet=_tablet_allowed(targets),
                 actions=reminder_actions(uid, text),

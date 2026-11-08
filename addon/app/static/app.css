@@ -1090,3 +1090,11 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
   .weeknav .view-switch .segment { font-size: 13px; padding: 0 5px; }
   #this-week { padding: 0 10px; }
 }
+
+/* ---- 0.6.4: "Avvisa su" in the event form; the Alexa volume is never greyed out to touch ---- */
+.event-notify { display: grid; gap: 8px; margin-top: 10px; }
+.event-notify[hidden] { display: none; }
+.event-notify .notify-title { margin: 0; font-size: 18px; }
+.volume.is-default input[type="range"] { filter: grayscale(1); opacity: 0.55; }
+.volume.is-default .volume-value { opacity: 0.55; }
+.volume-value { min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }

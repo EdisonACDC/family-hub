@@ -39,6 +39,21 @@ def calendar_state(entity_id: str, name: str, category_id: str) -> dict[str, Any
     }
 
 
+def notify_text(data: dict[str, Any]) -> str:
+    """As the integration shows an event's own channels: "phone,alexa|all|80", or ""."""
+    channels = data.get("channels")
+    if channels is None:
+        return ""
+    volume = data.get("alexa_volume")
+    return "|".join(
+        [
+            ",".join(channels),
+            str(data.get("alexa_target") or ""),
+            "" if volume is None else str(volume),
+        ]
+    )
+
+
 def stored_event(
     summary: str, start: str, end: str, person_ids: str = "", record_id: str | None = None
 ) -> dict[str, Any]:
@@ -51,6 +66,7 @@ def stored_event(
         "person_ids": person_ids,
         "record_id": record_id or uuid.uuid4().hex,
         "shift_id": "",
+        "notify": "",
     }
 
 
@@ -540,9 +556,18 @@ class FakeHA:
                 stored_event(
                     data["summary"], data["start"], data.get("end", data["start"]), person_ids
                 )
-                | {"shift_id": shift_id}
+                | {"shift_id": shift_id, "notify": notify_text(data)}
             )
             await self.push_entity_change(entity)
+        if domain == DOMAIN and service == "update_event":
+            for events in self.events.values():
+                for event in events:
+                    if event["record_id"] == data["uid"]:
+                        for key in ("summary", "start", "end"):
+                            if key in data:
+                                event[key] = data[key]
+                        if "channels" in data:
+                            event["notify"] = notify_text(data)
         if domain == "todo":
             await self._todo(data)
         if domain == DOMAIN and service == "delete_event":
