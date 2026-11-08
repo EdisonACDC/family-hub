@@ -101,9 +101,15 @@ def test_pickups_stay_on_one_line_that_scrolls_on_the_phone(
         page.goto(stack_full.url + "/?lang=it")
         chips = page.locator("#pickups .pickup-chip")
         expect(chips).to_have_count(6, timeout=5000)
-        tops = {round(chips.nth(i).bounding_box()["y"]) for i in range(6)}  # type: ignore[index]
-        assert len(tops) == 1, tops  # one line, never one under the other
         row = page.locator("#pickups")
+        # Read in one go: the row is drawn again when the week's events arrive.
+        tops = set(
+            row.evaluate(
+                "e => [...e.querySelectorAll('.pickup-chip')]"
+                ".map(c => Math.round(c.getBoundingClientRect().top))"
+            )
+        )
+        assert len(tops) == 1, tops  # one line, never one under the other
         assert row.evaluate("e => e.scrollWidth > e.clientWidth")
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         _shot(page, "phone_next_pickups")

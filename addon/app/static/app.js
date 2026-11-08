@@ -682,6 +682,7 @@
     var select = document.querySelector("#event-form select[name='category']");
     select.textContent = "";
     state.calendars.forEach(function (cal) {
+      if (cal.external || !cal.category_id) return;  // read only: no events can be added there
       select.appendChild(el("option", { value: cal.category_id }, cal.name));
     });
   }
@@ -2635,7 +2636,7 @@
     box.appendChild(weatherIcon(w.condition));
     var text = el("span", { class: "wx-text" });
     text.appendChild(el("strong", {}, Math.round(w.temperature) + w.unit));
-    text.appendChild(document.createTextNode(" " + I.w.cond(w.condition)));
+    text.appendChild(el("span", { class: "wx-cond" }, " " + I.w.cond(w.condition)));
     box.appendChild(text);
   }
 
@@ -2912,6 +2913,9 @@
     $("view-switch").setAttribute("aria-label", I.f("viewChoice"));
     $("todo-btn").textContent = I.f("listsButton");
     $("menu-btn").textContent = I.f("menu");
+    $("menu-btn").setAttribute("aria-label", I.f("menu"));
+    $("menu-lists").textContent = I.f("listsButton");
+    $("event-category-hint").textContent = I.f("evPersonsHint");
     $("menu-wizard").textContent = t("wizardStart");
     $("menu-shifts").textContent = I.f("menuShifts");
     $("menu-notify").textContent = I.f("menuNotify");
@@ -2999,6 +3003,11 @@
     $("menu-shifts").addEventListener("click", function () {
       toggleMenu(false);
       openShifts();
+    });
+    // On the phone the lists are in the menu (the top bar has no room for their button).
+    $("menu-lists").addEventListener("click", function () {
+      toggleMenu(false);
+      openTodos();
     });
     $("shifts-close").addEventListener("click", closeShifts);
     $("menu-notify").addEventListener("click", function () {

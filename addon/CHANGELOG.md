@@ -15,6 +15,12 @@
   questa scelta; un calendario senza persone è della famiglia.
 - Lo stesso evento in più calendari (stesso titolo, inizio e fine) compare una volta sola nella
   settimana, nel mese e nei prossimi 14 giorni, con un puntino per ogni altro calendario.
+- Nuovo evento: nel menu "Calendario" ci sono solo i calendari di Family Hub (i calendari esterni
+  sono in sola lettura e non si potevano salvare); sotto, "Per chi? Scegli le persone qui sotto."
+- Telefono (anche 360 px): la barra in alto non esce più dallo schermo. Riga 1 ora, data, meteo e
+  menu ☰; riga 2 i prossimi tre giorni, più stretti; riga 3 "Settimana | Mese" e ← Oggi →;
+  "Liste" è nel menu; i chip dei calendari scorrono in orizzontale; la barra occupa al massimo
+  circa un terzo dello schermo.
 
 ## 0.6.2
 

@@ -197,7 +197,8 @@ def test_menu_opens_under_the_menu_button_with_big_entries(stack_full: Stack, ta
     assert box["y"] >= bar["y"] + bar["height"] - 1
     assert box["y"] >= button["y"] + button["height"] - 1
     heights = tablet.evaluate(
-        "[...document.querySelectorAll('#menu .btn')].map(e => e.getBoundingClientRect().height)"
+        "[...document.querySelectorAll('#menu .btn')].filter(e => e.getClientRects().length)"
+        ".map(e => e.getBoundingClientRect().height)"
     )
     assert heights and min(heights) >= 48
     expect(tablet.locator("#menu .switch-row", has_text="Riduci trasparenza")).to_be_visible()

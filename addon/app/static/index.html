@@ -37,6 +37,7 @@
   <section class="filters" id="filters" aria-label="Calendari"></section>
 
   <div class="menu" id="menu" hidden>
+    <button type="button" class="btn" id="menu-lists">Liste</button>
     <button type="button" class="btn" id="menu-shifts">Turni</button>
     <button type="button" class="btn" id="menu-notify">Avvisi</button>
     <button type="button" class="btn" id="menu-ics" hidden>Calendari esterni</button>
@@ -65,6 +66,7 @@
       <div class="dialog-body">
         <label>Titolo <input name="summary" required maxlength="255" autocomplete="off"></label>
         <label>Calendario <select name="category" required></select></label>
+        <p class="hint" id="event-category-hint">Per chi? Scegli le persone qui sotto.</p>
         <label class="switch switch-row check"><span>Tutto il giorno</span><input type="checkbox" name="all_day" role="switch" aria-checked="false"></label>
         <label>Data <input type="text" name="date" required inputmode="numeric" placeholder="gg/mm/aaaa"></label>
         <div class="row">
