@@ -783,3 +783,51 @@ label.switch.switch-row,
 .waste-row .waste-icon { width: 26px; height: 26px; color: #fff; margin: 0; }
 .waste-label { flex: 1 1 auto; }
 .waste-row input[type="color"] { width: 52px; height: 36px; border: none; background: transparent; }
+
+/* ---- scrollbars: thin, translucent, rounded, like iOS. ----
+   Only where content scrolls: every scroll area uses overflow: auto (never "scroll"), so a
+   bar appears only when there is something to scroll. "Riduci trasparenza" makes the thumb a
+   solid grey. */
+html,
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+html::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background: transparent;
+}
+html::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+html::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  border: none;
+}
+html::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+body.reduce-transparency,
+body.reduce-transparency * {
+  scrollbar-color: #8e8e93 transparent;
+}
+body.reduce-transparency *::-webkit-scrollbar-thumb,
+body.reduce-transparency html::-webkit-scrollbar-thumb {
+  background: #8e8e93;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html,
+  * {
+    scrollbar-color: #8e8e93 transparent;
+  }
+  *::-webkit-scrollbar-thumb,
+  html::-webkit-scrollbar-thumb {
+    background: #8e8e93;
+  }
+}

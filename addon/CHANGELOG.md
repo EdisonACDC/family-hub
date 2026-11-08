@@ -1,5 +1,10 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.5.2
+
+- Barre di scorrimento in stile iOS (sottili, traslucide, arrotondate) in tutte le finestre e
+  i pannelli; grigio pieno con "Riduci trasparenza". Una barra appare solo dove il contenuto scorre.
+
 ## 0.5.1
 
 - Corretto avvio: SUPERVISOR_TOKEN non arrivava al programma. L'add-on ora parte come servizio
