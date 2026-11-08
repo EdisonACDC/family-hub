@@ -1322,3 +1322,9 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
 }
 /* Second row: the persons on the left; "Calendari ▾" and the next pickups on the right. */
 @media (min-width: 600px) { .subbar #calendars-btn { margin-left: auto; } }
+/* Tablet and PC: the second row is 48 px, its buttons at least 40 px (touched with a finger). */
+@media (min-width: 600px) {
+  .subbar { height: 48px; flex: 0 0 auto; }  /* never squeezed by a long calendar */
+  .subbar .subbar-btn, .subbar .person-chip { min-height: 40px; height: 40px; }
+  .subbar .pickup-chip { min-height: 40px; }
+}

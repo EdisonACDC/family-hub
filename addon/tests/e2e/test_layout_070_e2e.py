@@ -99,7 +99,12 @@ def test_tablet_and_pc_bars_and_calendar_height(
         week = page.locator("#week").bounding_box()
         assert top and sub and week
         assert top["height"] <= 66, top
-        assert sub["height"] <= 42, sub
+        assert 46 <= sub["height"] <= 50, sub
+        buttons = page.locator("#subbar button").evaluate_all(
+            "bs => bs.filter(b => b.offsetParent !== null)"
+            ".map(b => b.getBoundingClientRect().height)"
+        )
+        assert buttons and min(buttons) >= 40, buttons
         assert week["height"] >= 0.8 * height - 1, (week["height"], height)
         # "+ Nuovo" sits in the top bar; there is no round button over the days.
         add = page.locator("#add-btn").bounding_box()

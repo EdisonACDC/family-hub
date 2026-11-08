@@ -2758,7 +2758,7 @@
     fitToScreen(scroller);
     if (compact) scroller.style.maxHeight = Math.round(parseInt(scroller.style.maxHeight, 10) * 0.55) + "px";
     // The height of a day cell, so that a month's weeks fill the scrolling area.
-    state.cellHeight = scroller.clientHeight - (compact ? 70 : 84);
+    state.cellHeight = scroller.clientHeight - (compact ? 70 : 96);
     Array.prototype.forEach.call(scroller.querySelectorAll(".month-view"), function (grid) {
       grid.style.setProperty("--cell-h", cellHeightFor(monthOf(grid.parentNode.getAttribute("data-month"))) + "px");
     });

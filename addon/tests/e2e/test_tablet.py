@@ -70,7 +70,7 @@ def test_week_view_loads_fast_and_fits_the_tablet(stack_full: Stack, tablet: Pag
     assert fits
 
     # Every button of the top bar and of the days is at least 44 px high; the second row's
-    # chips (persons, Calendari, pickups) fit its 40 px.
+    # buttons (persons, Calendari) at least 40 px in its 48 px.
     heights = tablet.evaluate(
         "[...document.querySelectorAll('button, a.btn')]"
         ".filter(e => e.offsetParent !== null && !e.closest('#subbar'))"
@@ -81,7 +81,7 @@ def test_week_view_loads_fast_and_fits_the_tablet(stack_full: Stack, tablet: Pag
         "[...document.querySelectorAll('#subbar button')]"
         ".filter(e => e.offsetParent !== null).map(e => e.getBoundingClientRect().height)"
     )
-    assert small and min(small) >= 32, small
+    assert small and min(small) >= 40, small
 
     # "+ Nuovo" is in the top bar (44 px), not a round button over the days.
     add = tablet.locator("#add-btn").bounding_box()

@@ -181,6 +181,8 @@ async def test_a_good_download_replaces_the_copy_and_clears_the_error(
 async def test_rubbish_is_announced_the_evening_before_and_the_morning_of(
     hass: HomeAssistant, freezer: Any
 ) -> None:
+    # The reminders are planned from the time of the setup: start before the evening.
+    freezer.move_to("2026-11-08 12:00:00+01:00")
     calls = async_mock_service(hass, "persistent_notification", "create")
     await _setup(hass, [_source()], {"rest": WASTE_ICS})
     # Monday 9 November is the pickup: Sunday evening announces it, Monday morning says today.
@@ -198,6 +200,8 @@ async def test_rubbish_is_announced_the_evening_before_and_the_morning_of(
 async def test_holidays_are_only_announced_when_asked_for_the_return(
     hass: HomeAssistant, freezer: Any
 ) -> None:
+    # The reminders are planned from the time of the setup: start before the evening.
+    freezer.move_to("2026-11-08 12:00:00+01:00")
     calls = async_mock_service(hass, "persistent_notification", "create")
     await _setup(
         hass,
@@ -305,6 +309,8 @@ def test_waste_kinds_are_recognised_from_the_title() -> None:
 
 
 async def test_two_pickups_on_one_day_make_one_reminder(hass: HomeAssistant, freezer: Any) -> None:
+    # The reminders are planned from the time of the setup: start before the evening.
+    freezer.move_to("2026-11-08 12:00:00+01:00")
     calls = async_mock_service(hass, "persistent_notification", "create")
     await _setup(hass, [_source()], {"rest": TWO_BINS_ICS})
     freezer.move_to("2026-11-08 19:00:00+01:00")
@@ -317,6 +323,8 @@ async def test_two_pickups_on_one_day_make_one_reminder(hass: HomeAssistant, fre
 async def test_fatto_on_the_evening_also_ends_the_morning_reminder(
     hass: HomeAssistant, freezer: Any
 ) -> None:
+    # The reminders are planned from the time of the setup: start before the evening.
+    freezer.move_to("2026-11-08 12:00:00+01:00")
     calls = async_mock_service(hass, "persistent_notification", "create")
     entry = await _setup(hass, [_source()], {"rest": WASTE_ICS})
     manager = entry.runtime_data.external
@@ -329,6 +337,8 @@ async def test_fatto_on_the_evening_also_ends_the_morning_reminder(
 
 
 async def test_snooze_one_hour_sends_it_again(hass: HomeAssistant, freezer: Any) -> None:
+    # The reminders are planned from the time of the setup: start before the evening.
+    freezer.move_to("2026-11-08 12:00:00+01:00")
     calls = async_mock_service(hass, "persistent_notification", "create")
     entry = await _setup(hass, [_source()], {"rest": WASTE_ICS})
     manager = entry.runtime_data.external
@@ -375,6 +385,8 @@ async def test_a_home_assistant_rubbish_calendar_is_announced_like_an_ics_file(
     """A calendar from Home Assistant, chosen as rubbish in Fonti, gets the evening and morning
     reminders too. Its events for the day come from _ha_names_on, which asks calendar.get_events;
     here that read is replaced, because the test has no calendar integration to answer it."""
+    # The reminders are planned from the time of the setup: start before the evening.
+    freezer.move_to("2026-11-08 12:00:00+01:00")
     calls = async_mock_service(hass, "persistent_notification", "create")
     asked: list[tuple[str, str]] = []
 

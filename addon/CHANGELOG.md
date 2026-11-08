@@ -6,7 +6,7 @@ Nuova impaginazione: il calendario ha almeno l'80% dello schermo.
 
 - Tablet e PC: una sola barra in alto di 64 px (ora e data piccole; Settimana | Mese | Elenco,
   ← Oggi → e il periodo mostrato; meteo compatto, Liste, ☰ Menu e "+ Nuovo"). La procedura guidata
-  è nel Menu. Sotto, una riga di 40 px: le persone a sinistra, "Calendari ▾" e i prossimi ritiri
+  è nel Menu. Sotto, una riga di 48 px (pulsanti di almeno 40 px): le persone a sinistra, "Calendari ▾" e i prossimi ritiri
   (icone colorate con il giorno abbreviato) a destra; il meteo dei prossimi giorni va in questa riga
   sotto i 1280 px.
 - Persone in primo piano: "Tutti · Mamma · Papà …" con il colore di ciascuno. Toccandone una si
