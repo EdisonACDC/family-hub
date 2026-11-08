@@ -1,5 +1,16 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.2
+
+- Vacanze scolastiche, vacanze d'asilo e festività: un giorno di vacanza compare su ogni suo giorno
+  (Settimana, Mese, Giorni ed Elenco). La scheda dice per quanto: «26/10 – 30/10/2026 · 5 giorni».
+  Nel Mese sono una banda leggera che non riempie la cella. Non contano come impegni e non danno
+  promemoria; l'avviso «domani si rientra» resta facoltativo e spento.
+- Colore degli appuntamenti: è il colore della persona assegnata (con più persone, un pallino per
+  ciascuna). Senza persone vale il colore del calendario. I rifiuti mantengono il loro colore.
+- Stile unico per gli appuntamenti: vetro traslucido con barra colorata e testo bianco, in ogni vista
+  (Settimana, Mese, Elenco e Giorni).
+
 ## 0.7.1
 
 Solo impaginazione (nessuna funzione nuova), su tutte le larghezze da 320 a 1024 px.

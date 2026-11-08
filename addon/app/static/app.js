@@ -95,6 +95,43 @@
 
   function dayKey(start) { return isAllDay(start) ? start : ymd(new Date(start)); }
 
+  // The last day an all-day event covers: its end is the day after its last day (exclusive).
+  function lastDayOf(ev) {
+    var first = dayKey(ev.start);
+    if (!isAllDay(ev.start) || !ev.end || !isAllDay(ev.end)) return first;
+    var last = ymd(addDays(parseLocalDay(ev.end), -1));
+    return last > first ? last : first;
+  }
+
+  // Every day an event covers (at most 62): one day for appointments, several for holidays.
+  function daysOf(ev) {
+    var last = lastDayOf(ev);
+    var day = parseLocalDay(dayKey(ev.start));
+    var days = [];
+    while (ymd(day) <= last && days.length < 62) {
+      days.push(ymd(day));
+      day = addDays(day, 1);
+    }
+    return days;
+  }
+
+  // School holidays, nursery holidays and public holidays: shown on every day, never a reminder.
+  var VACATION_TYPES = ["vacanze_scuola", "vacanze_asilo", "festivita"];
+  function isHoliday(item) { return VACATION_TYPES.indexOf(item.type) !== -1; }
+
+  // The colour of an appointment: the colour of its first person; without persons the calendar's.
+  // Rubbish pickups keep their own colour.
+  function eventColor(item) {
+    if (item.ev.waste) return item.ev.waste_color || item.color;
+    var people = personList();
+    var ids = item.ev.person_ids || [];
+    for (var n = 0; n < ids.length; n++) {
+      var i = people.map(function (p) { return p.id; }).indexOf(ids[n]);
+      if (i !== -1) return personColor(people[i], i);
+    }
+    return item.color;
+  }
+
   function timeOf(start) {
     if (isAllDay(start)) return t("allDay");
     var d = new Date(start);
@@ -463,7 +500,8 @@
         }
         var item = { ev: ev, color: cal.color, colors: [color], type: cal.external ? (cal.type || "altro") : "" };
         seen[key] = item;
-        (byDay[dayKey(ev.start)] = byDay[dayKey(ev.start)] || []).push(item);
+        // An all-day event over several days (holidays) is listed on each of its days.
+        daysOf(ev).forEach(function (day) { (byDay[day] = byDay[day] || []).push(item); });
       });
     });
     Object.keys(byDay).forEach(function (key) {
@@ -496,7 +534,7 @@
   function allDayRow(item) {
     var phone = state.mode === "phone";
     var row = el("div", { class: "event allday" + (phone ? " allday-wrap" : "") });
-    row.style.setProperty("--ev", item.ev.waste_color || item.color);
+    row.style.setProperty("--ev", eventColor(item));
     if (item.ev.waste) row.appendChild(wasteIcon(item.ev.waste_icon || item.ev.waste));
     else if (item.ev.external) row.appendChild(iconSvg("calendar"));
     row.appendChild(el("span", { class: "allday-name", title: item.ev.summary }, shownTitle(item.ev)));
@@ -518,6 +556,8 @@
   }
 
   function calendarDots(item) {
+    // With persons, the person dots say whose it is; the calendar dots only show without persons.
+    if ((item.ev.person_ids || []).length) return document.createDocumentFragment();
     var dots = el("span", { class: "cal-dots", "aria-hidden": "true" });
     (item.colors || []).slice(1).forEach(function (color) {
       var dot = el("span", { class: "cal-dot" });
@@ -530,7 +570,7 @@
   function eventRow(item) {
     if (isAllDay(item.ev.start)) return allDayRow(item);
     var row = el("div", { class: "event" });
-    row.style.setProperty("--ev", item.ev.waste_color || item.color);
+    row.style.setProperty("--ev", eventColor(item));
     if (item.ev.external) row.classList.add("external");
     row.appendChild(el("span", { class: "ev-time" }, timeOf(item.ev.start)));
     var title = el("span", { class: "ev-title" });
@@ -1191,7 +1231,13 @@
   function cardWhen(ev) {
     var day = dayKey(ev.start);
     var text = showDate(day);
-    if (isAllDay(ev.start)) return text + " · " + I.f("allDayLabel");
+    if (isAllDay(ev.start)) {
+      var last = lastDayOf(ev);
+      if (last === day) return text + " · " + I.f("allDayLabel");
+      // Several days: "26/10 – 30/10/2026 · 5 giorni".
+      return day.split("-").slice(1).reverse().join("/") + " – " + showDate(last) + " · "
+        + I.f("daysCount").replace("{n}", String(daysOf(ev).length));
+    }
     var end = ev.end ? timeOf(ev.end) : "";
     return text + " · " + timeOf(ev.start) + (end ? " – " + end : "");
   }
@@ -2926,8 +2972,8 @@
       } else {
         // Every event is drawn; fitMonthCells hides the ones that do not fit and counts them.
         items.forEach(function (it) {
-          var line = el("span", { class: "month-ev" + (it.ev.external ? " external" : "") });
-          line.style.setProperty("--ev", it.ev.waste_color || it.color);
+          var line = el("span", { class: "month-ev" + (it.ev.external ? " external" : "") + (isHoliday(it) ? " holiday" : "") });
+          line.style.setProperty("--ev", eventColor(it));
           var time = isAllDay(it.ev.start) ? "" : timeOf(it.ev.start) + " ";
           line.textContent = time + shownTitle(it.ev);
           if ((it.colors || []).length > 1) line.appendChild(calendarDots(it));
@@ -3036,7 +3082,7 @@
       items.forEach(function (it) {
         count++;
         var row = el("button", { type: "button", class: "list-row" });
-        row.style.setProperty("--ev", it.ev.waste_color || it.color);
+        row.style.setProperty("--ev", eventColor(it));
         row.appendChild(el("span", { class: "list-time" }, isAllDay(it.ev.start) ? I.f("allDayLabel") : timeOf(it.ev.start)));
         var title = el("span", { class: "list-title" });
         if (it.ev.waste) title.appendChild(wasteIcon(it.ev.waste_icon || it.ev.waste));
@@ -3093,7 +3139,7 @@
     // All-day and external events: shown, but they do not take time.
     items.filter(function (it) { return !counts(it); }).forEach(function (it) {
       var line = el("button", { type: "button", class: "day-note" });
-      line.style.setProperty("--ev", it.ev.waste_color || it.color);
+      line.style.setProperty("--ev", eventColor(it));
       if (it.ev.waste) line.appendChild(wasteIcon(it.ev.waste_icon || it.ev.waste));
       line.appendChild(document.createTextNode((isAllDay(it.ev.start) ? "" : timeOf(it.ev.start) + " ") + shownTitle(it.ev)));
       line.addEventListener("click", card(it));
@@ -3119,7 +3165,7 @@
           return minutesIn(key, it.ev.start) < part.to && minutesIn(key, it.ev.end || it.ev.start) > part.from;
         }).forEach(function (it) {
           var name = el("button", { type: "button", class: "busy-name" }, timeOf(it.ev.start) + " " + shownTitle(it.ev));
-          name.style.setProperty("--ev", it.color);
+          name.style.setProperty("--ev", eventColor(it));
           name.addEventListener("click", card(it));
           block.appendChild(name);
         });
