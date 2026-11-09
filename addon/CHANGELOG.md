@@ -1,5 +1,10 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.4
+
+- Procedura guidata: i campi dei passi Ruolo, Utente, Telefono ed Echo restano dentro la finestra
+  anche a 320 px (il riquadro dei gruppi si restringe, senza larghezza minima).
+
 ## 0.7.3
 
 Correzioni sul telefono (nessuna funzione nuova).

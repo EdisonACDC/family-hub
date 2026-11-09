@@ -1477,6 +1477,8 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .dialog-body { overflow-x: auto; }
 /* 0.7.3: a field inside a window never gets wider than the window: it shrinks instead. */
 .dialog input, .dialog select, .dialog textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
+/* A fieldset's default min-width is its content's: here it must shrink with the window. */
+.dialog fieldset { min-width: 0; max-width: 100%; }
 .dialog label { min-width: 0; }
 /* A field row of the guide: its text and its field wrap, so a field never runs past the window. */
 #wizard-body label:has(> input) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
