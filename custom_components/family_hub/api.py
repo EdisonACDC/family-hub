@@ -23,6 +23,7 @@ from homeassistant.components.websocket_api.decorators import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 
 from .config_flow import _bad_time
 from .const import (
@@ -52,6 +53,7 @@ from .const import (
     PERSON_CHANNELS,
     PHONE_SOUNDS,
     ROLES,
+    SUMMARY_CHANNELS,
     THEMES,
     TIME_FORMATS,
     WEEKDAYS,
@@ -59,7 +61,7 @@ from .const import (
 from .external import TYPES as ICS_TYPES
 from .external_api import async_register_external_commands
 from .notifier import TEST_MESSAGE, announce_on_echos, phone_os, sound_data
-from .notify_settings import alexa_targets, available_services
+from .notify_settings import alexa_targets, available_services, echo_entities
 from .shifts import ShiftError, apply_to_future, clean_shifts
 
 PERSON_TEXT_KEYS = (
@@ -72,7 +74,6 @@ PERSON_TEXT_KEYS = (
     "all_day_reminder",
 )
 TIME_KEYS = ("quiet_start", "quiet_end", "all_day_reminder")
-FAMILY_PREFIX = "calendar.family_hub_"
 # Set when the guide saves: "configured" is read from here, not from the browser.
 SETUP_DONE = "setup_done"
 
@@ -141,8 +142,17 @@ def _slug(name: str) -> str:
 SOURCE_DOMAINS = {"todo": "todo.", "calendars": "calendar.", "weather": "weather."}
 
 
+def is_family_entity(hass: HomeAssistant, entity_id: str) -> bool:
+    """True for an entity Family Hub made, found in the entity registry (never by its name)."""
+    entry = er.async_get(hass).async_get(entity_id)
+    return entry is not None and entry.platform == DOMAIN
+
+
 def _sources(
-    value: Any, known: Callable[[str], bool], person_ids: set[str] | None = None
+    value: Any,
+    known: Callable[[str], bool],
+    person_ids: set[str] | None = None,
+    is_family: Callable[[str], bool] = lambda entity_id: False,
 ) -> dict[str, Any]:
     raw = _obj(value, "sources")
     result: dict[str, Any] = {}
@@ -151,7 +161,7 @@ def _sources(
         if not isinstance(items, list) or not all(isinstance(e, str) for e in items):
             raise ConfigError(f"sources.{key}: must be a list of entity ids")
         for entity_id in items:
-            if not entity_id.startswith(prefix) or entity_id.startswith(FAMILY_PREFIX):
+            if not entity_id.startswith(prefix) or is_family(entity_id):
                 raise ConfigError(f"sources.{key}: {entity_id} is not a {prefix[:-1]} entity")
             if not known(entity_id):
                 raise ConfigError(f"sources.{key}: {entity_id} does not exist")
@@ -206,6 +216,7 @@ def clean_config(
     in_use: dict[str, str] | None = None,
     known: Callable[[str], bool] = lambda entity_id: True,
     available: dict[str, list[str]] | None = None,
+    is_family: Callable[[str], bool] = lambda entity_id: False,
 ) -> dict[str, Any]:
     """Validate a configuration and return the options to store. Raises ConfigError.
 
@@ -273,8 +284,16 @@ def clean_config(
     snooze = reminders.get("snooze_minutes", DEFAULT_REMINDERS["snooze_minutes"])
     if not isinstance(snooze, int) or isinstance(snooze, bool) or not 1 <= snooze <= 1440:
         raise ConfigError("reminders.snooze_minutes: 1 to 1440")
+    summary_channels = reminders.get("summary_channels", DEFAULT_REMINDERS["summary_channels"])
+    if not isinstance(summary_channels, list) or not all(
+        c in SUMMARY_CHANNELS for c in summary_channels
+    ):
+        raise ConfigError("reminders.summary_channels: phone, alexa or tablet")
     options[OPT_REMINDERS] = {
         "offsets": offsets,
+        "morning_summary_on": bool(reminders.get("morning_summary_on", True)),
+        "evening_summary_on": bool(reminders.get("evening_summary_on", True)),
+        "summary_channels": list(dict.fromkeys(summary_channels)),
         "channels": list(channels),
         "quiet_start": _time(reminders.get("quiet_start"), "reminders.quiet_start"),
         "quiet_end": _time(reminders.get("quiet_end"), "reminders.quiet_end"),
@@ -289,7 +308,10 @@ def clean_config(
         or None,
     }
     options["sources"] = _sources(
-        config.get("sources", {}), known, {str(p["id"]) for p in options[OPT_PERSONS]}
+        config.get("sources", {}),
+        known,
+        {str(p["id"]) for p in options[OPT_PERSONS]},
+        is_family,
     )
     options[SETUP_DONE] = True
     return {**current, **options}
@@ -451,6 +473,7 @@ async def ws_config_save(
             _categories_in_use(entry),
             lambda entity_id: hass.states.get(entity_id) is not None,
             available_services(hass),
+            lambda entity_id: is_family_entity(hass, entity_id),
         )
     except ConfigError as err:
         connection.send_error(msg["id"], err.code, str(err))
@@ -570,6 +593,10 @@ def _kept(stored: dict[str, Any], key: str) -> list[str]:
         vol.Optional("entry_id"): str,
         vol.Required("person"): str,
         vol.Required("kind"): str,
+        # The choice and volume on the screen, when they are not saved yet ("Prova Echo" uses
+        # what is shown). Without them, the saved ones are used.
+        vol.Optional("alexa_notify"): str,
+        vol.Optional("alexa_volume"): object,
     }
 )
 @async_response
@@ -578,8 +605,8 @@ async def ws_notify_test(
 ) -> None:
     """Send a test message to one person's chosen phone or Echo speakers, and nothing else.
 
-    A phone test goes to the person's phone service. An Echo test follows the person's
-    speakers and volume, as a reminder does.
+    A phone test goes to the person's phone service. An Echo test follows the speakers and the
+    volume on the screen (or, without them, the saved ones), as a reminder does.
     """
     entry = _entry(hass, msg.get("entry_id"))
     if entry is None:
@@ -606,11 +633,22 @@ async def ws_notify_test(
         connection.send_result(msg["id"], {"sent": 1})
         return
     if kind == "alexa":
-        speakers = alexa_targets(hass, person.get("alexa_notify") or "")
+        choice = msg["alexa_notify"] if "alexa_notify" in msg else person.get("alexa_notify") or ""
+        volume = msg["alexa_volume"] if "alexa_volume" in msg else person.get("alexa_volume")
+        # The same rules as saving: a whole number 0 to 100 (or none), and an Echo that exists.
+        if volume is not None and (
+            isinstance(volume, bool) or not isinstance(volume, int) or not 0 <= volume <= 100
+        ):
+            connection.send_error(msg["id"], "bad_request", "Volume: whole number from 0 to 100")
+            return
+        if choice and choice != ALEXA_ALL and choice not in echo_entities(hass):
+            connection.send_error(msg["id"], "unknown_service", "Not an Echo in Home Assistant")
+            return
+        speakers = alexa_targets(hass, choice)
         if not speakers:
             connection.send_error(msg["id"], "no_service", "No Echo is chosen")
             return
-        await announce_on_echos(hass, speakers, TEST_MESSAGE, person.get("alexa_volume"))
+        await announce_on_echos(hass, speakers, TEST_MESSAGE, volume)
         connection.send_result(msg["id"], {"sent": len(speakers)})
         return
     connection.send_error(msg["id"], "bad_request", "Unknown kind")
@@ -652,6 +690,48 @@ async def ws_shared_save(
     connection.send_result(msg["id"], {"saved": True, "users": users})
 
 
+@require_admin
+@websocket_command(
+    {
+        vol.Required("type"): "family_hub/summary/save",
+        vol.Optional("entry_id"): str,
+        vol.Required("reminders"): dict,
+    }
+)
+@async_response
+async def ws_summary_save(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Save the morning and evening summaries: their times, their switches and the channels they
+    go on. A switch off keeps the time. Only these keys change."""
+    entry = _entry(hass, msg.get("entry_id"))
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Family Hub is not set up")
+        return
+    raw = msg["reminders"]
+    reminders = dict(entry.options.get(OPT_REMINDERS, {}))
+    try:
+        for kind in ("morning", "evening"):
+            if f"{kind}_summary" in raw:
+                reminders[f"{kind}_summary"] = (
+                    _time(raw[f"{kind}_summary"], f"reminders.{kind}_summary") or None
+                )
+            if f"{kind}_summary_on" in raw:
+                reminders[f"{kind}_summary_on"] = bool(raw[f"{kind}_summary_on"])
+        if "summary_channels" in raw:
+            channels = raw["summary_channels"]
+            if not isinstance(channels, list) or not all(c in SUMMARY_CHANNELS for c in channels):
+                raise ConfigError("reminders.summary_channels: phone, alexa or tablet")
+            reminders["summary_channels"] = list(dict.fromkeys(channels))
+    except ConfigError as err:
+        connection.send_error(msg["id"], err.code, str(err))
+        return
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, OPT_REMINDERS: reminders}
+    )
+    connection.send_result(msg["id"], {"saved": True})
+
+
 @callback
 def async_register_commands(hass: HomeAssistant) -> None:
     """Register the websocket commands once."""
@@ -660,5 +740,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
     async_register_command(hass, ws_shifts_save)
     async_register_command(hass, ws_notify_save)
     async_register_command(hass, ws_notify_test)
+    async_register_command(hass, ws_summary_save)
     async_register_command(hass, ws_shared_save)
     async_register_external_commands(hass)

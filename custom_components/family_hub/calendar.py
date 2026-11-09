@@ -15,6 +15,7 @@ from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.components.calendar.const import CalendarEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -134,7 +135,17 @@ async def async_setup_entry(
     data.calendars = {cal.category_id: cal for cal in calendars}
     # External calendars (ICS from a link or a file) are read-only entities of their own.
     external = data.external.build_entities() if data.external else []
+    _remove_orphans(hass, entry, {str(c.unique_id) for c in [*calendars, *external]})
     async_add_entities([*calendars, *external])
+
+
+def _remove_orphans(hass: HomeAssistant, entry: FamilyHubConfigEntry, keep: set[str]) -> None:
+    """Remove from the entity registry the calendars this entry made earlier whose category or
+    ICS file has been removed. Their entity ids are not reused for a new one of the same name."""
+    registry = er.async_get(hass)
+    for item in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if item.domain == "calendar" and item.unique_id not in keep:
+            registry.async_remove(item.entity_id)
 
 
 class FamilyHubCalendar(CalendarEntity):

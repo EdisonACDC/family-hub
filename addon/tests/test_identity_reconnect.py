@@ -38,6 +38,16 @@ class StubHA:
             return list(self.states)
         if kind == "config/auth/list":
             return list(self.users)
+        if kind == "config/entity_registry/list":
+            # Family Hub's calendar, as the entity registry lists it (found by this, not by name).
+            return [
+                {
+                    "entity_id": "calendar.family_hub_famiglia",
+                    "platform": "family_hub",
+                    "unique_id": "entry-1_famiglia",
+                    "config_entry_id": "entry-1",
+                }
+            ]
         if kind == "family_hub/ics/list":
             return {"calendars": []}
         return {}

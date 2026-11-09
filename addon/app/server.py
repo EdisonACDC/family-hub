@@ -4,8 +4,9 @@ Browser --(Ingress, WebSocket /ws)--> this server --(WebSocket, supervisor token
 
 - Only requests coming from the Ingress proxy are answered (anything else gets 403).
 - The user is read from X-Remote-User-Id (set by Ingress) and mapped to a person's role.
-- Only calendar.family_hub_* entities are subscribed to, and only family_hub actions
-  are forwarded. Nothing is stored here.
+- Only the calendars Family Hub made (found in the entity registry, whatever their entity ids are)
+  and the sources the guide chose are subscribed to, and only family_hub actions are forwarded.
+  Nothing is stored here.
 """
 
 from __future__ import annotations
@@ -41,10 +42,14 @@ from .waste import DEFAULT_WASTE_TYPES, type_of, types_from_trashcard
 LOGGER = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
-CALENDAR_PREFIX = "calendar.family_hub_"
-# Calendars from ICS files or links: calendar.family_hub_ext_<id>, read only.
-EXT_PREFIX = "calendar.family_hub_ext_"
 MAX_ICS_BYTES = 5 * 1024 * 1024
+SUMMARY_KEYS = (
+    "morning_summary",
+    "morning_summary_on",
+    "evening_summary",
+    "evening_summary_on",
+    "summary_channels",
+)
 DOMAIN = "family_hub"
 INGRESS_PEER_DEFAULT = "172.30.32.2"
 USER_HEADER = "X-Remote-User-Id"
@@ -152,6 +157,31 @@ class Hub:
     async def _states(self) -> list[dict[str, Any]]:
         return list(await self.ha.call("get_states"))
 
+    async def hub_calendars(self) -> dict[str, dict[str, str]]:
+        """The calendars Family Hub made, by entity id, read from the entity registry.
+
+        A calendar is recognised by its registry entry (the platform, and the unique id that starts
+        with the entry's id), never by its entity id: Home Assistant may put the area or the device
+        in front of it, and the family may rename it. ``kind`` is "category" (a family calendar) or
+        "external" (an ICS file or link); ``source_id`` is the category's or the source's id.
+        Raises HAError when Home Assistant cannot be asked."""
+        entries = await self.ha.call("config/entity_registry/list")
+        found: dict[str, dict[str, str]] = {}
+        for entry in entries:
+            entity_id = str(entry.get("entity_id", ""))
+            if entry.get("platform") != "family_hub" or not entity_id.startswith("calendar."):
+                continue
+            owner = str(entry.get("config_entry_id") or "")
+            unique = str(entry.get("unique_id") or "")
+            if not owner or not unique.startswith(f"{owner}_"):
+                continue
+            rest = unique[len(owner) + 1 :]
+            if rest.startswith("ext_"):
+                found[entity_id] = {"kind": "external", "source_id": rest[len("ext_") :]}
+            else:
+                found[entity_id] = {"kind": "category", "source_id": rest}
+        return found
+
     async def calendar_styles(self) -> dict[str, dict[str, str]]:
         """Name, type and colour the family gave the calendars of Home Assistant."""
         try:
@@ -176,14 +206,16 @@ class Hub:
     async def watched_ids(self) -> list[str]:
         sources = await self.sources()
         family = [c["entity_id"] for c in await self.family_calendars()]
-        ext = [f"{EXT_PREFIX}{e['id']}" for e in (await self.ics_info())["calendars"]]
+        hub = await self.hub_calendars()
+        ext = [entity_id for entity_id, item in hub.items() if item["kind"] == "external"]
         return sorted({*family, *sources["todo"], *sources["calendars"], *sources["weather"], *ext})
 
     async def family_calendars(self) -> list[dict[str, Any]]:
+        hub = await self.hub_calendars()
         found = []
         for state in await self._states():
             entity_id = state["entity_id"]
-            if not entity_id.startswith(CALENDAR_PREFIX) or entity_id.startswith(EXT_PREFIX):
+            if hub.get(entity_id, {}).get("kind") != "category":
                 continue
             attributes = state.get("attributes", {})
             found.append(
@@ -196,6 +228,7 @@ class Hub:
                     "category_id": attributes.get("category_id", ""),
                     "external": False,
                     "persons": list(attributes.get("persons", [])),
+                    "shared_users": list(attributes.get("shared_users", [])),
                 }
             )
         return found
@@ -228,23 +261,26 @@ class Hub:
                     "waste_types": info["waste_types"],
                 }
             )
-        # Calendars from ICS files or links (read only): calendar.family_hub_ext_<id>.
-        for entry in info["calendars"]:
-            entity_id = f"{EXT_PREFIX}{entry['id']}"
-            if entity_id in names:
-                found.append(
-                    {
-                        "entity_id": entity_id,
-                        "name": entry["name"],
-                        "category_id": "",
-                        "external": True,
-                        "type": entry.get("type", "altro"),
-                        "color": entry.get("color", "#64748B"),
-                        "persons": [str(p) for p in entry.get("persons", [])],
-                        "waste_colors": info["waste_styles"],
-                        "waste_types": info["waste_types"],
-                    }
-                )
+        # Calendars from ICS files or links (read only), recognised by the registry.
+        hub = await self.hub_calendars()
+        ics = {str(entry["id"]): entry for entry in info["calendars"]}
+        for entity_id, item in hub.items():
+            entry = ics.get(item["source_id"])
+            if item["kind"] != "external" or entry is None or entity_id not in names:
+                continue
+            found.append(
+                {
+                    "entity_id": entity_id,
+                    "name": entry["name"],
+                    "category_id": "",
+                    "external": True,
+                    "type": entry.get("type", "altro"),
+                    "color": entry.get("color", "#64748B"),
+                    "persons": [str(p) for p in entry.get("persons", [])],
+                    "waste_colors": info["waste_styles"],
+                    "waste_types": info["waste_types"],
+                }
+            )
         return found
 
     async def ics_info(self) -> dict[str, Any]:
@@ -345,12 +381,11 @@ class Hub:
     async def candidate_entities(self) -> list[dict[str, str]]:
         """To-do lists and calendars (not Family Hub's own) that the guide may offer."""
         found = []
+        hub = await self.hub_calendars()
         for state in await self._states():
             entity_id = state["entity_id"]
             domain = entity_id.split(".", 1)[0]
-            if domain not in ("todo", "calendar", "weather") or entity_id.startswith(
-                CALENDAR_PREFIX
-            ):
+            if domain not in ("todo", "calendar", "weather") or entity_id in hub:
                 continue
             found.append(
                 {
@@ -507,10 +542,8 @@ class Hub:
             raise PermissionError(entity_id)
 
     async def persons(self) -> list[dict[str, Any]]:
-        for state in await self._states():
-            if state["entity_id"].startswith(CALENDAR_PREFIX):
-                return list(state.get("attributes", {}).get("persons", []))
-        return []
+        calendars = await self.family_calendars()
+        return list(calendars[0]["persons"]) if calendars else []
 
     async def theme(self) -> str:
         """The screen theme chosen in the setup guide ("auto" when unknown)."""
@@ -576,11 +609,10 @@ class Hub:
         if not self.ha.connected:
             return PENDING_IDENTITY
         try:
-            states = await self._states()
-            calendar = next((s for s in states if s["entity_id"].startswith(CALENDAR_PREFIX)), {})
-            attributes = calendar.get("attributes", {})
-            persons = list(attributes.get("persons", []))
-            shared = list(attributes.get("shared_users", []))
+            calendars = await self.family_calendars()
+            calendar = calendars[0] if calendars else {}
+            persons = list(calendar.get("persons", []))
+            shared = list(calendar.get("shared_users", []))
             linked = identify(user_id, persons, shared)
             if linked.role != GUEST or linked.person_id is not None:
                 return linked
@@ -793,7 +825,7 @@ class Hub:
                 "trashcard_import",
             ):
                 return {"ok": True, "result": await self.ics_op(identity, op, request)}
-            if op in ("notify_get", "notify_save", "notify_test", "shared_save"):
+            if op in ("notify_get", "notify_save", "notify_test", "shared_save", "summary_save"):
                 return {"ok": True, "result": await self.notify_op(identity, op, request)}
             if op == "weather":
                 # Read only, for everyone: the screen shows the weather to guests too.
@@ -832,15 +864,30 @@ class Hub:
             return await self.save_notify(identity, request)
         if op == "shared_save":
             return await self.save_shared(identity, request)
+        if op == "summary_save":
+            return await self.save_summary(identity, request)
         return await self.notify_test(identity, request)
+
+    async def save_summary(self, identity: Identity, request: dict[str, Any]) -> dict[str, Any]:
+        """The morning and evening summaries: times, switches and channels. Adults only."""
+        if identity.role != ADULT:
+            raise PermissionError("summary_save")
+        reminders = request["reminders"]
+        if not isinstance(reminders, dict):
+            raise TypeError("reminders must be an object")
+        result: dict[str, Any] = await self.ha.call("family_hub/summary/save", reminders=reminders)
+        return result
 
     async def notify_settings(self, identity: Identity) -> dict[str, Any]:
         config = await self.ha.call("family_hub/config/get")
         persons = list(config.get("persons", []))
         if identity.role == CHILD:
             persons = [p for p in persons if p["id"] == identity.person_id]
+        reminders = dict(config.get("reminders", {}))
         result: dict[str, Any] = {
             "persons": [settings_of(p) for p in persons],
+            # The morning and evening summaries (adults change them; everyone reads).
+            "summary": {key: reminders.get(key) for key in SUMMARY_KEYS},
             "services": {
                 "phone": phone_services(await self.ha.call("get_services")),
                 "alexa": echo_speakers(
@@ -889,8 +936,10 @@ class Hub:
         person_id = str(request["person"])
         if identity.role == CHILD and identity.person_id != person_id:
             raise PermissionError("notify_test")
+        # What is on the screen may differ from what is saved: the test uses the screen's values.
+        extra = {key: request[key] for key in ("alexa_notify", "alexa_volume") if key in request}
         result: dict[str, Any] = await self.ha.call(
-            "family_hub/notify/test", person=person_id, kind=str(request["kind"])
+            "family_hub/notify/test", person=person_id, kind=str(request["kind"]), **extra
         )
         return result
 
@@ -948,7 +997,8 @@ class Hub:
         if op == "import_sources":
             return [c for c in await self.candidate_entities() if c["domain"] == "calendar"]
         entity_id = str(request["entity_id"])
-        if not entity_id.startswith("calendar.") or entity_id.startswith(CALENDAR_PREFIX):
+        # Never a calendar Family Hub made: recognised by the entity registry, not by its name.
+        if not entity_id.startswith("calendar.") or entity_id in await self.hub_calendars():
             raise ValueError("entity_id")
         category_id = str(request["category_id"])
         target = next(

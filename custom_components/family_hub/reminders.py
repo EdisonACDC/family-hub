@@ -123,7 +123,8 @@ class ReminderManager:
         self._unsubs.append(self._store.add_listener(self.async_refresh))
         for kind in ("morning", "evening"):
             clock = _clock(self.settings[f"{kind}_summary"])
-            if clock is not None:
+            # The switch off keeps the time in the settings but schedules nothing.
+            if clock is not None and self.settings[f"{kind}_summary_on"]:
                 self._unsubs.append(
                     async_track_time_change(
                         self._hass,
@@ -320,29 +321,25 @@ class ReminderManager:
             record["sent"] = [*record.get("sent", []), mark]
             await self._store.async_save()
 
-    async def _summary_message(
-        self, kind: str, rows: list[tuple[datetime, str]], text: dict[str, str]
-    ) -> str:
-        """The summary text. The morning one starts with today's weather, if a weather entity
-        was chosen in the guide."""
-        lines = [line for _, line in rows]
+    async def _summary_message(self, kind: str, lines: list[str]) -> str:
+        """The summary text: one line per item. The morning one starts with today's weather, if a
+        weather entity was chosen in the guide."""
         chosen = self._entry.options.get("sources", {}).get("weather", [])
         if kind == "morning" and chosen:
             weather = await summary_line(
                 self._hass, chosen[0], self._entry.options.get(CONF_LANGUAGE, "en")
             )
             if weather:
-                lines.insert(0, weather)
-        return "\n".join(lines) or text["nothing"]
+                lines = [weather, *lines]
+        return "\n".join(lines)
 
-    async def async_send_summary(self, kind: str) -> None:
-        """Send the morning ("today") or evening ("tomorrow") summary to everyone."""
-        now = dt_util.as_local(dt_util.now())
-        day = now.date() if kind == "morning" else now.date() + timedelta(days=1)
-        text = texts_for(self._entry.options.get(CONF_LANGUAGE, "en"))
+    def _family_summary_rows(
+        self, day: date, now: datetime
+    ) -> list[tuple[datetime, str, list[str]]]:
+        """The Family Hub appointments of one day: (sort key, line, the persons it is for)."""
         names = {pid: person["name"] for pid, person in self._persons.items()}
-
-        rows: list[tuple[datetime, str]] = []
+        text = texts_for(self._entry.options.get(CONF_LANGUAGE, "en"))
+        rows: list[tuple[datetime, str, list[str]]] = []
         for record in self._store.events.values():
             if record["all_day"]:
                 start_date = datetime.fromisoformat(record["start"]).date()
@@ -354,25 +351,76 @@ class ReminderManager:
                 label = key.strftime("%H:%M")
             if start_date != day:
                 continue
-            who = ", ".join(names[pid] for pid in record.get("persons", []) if pid in names)
+            persons = [str(pid) for pid in record.get("persons", [])]
+            who = ", ".join(names[pid] for pid in persons if pid in names)
             line = f"{label}  {record['summary']}" + (f" ({who})" if who else "")
-            rows.append((key, line))
+            rows.append((key, line, persons))
+        return rows
 
+    async def async_send_summary(self, kind: str) -> None:
+        """Send the morning ("today") or evening ("tomorrow") summary.
+
+        Nothing is sent when there is nothing to say. Each person gets their own appointments and
+        the family's (no persons), with the rubbish, holidays and linked calendars of the day, on
+        their phone and their Echo. The tablet gets the whole family's day, once. Only the
+        channels chosen for the summary are used (Alexa is off by default)."""
+        settings = self.settings
+        if not settings[f"{kind}_summary_on"]:
+            return
+        now = dt_util.as_local(dt_util.now())
+        day = now.date() if kind == "morning" else now.date() + timedelta(days=1)
+        text = texts_for(self._entry.options.get(CONF_LANGUAGE, "en"))
+        rows = self._family_summary_rows(day, now)
+        data = getattr(self._entry, "runtime_data", None)
+        external = data.external if data is not None else None
+        if external is not None:
+            key = datetime.combine(day, time.min, tzinfo=now.tzinfo)
+            rows.extend(
+                (key, line, persons) for line, persons in await external.async_day_lines(day)
+            )
         rows.sort(key=lambda row: row[0])
-        targets = self.targets_for(list(names))
+        if not rows:
+            return
+
+        channels = set(settings["summary_channels"])
         title = text["summary_morning"] if kind == "morning" else text["summary_evening"]
-        await async_send(
-            self._hass,
-            Delivery(
-                title=title,
-                message=await self._summary_message(kind, rows, text),
-                notification_id=f"{NOTIFICATION_PREFIX}summary_{kind}",
-                targets=[target for target in targets if not target.quiet],
-                channels=frozenset(self.settings["channels"]),
-                tts_entity=None,
-                tablet=_tablet_allowed(targets),
-            ),
-        )
+        if channels & {"phone", "alexa"}:
+            send_on = frozenset(
+                ({"phone"} if "phone" in channels else set())
+                | ({"speaker"} if "alexa" in channels else set())
+            )
+            for pid in self._persons:
+                mine = [line for _, line, persons in rows if not persons or pid in persons]
+                if not mine:
+                    continue
+                targets = [t for t in self.targets_for([pid]) if not t.quiet]
+                if not targets:
+                    continue
+                await async_send(
+                    self._hass,
+                    Delivery(
+                        title=title,
+                        message=await self._summary_message(kind, mine),
+                        notification_id=f"{NOTIFICATION_PREFIX}summary_{kind}_{pid}",
+                        targets=targets,
+                        channels=send_on,
+                        tts_entity=None,
+                        tablet=False,
+                    ),
+                )
+        if "tablet" in channels:
+            await async_send(
+                self._hass,
+                Delivery(
+                    title=title,
+                    message=await self._summary_message(kind, [line for _, line, _ in rows]),
+                    notification_id=f"{NOTIFICATION_PREFIX}summary_{kind}",
+                    targets=[],
+                    channels=frozenset({"tablet"}),
+                    tts_entity=None,
+                    tablet=True,
+                ),
+            )
 
     async def async_handle_action(self, action: str) -> None:
         """Handle a phone button: FH_DONE_<uid>, FH_DISMISS_<uid>, FH_SNOOZE_<minutes>_<uid>."""

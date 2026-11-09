@@ -1483,3 +1483,47 @@ html, body { overflow-x: hidden; max-width: 100%; }
 /* A field row of the guide: its text and its field wrap, so a field never runs past the window. */
 #wizard-body label:has(> input) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .waste-type > * { min-width: 0; }
+
+/* 0.7.5: the calendars window fits the screen, long names wrap, every switch stays visible. */
+#filters.calendars-panel {
+  width: min(420px, calc(100vw - 24px)); max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px); overflow-y: auto; overflow-x: hidden; box-sizing: border-box;
+}
+#filters .panel-title { overflow-wrap: anywhere; margin-top: 0; }
+#filters .switch-list { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; min-width: 0; }
+#filters .cal-switch { display: flex; align-items: center; gap: 10px; min-width: 0; width: 100%; box-sizing: border-box; white-space: normal; }
+#filters .cal-switch * { max-width: 100%; }
+#filters .cal-switch > span:not(.swatch):not(.cal-mark) { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+#filters .cal-switch input, #filters .cal-switch .switch { flex: none; }
+@media (max-width: 599px) {
+  #filters.calendars-panel {
+    position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+    top: auto; width: auto; max-width: none; max-height: calc(100dvh - 24px);
+  }
+}
+
+/* 0.7.5: the guide's footer is one row: Indietro, Salta (a small link), Avanti. */
+.wizard .dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.wizard .dialog-foot {
+  display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom)); max-height: calc(64px + env(safe-area-inset-bottom));
+}
+.wizard .dialog-foot .btn { min-height: 40px; padding: 6px 12px; min-width: 0; }
+#wizard-skip {
+  background: none; border: none; box-shadow: none; font-size: 14px; font-weight: 600;
+  text-decoration: underline; color: inherit; white-space: nowrap; flex: 0 1 auto;
+}
+@media (max-width: 599px) {
+  .wizard h2 { font-size: 24px; margin: 0 0 6px; }
+}
+@media (max-width: 359px) {
+  .wizard .dialog-foot { flex-wrap: wrap; }
+  #wizard-skip { order: -1; flex: 1 1 100%; text-align: center; }
+  #wizard-back, #wizard-next { flex: 1 1 0; }
+}
+
+/* 0.7.5: the notify page's save bar and the unsaved marker, and the summary card. */
+.notify-savebar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.unsaved { color: #fde68a; font-weight: 600; overflow-wrap: anywhere; }
+.summary-kind { margin: 10px 0 4px; font-size: 16px; }
+.summary-channels-title { font-weight: 600; margin: 10px 0 4px; }

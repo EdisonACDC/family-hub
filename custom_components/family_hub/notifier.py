@@ -6,7 +6,9 @@ never raised. Message text is never logged.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -17,7 +19,11 @@ from homeassistant.util import slugify
 
 from .const import (
     DEFAULT_PHONE_SOUND,
-    ECHO_RESTORE_SECONDS,
+    ECHO_FALLBACK_VOLUME,
+    ECHO_RESTORE_BASE_SECONDS,
+    ECHO_RESTORE_PER_CHAR_SECONDS,
+    ECHO_WAIT_MAX_SECONDS,
+    ECHO_WAIT_MIN_SECONDS,
     EVENT_REMINDER,
     EVENT_REMINDER_CLOSED,
     PERSON_CHANNELS,
@@ -25,6 +31,10 @@ from .const import (
 from .notify_settings import alexa_targets
 
 LOGGER = logging.getLogger(__name__)
+# How close a speaker's volume must be to the one chosen to count as reached (0 to 1 scale).
+VOLUME_TOLERANCE = 0.02
+# How often the speakers' volumes are looked at while waiting for them to change.
+ECHO_POLL_SECONDS = 0.2
 
 # The text of a test message from the "Avvisi" page.
 TEST_MESSAGE = "Prova: questo è un avviso di prova di Family Hub."
@@ -124,51 +134,104 @@ async def _call(hass: HomeAssistant, domain: str, service: str, data: dict[str, 
     await hass.services.async_call(domain, service, data, blocking=False)
 
 
+def _level(hass: HomeAssistant, speaker: str) -> float | None:
+    """The volume an Echo reports now (0 to 1), or None when it does not report one."""
+    state = hass.states.get(speaker)
+    level = state.attributes.get("volume_level") if state else None
+    return float(level) if isinstance(level, int | float) else None
+
+
+def restore_delay(message: str) -> float:
+    """Seconds, from the announcement, until the old volumes come back: the time to speak it."""
+    return ECHO_RESTORE_BASE_SECONDS + ECHO_RESTORE_PER_CHAR_SECONDS * len(message)
+
+
+async def _set_volumes(hass: HomeAssistant, speakers: list[str], target: float) -> dict[str, float]:
+    """Set the volume of every speaker, wait until they reach it (up to ECHO_WAIT_MAX_SECONDS, and
+    at least ECHO_WAIT_MIN_SECONDS), and return the volume each one goes back to afterwards.
+
+    One speaker that fails does not stop the others. A speaker whose old volume was not known
+    goes back to what it read right after the change, or to ECHO_FALLBACK_VOLUME.
+    """
+    started = time.monotonic()
+    restores: dict[str, float] = {}
+    for speaker in speakers:
+        prior = _level(hass, speaker)
+        try:
+            await hass.services.async_call(
+                "media_player",
+                "volume_set",
+                {"entity_id": speaker, "volume_level": target},
+                blocking=True,
+            )
+        except Exception as err:  # one Echo must not stop the others or the announcement
+            LOGGER.warning("Volume of %s not set: %s", speaker, err)
+            continue
+        if prior is not None:
+            restores[speaker] = prior
+        else:
+            after = _level(hass, speaker)
+            if after is not None and abs(after - target) > VOLUME_TOLERANCE:
+                restores[speaker] = after
+            else:
+                restores[speaker] = ECHO_FALLBACK_VOLUME
+    for _ in range(round(ECHO_WAIT_MAX_SECONDS / ECHO_POLL_SECONDS)):
+        if all(_reached(hass, s, target) for s in speakers):
+            break
+        await asyncio.sleep(ECHO_POLL_SECONDS)
+    remaining = ECHO_WAIT_MIN_SECONDS - (time.monotonic() - started)
+    if remaining > 0:
+        await asyncio.sleep(remaining)
+    return restores
+
+
+def _reached(hass: HomeAssistant, speaker: str, target: float) -> bool:
+    level = _level(hass, speaker)
+    return level is not None and abs(level - target) <= VOLUME_TOLERANCE
+
+
 async def announce_on_echos(
     hass: HomeAssistant, speakers: list[str], message: str, volume: int | None
 ) -> None:
     """Announce on Echo speakers through notify.alexa_media.
 
-    With a volume chosen: each speaker's volume is set first, then the announcement is made,
-    then the volume each speaker had is put back after a few seconds. The old volume is put
-    back only when it was known. Without a volume, nothing else changes.
+    With a volume chosen: each speaker's volume is set, the announcement waits until the volume
+    has changed, then it is made, and the old volumes come back when the message has been
+    spoken. Without a volume, nothing else changes. Each step is isolated: a failing speaker or
+    service is logged and the rest go on.
     """
     if not speakers:
         return
     if not hass.services.has_service("notify", "alexa_media"):
         LOGGER.warning("Announcement not sent: notify.alexa_media is not available")
         return
-    previous: dict[str, float] = {}
+    restores: dict[str, float] = {}
     if volume is not None:
-        for speaker in speakers:
-            state = hass.states.get(speaker)
-            level = state.attributes.get("volume_level") if state else None
-            if isinstance(level, int | float):
-                previous[speaker] = float(level)
-            await hass.services.async_call(
-                "media_player",
-                "volume_set",
-                {"entity_id": speaker, "volume_level": volume / 100},
-                blocking=True,
-            )
-    await hass.services.async_call(
-        "notify",
-        "alexa_media",
-        {"message": message, "target": speakers, "data": {"type": "announce"}},
-        blocking=True,
-    )
-    if previous:
+        restores = await _set_volumes(hass, speakers, volume / 100)
+    try:
+        await hass.services.async_call(
+            "notify",
+            "alexa_media",
+            {"message": message, "target": speakers, "data": {"type": "announce"}},
+            blocking=True,
+        )
+    except Exception as err:  # the message text is never logged
+        LOGGER.warning("Announcement not made: %s", err)
+    if restores:
 
         async def _restore(_now: datetime) -> None:
-            for speaker, level in previous.items():
-                await hass.services.async_call(
-                    "media_player",
-                    "volume_set",
-                    {"entity_id": speaker, "volume_level": level},
-                    blocking=False,
-                )
+            for speaker, level in restores.items():
+                try:
+                    await hass.services.async_call(
+                        "media_player",
+                        "volume_set",
+                        {"entity_id": speaker, "volume_level": level},
+                        blocking=False,
+                    )
+                except Exception as err:
+                    LOGGER.warning("Volume of %s not restored: %s", speaker, err)
 
-        async_call_later(hass, ECHO_RESTORE_SECONDS, _restore)
+        async_call_later(hass, restore_delay(message), _restore)
 
 
 ANDROID_CHANNEL = "Promemoria Family Hub"

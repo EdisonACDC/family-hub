@@ -26,6 +26,7 @@ def _notify_services(hass: HomeAssistant) -> None:
     er.async_get(hass).async_get_or_create(
         "media_player", "alexa_media", "kueche", suggested_object_id="kueche"
     )
+    hass.states.async_set("media_player.kueche", "idle", {})
     for name in ("mobile_app_sofia",):
         hass.services.async_register("notify", name, lambda call: None)
 

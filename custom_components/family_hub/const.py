@@ -113,8 +113,19 @@ PERSON_CHANNELS: Final[list[str]] = ["phone", "alexa", "tablet"]
 ALEXA_ALL: Final = "all"
 PHONE_SERVICE_PREFIX: Final = "mobile_app_"
 ALEXA_PLATFORM: Final = "alexa_media"
-# Seconds before the volume an Echo had is put back after an announcement at another volume.
-ECHO_RESTORE_SECONDS: Final = 20
+# An announcement at a chosen volume: the volume is set, then the speakers are given up to
+# ECHO_WAIT_MAX_SECONDS to reach it (and ECHO_WAIT_MIN_SECONDS in all) before the announcement.
+ECHO_WAIT_MAX_SECONDS: Final = 5
+ECHO_WAIT_MIN_SECONDS: Final = 2
+# The old volume comes back when the message has been spoken: this many seconds, plus this per
+# character of the message.
+ECHO_RESTORE_BASE_SECONDS: Final = 20
+ECHO_RESTORE_PER_CHAR_SECONDS: Final = 0.1
+# Where an Echo goes back to when its old volume was not known.
+ECHO_FALLBACK_VOLUME: Final = 0.3
+# Media players of the Alexa platform that are not speakers: the multiroom group, the Fire TV
+# and the Alexa app on this device. Matched on their entity id and name, lower case, no underscores.
+ECHO_NOT_SPEAKER_NAMES: Final = ("everywhere", "ovunque", "fire tv", "firetv", "this device")
 CONF_ALL_DAY_REMINDER: Final = "all_day_reminder"
 ATTR_ALL_DAY_REMINDER: Final = "all_day_reminder"
 # How one event's reminders go out, instead of its persons' own settings: the channels
@@ -137,10 +148,16 @@ DEFAULT_REMINDERS: Final[dict[str, Any]] = {
     "quiet_end": "07:00",
     "snooze_minutes": 10,  # default for snooze_reminder
     "tts_entity": None,  # tts.* entity used for spoken reminders
-    "morning_summary": "07:00",  # None disables
+    "morning_summary": "07:00",  # the time of the morning summary
     "evening_summary": "20:00",
+    "morning_summary_on": True,  # the switch: off keeps the time, sends nothing
+    "evening_summary_on": True,
+    # Where the summaries go: "phone", "alexa" (the person's Echo) and "tablet". Off by default
+    # for Alexa.
+    "summary_channels": ["phone", "tablet"],
     "all_day_reminder": "19:00",  # day before an all-day event, local time
 }
+SUMMARY_CHANNELS: Final = ("phone", "alexa", "tablet")
 
 # Bus events for the tablet add-on: a reminder popup to show, and one to close.
 EVENT_REMINDER: Final = "family_hub_reminder"

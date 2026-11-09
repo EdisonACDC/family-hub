@@ -82,6 +82,8 @@ def _echo(hass: HomeAssistant, name: str) -> None:
     er.async_get(hass).async_get_or_create(
         "media_player", "alexa_media", name, suggested_object_id=name
     )
+    # A real Echo has a state: an Echo without one is not a speaker (see notify_settings).
+    hass.states.async_set(f"media_player.{name}", "idle", {})
 
 
 async def test_alexa_announce_is_used_instead_of_tts(hass: HomeAssistant, freezer: Any) -> None:
@@ -183,7 +185,14 @@ async def test_an_event_uses_its_own_channels_echo_and_volume(
     )
     phone = async_mock_service(hass, "notify", "mobile_app_sofia")
     alexa = async_mock_service(hass, "notify", "alexa_media")
-    async_mock_service(hass, "media_player", "volume_set")
+
+    # As an Echo: the volume set is reported back, so the announcement does not wait for it.
+    async def set_volume(call: Any) -> None:
+        hass.states.async_set(
+            call.data["entity_id"], "idle", {"volume_level": call.data["volume_level"]}
+        )
+
+    hass.services.async_register("media_player", "volume_set", set_volume)
     tablet = async_mock_service(hass, "persistent_notification", "create")
     await hass.services.async_call(
         DOMAIN,

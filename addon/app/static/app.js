@@ -297,7 +297,11 @@
         $("empty-note").hidden = true;
       }
       refreshEvents();
-    }).catch(function () { /* offline: the status line already says so */ });
+    }).catch(function () {
+      // Not "no calendars": the calendars could not be read (Home Assistant or the add-on is busy).
+      $("empty-note").textContent = t("hubUnreachable");
+      $("empty-note").hidden = false;
+    });
   }
 
   function refreshEvents() {
@@ -418,6 +422,13 @@
 
   // "Calendari": a panel with a switch for every calendar (Family Hub's first). It opens from
   // the second row on the tablet and from the menu on the phone.
+  // A calendar's name when Home Assistant gives none: from its entity id, readable
+  // ("calendar.weekend_festivi" -> "Weekend festivi"). The entity id itself is never shown.
+  function readableName(entityId) {
+    var raw = String(entityId || "").split(".").slice(1).join(".").replace(/_/g, " ").trim();
+    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "";
+  }
+
   function renderFilters() {
     var box = $("filters");
     box.textContent = "";
@@ -426,7 +437,7 @@
     var ordered = state.calendars.filter(function (c) { return !c.external; })
       .concat(state.calendars.filter(function (c) { return c.external; }));
     ordered.forEach(function (cal) {
-      var row = switchRow(cal.name, !state.hidden[cal.entity_id], function (on) {
+      var row = switchRow(cal.name || readableName(cal.entity_id), !state.hidden[cal.entity_id], function (on) {
         state.hidden[cal.entity_id] = !on;
         paintCalendarsButton();
         renderWeek();
@@ -3435,8 +3446,61 @@
     state.notifyData.persons.forEach(function (person) {
       box.appendChild(notifyCard(person));
     });
-    box.appendChild(button(I.f("saveNotify"), "btn btn-primary", saveNotify));
+    if (state.role === "adult") box.appendChild(summaryCard());
+    var bar = el("div", { class: "notify-savebar" });
+    bar.appendChild(button(I.f("saveNotify"), "btn btn-primary", saveNotify));
+    var dirty = el("span", { class: "unsaved", id: "notify-dirty" }, I.f("unsavedChanges"));
+    dirty.hidden = true;
+    bar.appendChild(dirty);
+    box.appendChild(bar);
     if (state.role === "adult") box.appendChild(sharedCard());
+    // What the screen shows, as it would be saved: a change from it shows the marker.
+    state.notifySaved = JSON.stringify(notifyPayload());
+    box.onchange = updateNotifyDirty;
+    box.oninput = updateNotifyDirty;
+  }
+
+  function updateNotifyDirty() {
+    var dirty = $("notify-dirty");
+    if (dirty) dirty.hidden = JSON.stringify(notifyPayload()) === state.notifySaved;
+  }
+
+  // The summaries: their times and switches, and the channels each goes on (Alexa is off unless
+  // chosen). Saved on their own, with the "summary_save" request.
+  function summaryCard() {
+    var f = I.f;
+    var summary = state.notifyData.summary || {};
+    var card = el("section", { class: "notify-card summary-card" });
+    card.appendChild(el("h3", {}, f("summaryTitle")));
+    card.appendChild(el("p", { class: "hint" }, f("summaryHint")));
+    ["morning", "evening"].forEach(function (kind) {
+      var label = kind === "morning" ? f("summaryMorning") : f("summaryEvening");
+      card.appendChild(el("h4", { class: "summary-kind" }, label));
+      card.appendChild(switchRow(f("summaryOn"), summary[kind + "_summary_on"] !== false, function (on) {
+        summary[kind + "_summary_on"] = on;
+      }));
+      card.appendChild(fieldRow(f("summaryAt"), timeInput(summary[kind + "_summary"], f("summaryAt"), function (v) {
+        summary[kind + "_summary"] = v || null;
+      }, kind === "morning" ? "07:00" : "20:00")));
+    });
+    card.appendChild(el("p", { class: "summary-channels-title" }, f("summaryOn2")));
+    var chosen = (summary.summary_channels || ["phone", "tablet"]).slice();
+    var labels = { phone: f("chPhone"), alexa: f("chAlexa"), tablet: f("chTablet") };
+    var list = el("div", { class: "switch-list" });
+    ["phone", "alexa", "tablet"].forEach(function (key) {
+      list.appendChild(switchRow(labels[key], chosen.indexOf(key) !== -1, function (on) {
+        chosen = on ? chosen.concat([key]) : chosen.filter(function (c) { return c !== key; });
+        summary.summary_channels = chosen;
+      }));
+    });
+    card.appendChild(list);
+    card.appendChild(button(f("summarySave"), "btn", function () {
+      request({ op: "summary_save", reminders: summary }).then(function () {
+        showStatusNote(f("summarySaved"));
+        openNotify();
+      }).catch(showNotifyError);
+    }));
+    return card;
   }
 
   // Home Assistant users that are no person (the kitchen tablet): they may add, change and
@@ -3492,7 +3556,7 @@
     // Tests use the saved settings: they appear once a service is saved.
     var tests = el("div", { class: "notify-tests" });
     if (person.phone_notify) tests.appendChild(button(f("testPhone"), "btn", function () { testNotify(person, "phone"); }));
-    if (person.alexa_notify) tests.appendChild(button(f("testEcho"), "btn", function () { testNotify(person, "alexa"); }));
+    tests.appendChild(button(f("testEcho"), "btn", function () { testNotify(person, "alexa"); }));
     card.appendChild(tests);
     card.appendChild(el("p", { class: "hint" }, f("testHint")));
     return card;
@@ -3504,6 +3568,14 @@
       $("notify-error").hidden = false;
       return;
     }
+    request({ op: "notify_save", persons: notifyPayload() }).then(function () {
+      showStatusNote(I.f("notifySaved"));
+      openNotify();
+    }).catch(showNotifyError);
+  }
+
+  // The persons' settings as the screen shows them (what saving sends).
+  function notifyPayload() {
     var persons = {};
     state.notifyData.persons.forEach(function (p) {
       var change = {
@@ -3518,14 +3590,15 @@
       if (state.role === "adult") change.ha_user_id = p.ha_user_id || "";
       persons[p.id] = change;
     });
-    request({ op: "notify_save", persons: persons }).then(function () {
-      showStatusNote(I.f("notifySaved"));
-      openNotify();
-    }).catch(showNotifyError);
+    return persons;
   }
 
+  // Prova Echo uses the speaker and the volume on the screen, saved or not.
   function testNotify(person, kind) {
-    request({ op: "notify_test", person: person.id, kind: kind }).then(function (result) {
+    var extra = kind === "alexa"
+      ? { alexa_notify: person.alexa_notify || "", alexa_volume: person.alexa_volume == null ? null : person.alexa_volume }
+      : {};
+    request(Object.assign({ op: "notify_test", person: person.id, kind: kind }, extra)).then(function (result) {
       showStatusNote(I.f("testSent").replace("{n}", String(result.sent)));
     }).catch(showNotifyError);
   }

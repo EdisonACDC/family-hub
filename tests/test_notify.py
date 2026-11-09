@@ -21,11 +21,17 @@ from custom_components.family_hub.const import (
     CONF_LANGUAGE,
     DEFAULT_CATEGORIES,
     DOMAIN,
-    ECHO_RESTORE_SECONDS,
     OPT_CATEGORIES,
     OPT_PERSONS,
 )
-from custom_components.family_hub.notifier import Delivery, Target, async_send
+from custom_components.family_hub.notifier import (
+    TEST_MESSAGE,
+    Delivery,
+    Target,
+    async_send,
+    restore_delay,
+)
+from custom_components.family_hub.notify_settings import alexa_targets, echo_entities
 from custom_components.family_hub.reminders import _tablet_allowed
 
 PHONE = "mobile_app_pixel"
@@ -43,9 +49,18 @@ class Calls:
         return [data for call, data in self.items if call == name]
 
 
+def _fire_restore(hass: HomeAssistant) -> Any:
+    """Let the time it takes to speak the test message pass, so the old volumes come back."""
+    return async_fire_time_changed(
+        hass, dt_util.utcnow() + timedelta(seconds=restore_delay(TEST_MESSAGE) + 1)
+    )
+
+
 @pytest.fixture
-def calls(hass: HomeAssistant) -> Calls:
+def calls(hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch) -> Calls:
     recorder = Calls()
+    # No waiting for real seconds in the tests: the volume is seen as reached at once.
+    monkeypatch.setattr("custom_components.family_hub.notifier.ECHO_WAIT_MIN_SECONDS", 0)
 
     def record(name: str) -> Any:
         async def handler(call: ServiceCall) -> None:
@@ -53,9 +68,16 @@ def calls(hass: HomeAssistant) -> Calls:
 
         return handler
 
+    async def set_volume(call: ServiceCall) -> None:
+        # As an Echo does: its volume is the one set, and it reports it.
+        recorder.items.append(("media_player.volume_set", dict(call.data)))
+        hass.states.async_set(
+            call.data["entity_id"], "idle", {"volume_level": call.data["volume_level"]}
+        )
+
     hass.services.async_register("notify", PHONE, record(f"notify.{PHONE}"))
     hass.services.async_register("notify", "alexa_media", record("notify.alexa_media"))
-    hass.services.async_register("media_player", "volume_set", record("media_player.volume_set"))
+    hass.services.async_register("media_player", "volume_set", set_volume)
     registry = er.async_get(hass)
     for name in ("kueche", "wohnzimmer"):
         registry.async_get_or_create("media_player", "alexa_media", name, suggested_object_id=name)
@@ -238,7 +260,7 @@ async def test_echo_test_sets_volume_announces_then_restores(
     (announce,) = calls.named("notify.alexa_media")
     assert announce["target"] == [KITCHEN, LIVING]
     assert announce["data"] == {"type": "announce"}
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=ECHO_RESTORE_SECONDS + 1))
+    _fire_restore(hass)
     await hass.async_block_till_done()
     restored = calls.named("media_player.volume_set")[2:]
     assert sorted((r["entity_id"], r["volume_level"]) for r in restored) == [
@@ -258,15 +280,16 @@ async def test_echo_without_volume_sets_nothing(
     )
     assert (await client.receive_json())["result"] == {"sent": 1}
     assert [c for c, _ in calls.items] == ["notify.alexa_media"]
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=ECHO_RESTORE_SECONDS + 1))
+    _fire_restore(hass)
     await hass.async_block_till_done()
     assert [c for c, _ in calls.items] == ["notify.alexa_media"]
 
 
-async def test_unknown_volume_is_not_put_back(
+async def test_unknown_volume_goes_back_to_the_fallback_not_left_high(
     hass: HomeAssistant, hass_ws_client: Any, calls: Calls
 ) -> None:
-    hass.states.async_set(KITCHEN, "unavailable", {})
+    # The Echo reports no volume before the change: it must not be left at the chosen one.
+    hass.states.async_set(KITCHEN, "idle", {})
     await _entry(hass)
     client = await hass_ws_client(hass)
     await _save(client, 1, {"mamma": {"alexa_notify": KITCHEN, "alexa_volume": 40}})
@@ -274,9 +297,88 @@ async def test_unknown_volume_is_not_put_back(
         {"id": 2, "type": "family_hub/notify/test", "person": "mamma", "kind": "alexa"}
     )
     await client.receive_json()
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=ECHO_RESTORE_SECONDS + 1))
+    _fire_restore(hass)
     await hass.async_block_till_done()
-    assert [d["entity_id"] for d in calls.named("media_player.volume_set")] == [KITCHEN]
+    restored = [d for d in calls.named("media_player.volume_set") if d["volume_level"] == 0.3]
+    assert [d["entity_id"] for d in restored] == [KITCHEN]
+
+
+async def test_test_uses_the_values_on_the_screen_not_the_saved_ones(
+    hass: HomeAssistant, hass_ws_client: Any, calls: Calls
+) -> None:
+    await _entry(hass)
+    client = await hass_ws_client(hass)
+    await _save(client, 1, {"mamma": {"alexa_notify": KITCHEN, "alexa_volume": 60}})
+    await client.send_json(
+        {
+            "id": 2,
+            "type": "family_hub/notify/test",
+            "person": "mamma",
+            "kind": "alexa",
+            "alexa_notify": LIVING,
+            "alexa_volume": 25,
+        }
+    )
+    assert (await client.receive_json())["result"] == {"sent": 1}
+    (volume,) = calls.named("media_player.volume_set")
+    assert (volume["entity_id"], volume["volume_level"]) == (LIVING, 0.25)
+    assert calls.named("notify.alexa_media")[0]["target"] == [LIVING]
+    _fire_restore(hass)
+    await hass.async_block_till_done()
+
+
+async def test_test_refuses_a_bad_volume_or_an_unknown_echo(
+    hass: HomeAssistant, hass_ws_client: Any, calls: Calls
+) -> None:
+    await _entry(hass)
+    client = await hass_ws_client(hass)
+    base = {"type": "family_hub/notify/test", "person": "mamma", "kind": "alexa"}
+    cases = [
+        ({"alexa_notify": KITCHEN, "alexa_volume": 101}, "bad_request"),
+        ({"alexa_notify": KITCHEN, "alexa_volume": True}, "bad_request"),
+        ({"alexa_notify": "media_player.garage", "alexa_volume": 30}, "unknown_service"),
+    ]
+    for msg_id, (extra, code) in enumerate(cases, start=1):
+        await client.send_json({"id": msg_id, **base, **extra})
+        assert (await client.receive_json())["error"]["code"] == code
+    assert calls.items == []
+
+
+async def test_all_leaves_out_unavailable_groups_fire_tv_and_this_device(
+    hass: HomeAssistant, calls: Calls
+) -> None:
+    registry = er.async_get(hass)
+    for name in ("ovunque", "fire_tv_demo", "this_device", "vecchio", "spento"):
+        registry.async_get_or_create("media_player", "alexa_media", name, suggested_object_id=name)
+    hass.states.async_set("media_player.ovunque", "idle", {"friendly_name": "Ovunque"})
+    hass.states.async_set("media_player.fire_tv_demo", "idle", {})
+    hass.states.async_set("media_player.this_device", "idle", {})
+    hass.states.async_set("media_player.vecchio", "unavailable", {})
+    registry.async_update_entity("media_player.spento", disabled_by=er.RegistryEntryDisabler.USER)
+    assert echo_entities(hass) == [KITCHEN, LIVING]
+    assert alexa_targets(hass, "all") == [KITCHEN, LIVING]
+
+
+async def test_an_echo_that_fails_does_not_stop_the_others(
+    hass: HomeAssistant, calls: Calls, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("custom_components.family_hub.notifier.ECHO_WAIT_MIN_SECONDS", 0)
+    recorded: list[str] = []
+
+    async def volume(call: ServiceCall) -> None:
+        recorded.append(call.data["entity_id"])
+        if call.data["entity_id"] == KITCHEN:
+            raise RuntimeError("Echo offline")
+        hass.states.async_set(LIVING, "idle", {"volume_level": call.data["volume_level"]})
+
+    hass.services.async_register("media_player", "volume_set", volume)
+    from custom_components.family_hub.notifier import announce_on_echos
+
+    await announce_on_echos(hass, [KITCHEN, LIVING], TEST_MESSAGE, 40)
+    assert recorded == [KITCHEN, LIVING]
+    assert [c for c, _ in calls.items] == ["notify.alexa_media"]
+    _fire_restore(hass)
+    await hass.async_block_till_done()
 
 
 def _target(**overrides: Any) -> Target:

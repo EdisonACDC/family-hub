@@ -132,6 +132,7 @@ async def test_D_shared_echo_announces_once(hass: HomeAssistant, freezer: Any) -
     er.async_get(hass).async_get_or_create(
         "media_player", "alexa_media", "cucina", suggested_object_id="cucina"
     )
+    hass.states.async_set("media_player.cucina", "idle", {})
     calls = async_mock_service(hass, "notify", "alexa_media")
     persons = [
         {

@@ -125,7 +125,11 @@ def test_rubbish_pickups_show_their_icon_and_colour_in_the_week(
     }
     key = "calendar.family_hub_ext_abfuhr"
     stack_full.fake.states.append(
-        {"entity_id": key, "state": "off", "attributes": {"friendly_name": "Abfuhrtermine"}}
+        {
+            "entity_id": key,
+            "state": "off",
+            "attributes": {"friendly_name": "Abfuhrtermine", "source_id": "abfuhr"},
+        }
     )
     stack_full.fake.events[key] = [
         {
@@ -193,7 +197,11 @@ def _add_rubbish_calendar(stack: Stack, key: str, source: str, events: list[dict
         "source": "file",
     }
     stack.fake.states.append(
-        {"entity_id": key, "state": "off", "attributes": {"friendly_name": "Abfuhr"}}
+        {
+            "entity_id": key,
+            "state": "off",
+            "attributes": {"friendly_name": "Abfuhr", "source_id": source},
+        }
     )
     stack.fake.events[key] = events
 

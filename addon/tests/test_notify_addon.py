@@ -197,3 +197,33 @@ def test_child_tests_only_own_and_guest_nothing() -> None:
             await shutdown(ha_server, client)
 
     _run(scenario)
+
+
+def test_echo_test_uses_the_speaker_and_volume_on_the_screen() -> None:
+    """0.7.5: "Prova Echo" sends the speaker and the volume shown, saved or not."""
+
+    async def scenario() -> None:
+        fake = FakeHA()
+        ha_server, client, _ = await started(fake)
+        try:
+            adult = await connect(client, ADULT_USER)
+            reply = await request(
+                adult,
+                {
+                    "id": 1,
+                    "op": "notify_test",
+                    "person": "mamma",
+                    "kind": "alexa",
+                    "alexa_notify": "media_player.wohnzimmer",
+                    "alexa_volume": 25,
+                },
+            )
+            assert reply["result"] == {"sent": 1}
+            sent = fake.notify_tests[-1]
+            assert sent["alexa_notify"] == "media_player.wohnzimmer"
+            assert sent["alexa_volume"] == 25
+            await adult.close()
+        finally:
+            await shutdown(ha_server, client)
+
+    _run(scenario)

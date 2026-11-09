@@ -333,3 +333,76 @@ def test_shift_calendar_last_day_is_reachable_at_320(stack_full: Stack, browser:
         assert hit, "the last day is covered by something else"
         problems = page.evaluate(CHECK_JS)
         assert not problems, problems
+
+
+LONG_NAME = "Calendario della casa più lungo senza spazi 😀 Àèìòù"
+
+
+@pytest.mark.parametrize(("width", "height"), [(320, 640), (360, 780), (390, 844)])
+def test_a_long_calendar_name_keeps_the_panel_and_every_switch_on_screen(
+    stack_full: Stack, browser: Browser, width: int, height: int
+) -> None:
+    """0.7.5: a calendar with a long name (accents, an emoji, no spaces) does not push the calendars
+    window off the screen, and each switch stays visible and can be tapped."""
+    stack_full.fake.states.append(
+        {
+            "entity_id": "calendar.agenda_lunga_di_prova",
+            "state": "off",
+            "attributes": {
+                "friendly_name": LONG_NAME,
+                "category_id": "lunga",
+                "category_name": LONG_NAME,
+                "persons": [],
+                "shared_users": [],
+            },
+        }
+    )
+    stack_full.fake.events["calendar.agenda_lunga_di_prova"] = []
+    try:
+        with _device(browser, width, height) as page:
+            _open(page, stack_full)
+            page.locator("#menu-btn").click()
+            page.locator("#menu-calendars").click()
+            panel = page.locator("#filters")
+            expect(panel).to_be_visible(timeout=3000)
+            box = panel.bounding_box()
+            assert box and box["x"] >= -1 and box["x"] + box["width"] <= width + 1, box
+            switches = page.locator("#filters .cal-switch")
+            count = switches.count()
+            assert count >= 1
+            for i in range(count):
+                row = switches.nth(i).bounding_box()
+                assert row and row["x"] >= -1 and row["x"] + row["width"] <= width + 1, (i, row)
+                assert switches.nth(i).locator("input, .switch").first.is_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    finally:
+        stack_full.fake.states[:] = [
+            s for s in stack_full.fake.states if s["entity_id"] != "calendar.agenda_lunga_di_prova"
+        ]
+        stack_full.fake.events.pop("calendar.agenda_lunga_di_prova", None)
+
+
+@pytest.mark.parametrize(("width", "height"), [(320, 640), (360, 780), (390, 844)])
+def test_the_guide_footer_is_one_row_and_short(
+    stack_full: Stack, browser: Browser, width: int, height: int
+) -> None:
+    """0.7.5: the guide's buttons (Indietro, Salta, Avanti) sit in one short row on the phone; the
+    step's own content keeps the room above it."""
+    with _device(browser, width, height) as page:
+        _open(page, stack_full)
+        _menu(page, "#menu-wizard")
+        expect(page.locator("#wizard-overlay")).to_be_visible(timeout=3000)
+        # Indietro is hidden on the first step: the footer is measured on the second.
+        page.locator("#wizard-next").click()
+        expect(page.locator("#wizard-back")).to_be_visible(timeout=3000)
+        back = page.locator("#wizard-back").bounding_box()
+        skip = page.locator("#wizard-skip").bounding_box()
+        nxt = page.locator("#wizard-next").bounding_box()
+        assert back and skip and nxt
+        if width >= 360:
+            # One row: the three buttons share a top edge.
+            tops = {round(back["y"]), round(skip["y"]), round(nxt["y"])}
+            assert max(tops) - min(tops) <= 2, (back, skip, nxt)
+        footer = page.locator("#wizard-overlay .wizard .dialog-foot").bounding_box()
+        assert footer and footer["height"] <= 72, footer
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")

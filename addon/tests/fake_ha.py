@@ -15,6 +15,9 @@ from aiohttp import WSMsgType, web
 from app.waste import DEFAULT_WASTE_TYPES
 
 TOKEN = "test-token"
+# The config entry of the fake Family Hub: its calendars' unique ids start with it, as the
+# integration's do ("<entry>_<category>" and "<entry>_ext_<source>").
+ENTRY_ID = "fake-entry"
 
 # Who is who in the fake family. ``ha_user_id`` links a Home Assistant user to a person.
 PERSONS = [
@@ -365,6 +368,7 @@ class FakeHA:
                 for e in self.echos
             ]
             entries.append({"entity_id": "light.kitchen", "platform": "hue", "name": None})
+            entries.extend(self.hub_registry())
             await self._reply(ws, msg_id, True, entries)
         elif kind == "get_states":
             await self._reply(ws, msg_id, True, copy.deepcopy(self.states))
@@ -502,7 +506,7 @@ class FakeHA:
                 {
                     "entity_id": entity,
                     "state": "off",
-                    "attributes": {"friendly_name": calendar["name"]},
+                    "attributes": {"friendly_name": calendar["name"], "source_id": source_id},
                 }
             )
             self.events[entity] = [
@@ -529,6 +533,36 @@ class FakeHA:
             self.ics[source_id]["content"] = msg["content"]
             await self._reply(ws, msg_id, True, {"saved": True})
 
+    def hub_registry(self) -> list[dict[str, Any]]:
+        """The entity registry entries of Family Hub's calendars, as Home Assistant lists them:
+        the platform and the unique id, whatever the entity id is."""
+        found = []
+        for state in self.states:
+            attributes = state.get("attributes", {})
+            if "category_id" in attributes:
+                unique = f"{ENTRY_ID}_{attributes['category_id']}"
+            elif "source_id" in attributes:
+                unique = f"{ENTRY_ID}_ext_{attributes['source_id']}"
+            else:
+                continue
+            found.append(
+                {
+                    "entity_id": state["entity_id"],
+                    "platform": DOMAIN,
+                    "unique_id": unique,
+                    "config_entry_id": ENTRY_ID,
+                }
+            )
+        return found
+
+    def rename_calendar(self, old: str, new: str) -> None:
+        """What a family does by hand: the entity id changes, the calendar stays the same."""
+        for state in self.states:
+            if state["entity_id"] == old:
+                state["entity_id"] = new
+        if old in self.events:
+            self.events[new] = self.events.pop(old)
+
     async def _notify_test(self, ws: web.WebSocketResponse, msg: dict[str, Any]) -> None:
         """Like the integration's test message: the person's chosen service only."""
         self.notify_tests.append(copy.deepcopy(msg))
@@ -540,7 +574,9 @@ class FakeHA:
             chosen = [person.get("phone_notify")] if person.get("phone_notify") else []
             chosen = [s for s in chosen if s in self.notify_services]
         else:
-            choice = person.get("alexa_notify") or ""
+            # The speaker on the screen when one is sent, else the saved one (as the integration).
+            choice = msg["alexa_notify"] if "alexa_notify" in msg else person.get("alexa_notify")
+            choice = choice or ""
             speakers = self.echos if choice == "all" else [choice]
             chosen = [s for s in speakers if s in self.echos] if choice else []
         if not chosen:
@@ -557,7 +593,15 @@ class FakeHA:
             return
         self.calls.append({"domain": domain, "service": service, "data": data})
         if domain == DOMAIN and service == "add_event":
-            entity = f"calendar.family_hub_{data['category']}"
+            # The calendar of the category, found by its id (its entity id may be renamed).
+            entity = next(
+                (
+                    s["entity_id"]
+                    for s in self.states
+                    if s.get("attributes", {}).get("category_id") == data["category"]
+                ),
+                f"calendar.family_hub_{data['category']}",
+            )
             person_ids = ",".join(data.get("persons", []))
             shift_id = data.get("shift_id", "")
             self.events.setdefault(entity, []).append(

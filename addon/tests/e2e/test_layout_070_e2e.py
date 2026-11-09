@@ -216,6 +216,9 @@ def test_phone_bars_tabs_and_the_plus_never_covers_an_event(
             expect(page.locator(item)).to_be_visible()
         page.locator("#menu-calendars").click()
         expect(page.locator("#filters .cal-switch").first).to_be_visible()
+        # The panel is a sheet over the tabs: it is closed with its own button first.
+        page.locator("#filters button", has_text="Chiudi").click()
+        expect(page.locator("#filters")).to_be_hidden()
         _view(page, "week")
 
 
@@ -275,8 +278,8 @@ def _four_persons(stack: Stack) -> Iterator[None]:
     extra = [
         {"id": "papa", "name": "Papà", "role": "adult", "ha_user_id": "", "color": "#16A34A"},
         {
-            "id": "cristian",
-            "name": "Cristian",
+            "id": "luca",
+            "name": "Luca",
             "role": "adult",
             "ha_user_id": "",
             "color": "#F59E0B",

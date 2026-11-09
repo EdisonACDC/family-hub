@@ -333,7 +333,13 @@ async def test_fatto_on_the_evening_also_ends_the_morning_reminder(
     freezer.move_to("2026-11-09 07:00:00+01:00")
     async_fire_time_changed(hass, datetime.fromisoformat("2026-11-09 07:00:00+01:00"))
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in calls if "Indiff" in c.data["message"]] == []
+    # The morning summary may list the rubbish of the day; the reminder itself must not come.
+    reminders = [
+        c.data["message"]
+        for c in calls
+        if "Indiff" in c.data["message"] and "summary" not in c.data.get("notification_id", "")
+    ]
+    assert reminders == []
 
 
 async def test_snooze_one_hour_sends_it_again(hass: HomeAssistant, freezer: Any) -> None:
@@ -345,12 +351,21 @@ async def test_snooze_one_hour_sends_it_again(hass: HomeAssistant, freezer: Any)
     freezer.move_to("2026-11-08 19:00:00+01:00")
     async_fire_time_changed(hass, datetime.fromisoformat("2026-11-08 19:00:00+01:00"))
     await hass.async_block_till_done()
-    assert len([c for c in calls if "Indiff" in c.data["message"]]) == 1
+
+    # The evening summary (20:00) also lists the rubbish: only the reminders are counted here.
+    def reminders() -> list[Any]:
+        return [
+            c
+            for c in calls
+            if "Indiff" in c.data["message"] and "summary" not in c.data["notification_id"]
+        ]
+
+    assert len(reminders()) == 1
     await manager.async_action("snooze", "ext-rest-2026-11-09", 60)
     freezer.move_to("2026-11-08 20:00:00+01:00")
     async_fire_time_changed(hass, datetime.fromisoformat("2026-11-08 20:00:00+01:00"))
     await hass.async_block_till_done()
-    assert len([c for c in calls if "Indiff" in c.data["message"]]) == 2
+    assert len(reminders()) == 2
 
 
 async def test_the_entity_keeps_its_id_and_takes_the_chosen_name(hass: HomeAssistant) -> None:
@@ -417,8 +432,8 @@ async def test_a_home_assistant_rubbish_calendar_is_announced_like_an_ics_file(
     messages = [c.data["message"] for c in calls]
     assert "Domani: Indifferenziato" in messages
     assert "Oggi: Indifferenziato" in messages
-    # Only the rubbish calendar is read, for the evening's day and the morning's.
-    assert {entity for entity, _ in asked} == {"calendar.rifiuti_bianco"}
+    # The rubbish calendar is read for the reminders; the chosen calendars too, for the summary.
+    assert {entity for entity, _ in asked} == {"calendar.rifiuti_bianco", "calendar.festa"}
     assert ("calendar.rifiuti_bianco", "2026-11-09") in asked
 
 

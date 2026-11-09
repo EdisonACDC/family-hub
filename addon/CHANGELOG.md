@@ -1,5 +1,20 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.5
+
+- Calendari: l'add-on trova i calendari di Family Hub nel registro delle entità, non dal nome
+  dell'entità: funziona con un'area assegnata al dispositivo e con entità rinominate a mano.
+  Un calendario di una categoria tolta esce dal registro. Se Home Assistant non risponde, la
+  pagina dice «Family Hub non raggiungibile».
+- Prova Echo usa l'altoparlante e il volume a schermo, anche se non sono ancora salvati.
+- Riepiloghi (mattina e sera): non si inviano se non c'è niente da dire; includono rifiuti, vacanze
+  e i calendari collegati; ogni persona riceve i propri appuntamenti e quelli di famiglia; canali
+  scelti (telefono, Alexa, tablet; Alexa spento per default); un interruttore per ciascuno.
+- Echo: "tutti gli Echo" esclude gruppi, Fire TV, «This Device», disabilitati e non disponibili;
+  l'annuncio parte dopo che il volume è cambiato e il volume precedente torna dopo il messaggio.
+- Procedura guidata: piede su una riga; finestra Calendari entro lo schermo con nomi lunghi.
+- CLAUDE.md: regole di prodotto (nessuna dipendenza dai nomi, dati di prova generici).
+
 ## 0.7.4
 
 - Procedura guidata: i campi dei passi Ruolo, Utente, Telefono ed Echo restano dentro la finestra

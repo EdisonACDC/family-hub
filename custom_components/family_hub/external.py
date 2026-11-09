@@ -24,6 +24,7 @@ import aiohttp
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import (
     async_track_point_in_time,
@@ -46,6 +47,12 @@ LOGGER = logging.getLogger(__name__)
 
 TYPES = ["rifiuti", "vacanze_scuola", "vacanze_asilo", "festivita", "altro"]
 VACATION_TYPES = {"vacanze_scuola", "vacanze_asilo", "festivita"}
+# The one line a holiday gets in a summary (Italian, as the rubbish labels are).
+VACATION_LABELS = {
+    "vacanze_scuola": "Vacanze scuola",
+    "vacanze_asilo": "Vacanze asilo",
+    "festivita": "Festività",
+}
 MAX_BYTES = 5 * 1024 * 1024
 MAX_EVENTS = 5000
 TIMEOUT_SECONDS = 20
@@ -291,6 +298,50 @@ class ExternalManager:
             slug = entity_id.split(".", 1)[-1].replace("_", "-")
             found.append({"id": f"ha-{slug}", "type": "rifiuti", "calendar": entity_id})
         return found
+
+    def _ha_sources(self) -> list[dict[str, Any]]:
+        """Each chosen Home Assistant calendar (not one of Family Hub's own) with its type and the
+        persons it is for, as a source."""
+        styles = self._entry.options.get("sources", {}).get("calendar_styles", {})
+        found = []
+        for entity_id, style in styles.items():
+            # Family Hub's own calendars are found in the entity registry, whatever their names.
+            registered = er.async_get(self._hass).async_get(entity_id)
+            if registered is not None and registered.platform == DOMAIN:
+                continue
+            slug = entity_id.split(".", 1)[-1].replace("_", "-")
+            found.append(
+                {
+                    "id": f"ha-{slug}",
+                    "type": style.get("type") or "altro",
+                    "calendar": entity_id,
+                    "persons": list(style.get("persons", [])),
+                }
+            )
+        return found
+
+    async def async_day_lines(self, day: date) -> list[tuple[str, list[str]]]:
+        """The lines of the linked calendars for one day's summary: each with the persons it is
+        for (none: the whole family). Rubbish reads "Rifiuti: Organico" by its type, a holiday
+        is one line ("Vacanze scuola") however many of its days are today, and other titles are
+        listed as they are."""
+        lines: list[tuple[str, list[str]]] = []
+        for source in [*self.sources(), *self._ha_sources()]:
+            kind = str(source.get("type") or "altro")
+            names = await self._names_on(source, day)
+            if not names:
+                continue
+            persons = [str(p) for p in source.get("persons", [])]
+            if kind == "rifiuti":
+                for name in names:
+                    found = type_of(name, self.waste_types())
+                    label = found["label"] if found else name
+                    lines.append((f"Rifiuti: {label}", persons))
+            elif kind in VACATION_LABELS:
+                lines.append((VACATION_LABELS[kind], persons))
+            else:
+                lines.extend((name, persons) for name in names)
+        return lines
 
     async def _names_on(self, source: dict[str, Any], day: date) -> list[str]:
         """The titles of one source's events on a day: from the external file, or from the
