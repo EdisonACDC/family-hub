@@ -322,7 +322,7 @@ button, input, select {
 .hint { color: var(--muted); margin: 6px 0 10px; }
 #wizard-body { display: flex; flex-direction: column; gap: 4px; }
 #wizard-body select, #wizard-body input[type="color"] { min-height: 48px; }
-#wizard-body input[type="color"] { width: 64px; padding: 4px; }
+#wizard-body input[type="color"] { width: min(64px, 100%); padding: 4px; }
 .dialog label.check { flex-direction: row; }
 
 /* ---- layouts ---- */
@@ -399,8 +399,12 @@ button, input, select {
 .todo-row input[type="checkbox"] { width: 28px; height: 28px; flex: 0 0 auto; }
 .todo-row span { flex: 1 1 auto; overflow-wrap: break-word; }
 .todo-row span.done { text-decoration: line-through; color: var(--muted); }
-.todo-add { display: flex; gap: 10px; margin-top: 8px; }
-.todo-add input { flex: 1 1 auto; min-height: 48px; padding: 8px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); }
+/* The entry line: the input takes the free width (and may shrink); Aggiungi stays beside it when it
+   fits, and goes below it at full width on a phone. Nothing leaves the window. */
+.todo-add { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; min-width: 0; }
+.todo-add input { flex: 1 1 160px; min-width: 0; width: 1%; min-height: 48px; padding: 8px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); }
+.todo-add .btn { flex: 0 0 auto; max-width: 100%; }
+@media (max-width: 599px) { .todo-add .btn { flex: 1 1 100%; } }
 
 /* ---- shifts ---- */
 
@@ -976,7 +980,7 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
 .event .waste-icon.mdi, .allday .waste-icon.mdi { color: #fff; }
 .waste-type-list { display: grid; gap: 10px; }
 .waste-type {
-  display: grid; grid-template-columns: 40px repeat(4, minmax(0, 1fr)) auto; gap: 8px; align-items: end;
+  display: grid; grid-template-columns: 40px repeat(4, minmax(0, 1fr)) auto; gap: 8px; align-items: end; min-width: 0;
   padding: 8px; border-radius: 14px; border-left: 6px solid var(--ev); background: rgba(40, 30, 20, 0.18);
 }
 .waste-type .waste-preview { width: 32px; height: 32px; color: var(--ev); align-self: center; }
@@ -1466,5 +1470,14 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .month-top .month-more { font-size: 11px; line-height: 13px; white-space: nowrap; flex: 0 0 auto; }
 .month-ev { line-height: 15px; }
 /* The shift calendar: seven days of at least 40 px; on a 320 px phone the body scrolls sideways. */
-#shifts-calendar .month-grid { grid-template-columns: repeat(7, minmax(40px, 1fr)); gap: 4px; width: 100%; overflow-x: auto; }
+/* Seven equal columns that always fit the window, even at 320 px; the days scroll up and down. */
+#shifts-calendar .month-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; width: 100%; max-width: 100%; }
+#shifts-calendar .day-cell { min-width: 0; overflow: hidden; padding: 4px 2px; }
+#shifts-calendar .dshift { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .dialog-body { overflow-x: auto; }
+/* 0.7.3: a field inside a window never gets wider than the window: it shrinks instead. */
+.dialog input, .dialog select, .dialog textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.dialog label { min-width: 0; }
+/* A field row of the guide: its text and its field wrap, so a field never runs past the window. */
+#wizard-body label:has(> input) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.waste-type > * { min-width: 0; }

@@ -49,12 +49,30 @@ CHECK_JS = """() => {
       }
     });
   }
+  // Everything inside the open window (inputs, buttons, calendar days) stays within its left and
+  // right edges; a list may scroll up and down inside the window, but not sideways.
+  const win = top ? top.querySelector('.dialog') : null;
+  if (win) {
+    const d = win.getBoundingClientRect();
+    win.querySelectorAll('input, select, textarea, button, .day-cell').forEach(e => {
+      if (!e.offsetParent || e.disabled) return;
+      const r = e.getBoundingClientRect();
+      if (r.width === 0) return;
+      if (r.left < d.left - 1 || r.right > d.right + 1) {
+        const label = (e.id || e.getAttribute('aria-label') || e.textContent || e.tagName).trim();
+        bad.push(['outside-window', label.slice(0, 24),
+          Math.round(r.left), Math.round(r.right), Math.round(d.left), Math.round(d.right)]);
+      }
+    });
+  }
   document.querySelectorAll('button').forEach(b => {
     if (!b.offsetParent || b.disabled) return;
     if (b.closest('.month-day, .month-top, .free-slot, .busy-name, .cal-switch, .list-row')) return;
     const r = b.getBoundingClientRect();
     if (r.width === 0) return;
-    if (r.height < 40 || r.width < 40) {
+    // A calendar day is as narrow as seven columns of the window allow; it keeps a 40 px height.
+    const narrowDay = b.classList.contains('day-cell');
+    if (r.height < 40 || (!narrowDay && r.width < 40)) {
       bad.push([
         'small', b.textContent.trim().slice(0, 20), Math.round(r.width), Math.round(r.height)
       ]);
@@ -116,6 +134,13 @@ def _phone(page: Page) -> bool:
 def _menu(page: Page, item: str) -> None:
     page.locator("#menu-btn").click()
     page.locator(item).click()
+
+
+def _menu_lists(page: Page) -> None:
+    if _phone(page):
+        page.locator("#tabbar [data-tab='lists']").click()
+    else:
+        page.locator("#todo-btn").click()
 
 
 def _view(page: Page, view: str) -> None:
@@ -265,3 +290,46 @@ def test_every_screen_fits_and_its_buttons_are_reachable(
             except Exception as err:  # the screen could not be reached at this size
                 problems.append(f"{name}: could not open ({type(err).__name__}: {str(err)[:120]})")
     assert not problems, f"at {width}x{height}:\n" + "\n".join(problems)
+
+
+@pytest.mark.parametrize(("width", "height"), [(320, 640), (390, 844)])
+def test_lists_entry_line_fits_and_adds_an_item(
+    stack_full: Stack, browser: Browser, width: int, height: int
+) -> None:
+    """0.7.3: the entry line of a list is inside the window, and Aggiungi really adds the entry."""
+    with _device(browser, width, height) as page:
+        _open(page, stack_full)
+        _menu_lists(page)
+        overlay = page.locator("#todo-overlay")
+        expect(overlay).to_be_visible(timeout=3000)
+        entry = overlay.locator(".todo-add")
+        expect(entry).to_be_visible(timeout=5000)
+        entry.locator("input").fill("Latte di prova")
+        entry.locator("button[type='submit']").click()
+        expect(overlay.get_by_text("Latte di prova", exact=True)).to_be_visible(timeout=5000)
+        problems = page.evaluate(CHECK_JS)
+        assert not problems, f"at {width}x{height}: {problems}"
+
+
+def test_shift_calendar_last_day_is_reachable_at_320(stack_full: Stack, browser: Browser) -> None:
+    """0.7.3: at 320 px the days of the month fit the window sideways; the last one can be scrolled
+    to and tapped."""
+    with _device(browser, 320, 640) as page:
+        _open(page, stack_full)
+        _menu(page, "#menu-shifts")
+        expect(page.locator("#shifts-overlay")).to_be_visible(timeout=3000)
+        page.locator("#tab-calendar").click()
+        cells = page.locator("#shifts-calendar .day-cell")
+        expect(cells.first).to_be_visible(timeout=3000)
+        last = cells.last
+        last.scroll_into_view_if_needed()
+        box = last.bounding_box()
+        assert box is not None
+        hit = page.evaluate(
+            "([x, y]) => { const e = document.elementFromPoint(x, y);"
+            " return e ? e.closest('.day-cell') !== null : false; }",
+            [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2],
+        )
+        assert hit, "the last day is covered by something else"
+        problems = page.evaluate(CHECK_JS)
+        assert not problems, problems

@@ -1,5 +1,16 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.3
+
+Correzioni sul telefono (nessuna funzione nuova).
+
+- Liste: la riga «Scrivi una voce…» resta dentro la finestra; su telefono il pulsante Aggiungi va
+  sotto la riga, a tutta larghezza.
+- Turni → Calendario: sette colonne di pari larghezza che entrano nella finestra anche a 320 px; i
+  giorni 1–30 si vedono scorrendo in verticale e si toccano.
+- Test: ogni campo, pulsante e giorno della finestra resta dentro i suoi bordi, a 320, 360, 390,
+  430, 768 e 1024 px; la prova delle Liste scrive una voce e preme Aggiungi.
+
 ## 0.7.2
 
 - Vacanze scolastiche, vacanze d'asilo e festività: un giorno di vacanza compare su ogni suo giorno
