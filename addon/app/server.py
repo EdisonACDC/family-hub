@@ -42,6 +42,9 @@ from .waste import default_waste_types, type_of, types_from_trashcard
 
 LOGGER = logging.getLogger(__name__)
 
+# The languages the page has text for; anything else falls back to English.
+SUPPORTED_LANGUAGES = ("it", "de", "en")
+
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_ICS_BYTES = 5 * 1024 * 1024
 SUMMARY_KEYS = (
@@ -563,6 +566,23 @@ class Hub:
         calendars = await self.family_calendars()
         return list(calendars[0]["persons"]) if calendars else []
 
+    async def language(self) -> str:
+        """The page's language: the family's own once it is chosen, else Home Assistant's, else
+        English. Never a fixed language."""
+        try:
+            config = await self.ha.call("family_hub/config/get")
+        except HAError:
+            config = {}
+        family = str((config.get("family") or {}).get("language") or "").lower()
+        if family in SUPPORTED_LANGUAGES:
+            return family
+        try:
+            info = await self.ha.call("family_hub/info")
+        except HAError:
+            info = {}
+        home = str(info.get("language") or "").split("-")[0].lower()
+        return home if home in SUPPORTED_LANGUAGES else "en"
+
     async def theme(self) -> str:
         """The screen theme chosen in the setup guide ("auto" when unknown)."""
         try:
@@ -822,6 +842,7 @@ class Hub:
                     {
                         "type": "theme",
                         "theme": theme,
+                        "language": await self.language(),
                         "time_format": await self.time_format(),
                         "first_weekday": await self.first_weekday(),
                         "week_from_today": await self.week_from_today(),
@@ -1122,6 +1143,7 @@ async def _ws_handler(request: web.Request) -> web.WebSocketResponse:
         {
             "type": "theme",
             "theme": await hub.theme(),
+            "language": await hub.language(),
             "time_format": await hub.time_format(),
             "first_weekday": await hub.first_weekday(),
             "week_from_today": await hub.week_from_today(),

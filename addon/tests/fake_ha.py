@@ -187,7 +187,8 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.7.7b1"
+    integration_version = "0.7.7b2"
+    ha_language = "it"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
     configured = True
@@ -335,7 +336,11 @@ class FakeHA:
                 ws,
                 msg_id,
                 True,
-                {"version": self.integration_version, "configured": self.configured},
+                {
+                    "version": self.integration_version,
+                    "configured": self.configured,
+                    "language": self.ha_language,
+                },
             )
         elif kind == "family_hub/config/get":
             await self._reply(ws, msg_id, True, copy.deepcopy(self.config))

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import time
 from collections.abc import Iterator
 from datetime import date, datetime, timedelta
@@ -200,38 +201,39 @@ def test_adult_completes_the_guide_and_the_data_is_saved(
     tablet.goto(stack_empty.url + "/?lang=it")
     wizard = tablet.locator("#wizard-overlay")
     expect(wizard).to_be_visible(timeout=3000)
-    expect(tablet.locator("#wizard-progress")).to_have_text("Passo 1 di 6")
+    expect(tablet.locator("#wizard-progress")).to_have_text(re.compile(r"1 \D+ 6\s*$"))
 
     # 1 Famiglia
     tablet.get_by_label("Nome della famiglia").fill("Famiglia Esempio")
-    tablet.get_by_label("Lingua").select_option("de")
+    # The language stays Italian here: choosing another one switches the page at once (see
+    # test_language_0774_e2e.py), and the rest of this flow is in Italian.
     tablet.get_by_label("Paese").fill("Deutschland")
     tablet.locator("#wizard-next").click()
 
     # 2 Persone: a new install has none yet
-    expect(tablet.locator("#wizard-progress")).to_have_text("Passo 2 di 6")
+    expect(tablet.locator("#wizard-progress")).to_have_text(re.compile(r"2 \D+ 6\s*$"))
     tablet.locator("#wizard-body").get_by_role("button", name="Aggiungi").click()
     tablet.get_by_label("Nome", exact=True).last.fill("Sofia Esempio")
     tablet.get_by_label("Telefono").last.select_option("mobile_app_sofia")
     tablet.locator("#wizard-next").click()
 
     # 3 Calendari: add one
-    expect(tablet.locator("#wizard-progress")).to_have_text("Passo 3 di 6")
+    expect(tablet.locator("#wizard-progress")).to_have_text(re.compile(r"3 \D+ 6\s*$"))
     tablet.locator("#wizard-body").get_by_role("button", name="Aggiungi").click()
     tablet.get_by_label("Nome del calendario").last.fill("Sport")
     tablet.locator("#wizard-next").click()
 
     # 4 Promemoria
-    expect(tablet.locator("#wizard-progress")).to_have_text("Passo 4 di 6")
+    expect(tablet.locator("#wizard-progress")).to_have_text(re.compile(r"4 \D+ 6\s*$"))
     tablet.locator("#wizard-body .segment", has_text="15").click()
     tablet.locator("#wizard-next").click()
 
     # 5 Fonti: nothing to fill, skip it
-    expect(tablet.locator("#wizard-progress")).to_have_text("Passo 5 di 6")
+    expect(tablet.locator("#wizard-progress")).to_have_text(re.compile(r"5 \D+ 6\s*$"))
     tablet.locator("#wizard-skip").click()
 
     # 6 Schermo, then save
-    expect(tablet.locator("#wizard-progress")).to_have_text("Passo 6 di 6")
+    expect(tablet.locator("#wizard-progress")).to_have_text(re.compile(r"6 \D+ 6\s*$"))
     tablet.get_by_label("Tema").select_option("dark")
     tablet.locator("#wizard-next").click()  # "Salva"
     expect(wizard).to_be_hidden(timeout=3000)
@@ -240,7 +242,7 @@ def test_adult_completes_the_guide_and_the_data_is_saved(
     saved = stack_empty.fake.saved_configs[-1]
     assert saved["configured"] is True
     assert saved["family"]["family_name"] == "Famiglia Esempio"
-    assert saved["family"]["language"] == "de"
+    assert saved["family"]["language"] == "it"
     assert saved["family"]["country"] == "Deutschland"
     assert saved["persons"][0]["name"] == "Sofia Esempio"
     assert saved["persons"][0]["phone_notify"] == "mobile_app_sofia"
@@ -512,7 +514,7 @@ def test_sources_step_saves_the_chosen_lists(stack_full: Stack, tablet: Page) ->
         expect(tablet.locator("#wizard-overlay")).to_be_visible()
         for _ in range(4):
             tablet.locator("#wizard-next").click()
-        expect(tablet.locator("#wizard-progress")).to_have_text("Passo 5 di 6")
+        expect(tablet.locator("#wizard-progress")).to_have_text(re.compile(r"5 \D+ 6\s*$"))
         shop = tablet.get_by_label("Spesa")
         expect(shop).to_be_checked()
         shop.uncheck()

@@ -477,6 +477,9 @@ button, input, select {
   --card-bg: rgba(40,30,20,.18);
   --menu-bg: rgba(70,50,30,.55);
   --solid: #6E5C4D;
+  --bar-ink: #2b1d12;
+  --bar-shadow: rgba(255, 255, 255, 0.5);
+  --band: linear-gradient(180deg, rgba(120,102,84,.92), rgba(120,102,84,.75));
 }
 
 /* The night glass: the same tokens for the system's dark setting, and for "Scuro". */
@@ -500,6 +503,9 @@ button, input, select {
   --card-bg: rgba(2,6,23,.30);
   --menu-bg: rgba(15,23,42,.90);
   --solid: #1E293B;
+  --bar-ink: #FFFFFF;
+  --bar-shadow: rgba(0, 0, 0, 0.35);
+  --band: linear-gradient(180deg, rgba(15,23,42,.92), rgba(15,23,42,.78));
   }
 }
 :root[data-theme="dark"] {
@@ -521,6 +527,9 @@ button, input, select {
   --card-bg: rgba(2,6,23,.30);
   --menu-bg: rgba(15,23,42,.90);
   --solid: #1E293B;
+  --bar-ink: #FFFFFF;
+  --bar-shadow: rgba(0, 0, 0, 0.35);
+  --band: linear-gradient(180deg, rgba(15,23,42,.92), rgba(15,23,42,.78));
 }
 html, body { color: var(--ink); }
 body {
@@ -937,12 +946,12 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
 .status,
 #conn-text,
 .weather-now {
-  color: #2b1d12;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  color: var(--bar-ink);
+  text-shadow: 0 1px 0 var(--bar-shadow);
 }
-#clock-time { color: #2b1d12; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6); }
-.weather-now strong { color: #2b1d12; }
-.weather-days { color: #2b1d12; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5); }
+#clock-time { color: var(--bar-ink); text-shadow: 0 1px 0 var(--bar-shadow); }
+.weather-now strong { color: var(--bar-ink); }
+.weather-days { color: var(--bar-ink); text-shadow: 0 1px 0 var(--bar-shadow); }
 
 /* The event form: Start and End side by side inside the window. */
 .persons-fieldset { margin: 8px 0; }
@@ -1175,13 +1184,13 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
 .month-block { padding-bottom: 14px; }
 .month-block .month-title {
   position: sticky; top: 0; z-index: 2; margin: 0 0 6px; padding: 6px 4px;
-  background: linear-gradient(180deg, rgba(120,102,84,.92), rgba(120,102,84,.75));
+  background: var(--band);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: 12px;
 }
 .month-pad { min-height: 1px; }
 .list-month {
   position: sticky; top: 0; z-index: 2; margin: 10px 0 4px; padding: 6px 8px; color: #fff; text-transform: capitalize;
-  background: linear-gradient(180deg, rgba(120,102,84,.92), rgba(120,102,84,.75)); border-radius: 12px;
+  background: var(--band); border-radius: 12px;
 }
 .list-day { display: grid; gap: 4px; margin: 6px 0 10px; }
 .list-date { margin: 4px 4px 2px; color: #fff; font-size: 16px; text-transform: capitalize; }
@@ -1243,7 +1252,7 @@ body.reduce-transparency html::-webkit-scrollbar-thumb {
 .cal-switch .waste-icon { width: 20px; height: 20px; color: var(--chip); }
 .cal-switch > span:not(.cal-mark) { flex: 1 1 auto; }
 .period-title {
-  background: none; border: none; color: #2b1d12; font: inherit; font-size: 18px; font-weight: 700;
+  background: none; border: none; color: var(--bar-ink); font: inherit; font-size: 18px; font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; cursor: pointer;
   text-transform: capitalize; min-height: 44px; padding: 0 6px;
 }
@@ -1626,3 +1635,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .leave-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 #guide-start[hidden] { display: none !important; }
 #guide-start { margin: 12px 0 0; }
+
+/* 0.7.7b2: the primary button keeps its light face on hover and focus (the glass hover made its
+   dark text unreadable on the night glass). */
+.btn-primary:hover, .btn-primary:focus-visible { background: rgba(255,255,255,.95); }

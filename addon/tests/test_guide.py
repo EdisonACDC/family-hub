@@ -218,6 +218,7 @@ def test_theme_is_sent_on_connect_and_after_a_save() -> None:
             assert {
                 "type": "theme",
                 "theme": "dark",
+                "language": "it",
                 "time_format": "24h",
                 "first_weekday": "monday",
                 "week_from_today": True,
@@ -231,6 +232,7 @@ def test_theme_is_sent_on_connect_and_after_a_save() -> None:
             assert {
                 "type": "theme",
                 "theme": "light",
+                "language": "it",
                 "time_format": "24h",
                 "first_weekday": "monday",
                 "week_from_today": True,

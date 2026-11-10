@@ -401,11 +401,64 @@
     }
   };
 
+  // Labels written in the HTML page itself, marked with data-i18n (text) or data-i18n-attr
+  // (attribute="key"). applyStatic() in app.js sets them in the chosen language.
+  var STATIC = {
+    it: {
+      sWeek: "Settimana", sMonth: "Mese", sList: "Elenco", sMenu: "Menu", sCalendars: "Calendari",
+      sLists: "Liste", sNew: "Nuovo", sPickups: "Prossimi ritiri", sShifts: "Turni", sNotices: "Avvisi",
+      sExternal: "Calendari esterni", sReduce: "Riduci trasparenza", sDays: "Giorni",
+      sForWhom: "Per chi? Scegli le persone qui sotto.", sPeople: "Persone",
+      sReminders: "Promemoria (minuti prima, separati da virgola)", sEmptyList: "Vuoto: quelli di famiglia.",
+      sStop: "Ferma", sPerson: "Persona", sTemplates: "Modelli", sNo: "No", sYes: "Sì", sBack: "Indietro",
+      sSkipLater: "Salta, lo faccio dopo", sNext: "Avanti", sDateFormat: "gg/mm/aaaa", sView: "Vista",
+      sViews: "Viste", sWeekEvents: "Eventi della settimana", sUpcoming: "Prossimi eventi", sEvent: "Evento",
+      sClose: "Chiudi", sCancel: "Annulla", sSave: "Salva", sDone: "Fatto", sEvents: "Eventi",
+      sPlusLabel: "Nuovo evento"
+    },
+    de: {
+      sWeek: "Woche", sMonth: "Monat", sList: "Liste", sMenu: "Menü", sCalendars: "Kalender",
+      sLists: "Listen", sNew: "Neu", sPickups: "Nächste Abholungen", sShifts: "Dienste", sNotices: "Hinweise",
+      sExternal: "Externe Kalender", sReduce: "Transparenz verringern", sDays: "Tage",
+      sForWhom: "Für wen? Wähle unten die Personen.", sPeople: "Personen",
+      sReminders: "Erinnerungen (Minuten vorher, durch Komma getrennt)", sEmptyList: "Leer: die der Familie.",
+      sStop: "Stopp", sPerson: "Person", sTemplates: "Vorlagen", sNo: "Nein", sYes: "Ja", sBack: "Zurück",
+      sSkipLater: "Überspringen, später", sNext: "Weiter", sDateFormat: "TT.MM.JJJJ", sView: "Ansicht",
+      sViews: "Ansichten", sWeekEvents: "Termine der Woche", sUpcoming: "Nächste Termine", sEvent: "Termin",
+      sClose: "Schließen", sCancel: "Abbrechen", sSave: "Speichern", sDone: "Erledigt", sEvents: "Termine",
+      sPlusLabel: "Neuer Termin"
+    },
+    en: {
+      sWeek: "Week", sMonth: "Month", sList: "List", sMenu: "Menu", sCalendars: "Calendars",
+      sLists: "Lists", sNew: "New", sPickups: "Upcoming pickups", sShifts: "Shifts", sNotices: "Notices",
+      sExternal: "External calendars", sReduce: "Reduce transparency", sDays: "Days",
+      sForWhom: "For whom? Choose the people below.", sPeople: "People",
+      sReminders: "Reminders (minutes before, separated by commas)", sEmptyList: "Empty: the family's ones.",
+      sStop: "Stop", sPerson: "Person", sTemplates: "Templates", sNo: "No", sYes: "Yes", sBack: "Back",
+      sSkipLater: "Skip, do it later", sNext: "Next", sDateFormat: "dd/mm/yyyy", sView: "View",
+      sViews: "Views", sWeekEvents: "Events this week", sUpcoming: "Upcoming events", sEvent: "Event",
+      sClose: "Close", sCancel: "Cancel", sSave: "Save", sDone: "Done", sEvents: "Events",
+      sPlusLabel: "New event"
+    }
+  };
+  ["it", "de", "en"].forEach(function (code) { Object.assign(UI[code], STATIC[code]); });
+  // The key of a text in any of the languages (the Italian one first), so a label drawn in one
+  // language can be found and drawn again in another.
+  var KEY_OF = {};
+  ["it", "de", "en"].forEach(function (code) {
+    Object.keys(UI[code]).forEach(function (key) {
+      var value = UI[code][key];
+      if (typeof value === "string" && !(value in KEY_OF)) KEY_OF[value] = key;
+    });
+  });
+
+  // Until the add-on tells the page the family's language, the page uses ?lang=, then the
+  // browser's, and English if neither is one it has. The family's own language then replaces it.
   function pickLang() {
     var wanted = new URLSearchParams(window.location.search).get("lang");
     if (wanted && UI[wanted]) return wanted;
-    var nav = (navigator.language || "it").slice(0, 2);
-    return UI[nav] ? nav : "it";
+    var nav = String(navigator.language || "en").slice(0, 2).toLowerCase();
+    return UI[nav] ? nav : "en";
   }
 
   // Weather: condition names as Home Assistant reports them, and the words around them.
@@ -434,6 +487,19 @@
   };
 
   var lang = pickLang();
+
+  // Words for the weather in the chosen language (English when the table lacks it).
+  function weatherWords() {
+    var table = WEATHER[lang] || WEATHER.en;
+    return {
+      now: table.now,
+      max: table.max,
+      min: table.min,
+      sources: table.sourcesWeather,
+      cond: function (c) { return (table.cond[c]) || c; }
+    };
+  }
+
   window.FH_I18N = {
     lang: lang,
     t: function (key) { return UI[lang][key] || UI.en[key] || key; },
@@ -443,12 +509,17 @@
     steps: STEPS[lang] || STEPS.en,
     stepCount: 6,
     // Words for the weather: w.now, w.max, w.min, and w.cond(condition) for its name.
-    w: {
-      now: (WEATHER[lang] || WEATHER.en).now,
-      max: (WEATHER[lang] || WEATHER.en).max,
-      min: (WEATHER[lang] || WEATHER.en).min,
-      sources: (WEATHER[lang] || WEATHER.en).sourcesWeather,
-      cond: function (c) { return ((WEATHER[lang] || WEATHER.en).cond[c]) || c; }
+    w: weatherWords(),
+    keyOf: function (text) { return Object.prototype.hasOwnProperty.call(KEY_OF, text) ? KEY_OF[text] : ""; },
+    // Switches every text the page shows to another language, at once. Returns false when the
+    // language has no text here. The page redraws itself after it (see setLanguage in app.js).
+    setLang: function (code) {
+      if (!UI[code]) return false;
+      lang = code;
+      window.FH_I18N.lang = code;
+      window.FH_I18N.steps = STEPS[code] || STEPS.en;
+      window.FH_I18N.w = weatherWords();
+      return true;
     }
   };
 })();

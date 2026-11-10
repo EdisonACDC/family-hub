@@ -1,5 +1,13 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.7b2
+
+- Lingua: la pagina usa la lingua della famiglia (poi quella di Home Assistant, poi quella del
+  browser, infine l'inglese). Cambiandola nella procedura guidata, tutta la pagina cambia subito:
+  barra, viste, giorni e mesi, finestre, meteo; uscendo senza salvare torna quella salvata.
+- Tema scuro: testo della barra in alto, meteo, titolo del periodo e titolo del mese leggibili
+  (contrasto di almeno 4,5:1); il pulsante principale resta chiaro al passaggio del mouse.
+
 ## 0.7.7b1
 
 - Versione di rilascio: ogni beta ha un numero nuovo (0.7.7b1, tag v0.7.7-beta.1), uguale per

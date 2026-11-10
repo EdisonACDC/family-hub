@@ -444,7 +444,12 @@ async def ws_info(hass: HomeAssistant, connection: ActiveConnection, msg: dict[s
     integration = await async_get_integration(hass, DOMAIN)
     connection.send_result(
         msg["id"],
-        {"version": str(integration.version), "configured": _entry(hass, None) is not None},
+        {
+            "version": str(integration.version),
+            "configured": _entry(hass, None) is not None,
+            # Home Assistant's language: the page uses it until the family has chosen one.
+            "language": str(hass.config.language or ""),
+        },
     )
 
 

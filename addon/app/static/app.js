@@ -219,6 +219,7 @@
           : "";
     } else if (msg.type === "theme") {
       applyTheme(msg.theme);
+      if (msg.language && msg.language !== I.lang) setLanguage(msg.language);
       if (msg.time_format) state.timeFormat = msg.time_format;
       if (msg.first_weekday && msg.first_weekday !== state.firstWeekday) {
         state.firstWeekday = msg.first_weekday;
@@ -447,6 +448,44 @@
   }
 
   // Theme chosen in the setup guide: "light" or "dark"; "auto" follows the system.
+  // The labels written in the HTML: each text is found by its key in any language and drawn in the
+  // chosen one, so a second switch works too.
+  function applyStatic() {
+    document.documentElement.lang = I.lang;
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    var node;
+    while ((node = walker.nextNode())) {
+      var parent = node.parentElement;
+      if (!parent || parent.closest("script, style")) continue;
+      var raw = node.nodeValue;
+      var text = raw.trim();
+      if (!text) continue;
+      var key = parent.getAttribute("data-i18n") || I.keyOf(text);
+      if (!key) continue;
+      parent.setAttribute("data-i18n", key);
+      node.nodeValue = raw.replace(text, t(key));
+    }
+    ["aria-label", "title", "placeholder"].forEach(function (attr) {
+      document.querySelectorAll("[" + attr + "]").forEach(function (el) {
+        var value = el.getAttribute(attr);
+        var store = "data-i18n-" + attr;
+        var key = el.getAttribute(store) || I.keyOf(value);
+        if (!key) return;
+        el.setAttribute(store, key);
+        el.setAttribute(attr, t(key));
+      });
+    });
+  }
+
+  // Switches the whole page to another language at once: the labels, the week, the months, the
+  // weather words and any open guide are drawn again. Nothing is saved by this.
+  function setLanguage(code) {
+    if (!I.setLang(code)) return;
+    applyStatic();
+    refreshCalendars();
+    if ($("wizard-overlay") && !$("wizard-overlay").hidden) renderWizard();
+  }
+
   function applyTheme(theme) {
     var root = document.documentElement;
     if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
@@ -1406,7 +1445,10 @@
   function buildFamilyFields(box) {
     var f = I.f, fam = state.draft.family;
     box.appendChild(fieldRow(f("familyName"), textInput(fam.family_name, function (v) { fam.family_name = v; }, { maxlength: 60, required: true })));
-    box.appendChild(fieldRow(f("language"), selectInput([["it", "Italiano"], ["de", "Deutsch"], ["en", "English"]], fam.language, function (v) { fam.language = v; })));
+    box.appendChild(fieldRow(f("language"), selectInput([["it", "Italiano"], ["de", "Deutsch"], ["en", "English"]], fam.language, function (v) {
+      fam.language = v;
+      setLanguage(v);  // a preview: it goes back if the guide is left without saving
+    })));
     box.appendChild(fieldRow(f("weekday"), selectInput([["monday", f("monday")], ["sunday", f("sunday")]], fam.first_weekday, function (v) { fam.first_weekday = v; })));
     box.appendChild(fieldRow(f("timeFormat"), selectInput([["24h", f("h24")], ["12h", f("h12")]], fam.time_format, function (v) { fam.time_format = v; })));
     box.appendChild(fieldRow(f("country"), textInput(fam.country, function (v) { fam.country = v; })));
@@ -1518,7 +1560,8 @@
       };
       // What is saved: leaving without saving goes back to it (the theme is previewed live).
       state.savedTheme = config.screen.theme || "auto";
-      state.draftSnapshot = JSON.stringify(draftForSave());
+      state.savedLanguage = config.family.language || I.lang;
+      state.draftDirty = false;
       showWizard();
     }).catch(function (err) {
       showStatusNote(I.f("loadError") + " " + errorText(err));
@@ -1548,8 +1591,14 @@
 
   // Leaving the guide (the X, Esc, or a tap outside the window) never saves. Changes not yet
   // saved are asked about first; "Esci" throws them away and puts the saved theme back.
+  // A change is something the family did in the guide (a typed, chosen or clicked control inside it).
+  // Drawing the steps does not count, and nor do the guide's own buttons outside the body.
   function hasUnsavedChanges() {
-    return !!state.draft && JSON.stringify(draftForSave()) !== state.draftSnapshot;
+    return !!state.draft && !!state.draftDirty;
+  }
+
+  function markDraftChanged() {
+    state.draftDirty = true;
   }
 
   function requestClose() {
@@ -1563,6 +1612,7 @@
 
   function discardAndClose() {
     applyTheme(state.savedTheme);
+    setLanguage(state.savedLanguage);
     closeWizard();
   }
 
@@ -3748,6 +3798,7 @@
     $("confirm-cancel").textContent = I.f("confirmCancel");
     $("todos-title").textContent = I.f("listsTitle");
     $("todos-close").textContent = I.f("closeLists");
+    applyStatic();
     $("wizard-start").textContent = t("wizardStart");
     $("guide-start").textContent = I.f("guideStart");
     $("wizard-close").setAttribute("aria-label", I.f("wizardClose"));
@@ -3944,6 +3995,9 @@
     $("wizard-start").addEventListener("click", function () { state.draft = null; openWizard(0); });
     $("guide-start").addEventListener("click", function () { state.draft = null; openWizard(0); });
     $("wizard-close").addEventListener("click", requestClose);
+    ["input", "change", "click"].forEach(function (type) {
+      $("wizard-body").addEventListener(type, markDraftChanged);
+    });
     $("wizard-leave-stay").addEventListener("click", function () { $("wizard-leave").hidden = true; });
     $("wizard-leave-exit").addEventListener("click", discardAndClose);
     // A tap on the veil outside the window is a way out too (a tap inside the window is not).

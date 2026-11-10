@@ -10,6 +10,7 @@ For each screen the checks are:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date, timedelta
@@ -245,8 +246,9 @@ def _screens(stack: Stack) -> list[tuple[str, Callable[[Page], None]]]:
             expect(page.locator("#wizard-overlay")).to_be_visible(timeout=3000)
             for _ in range(step - 1):
                 page.locator("#wizard-next").click()
+            # "Passo 2 di 6" in Italian, "Schritt 2 von 6" in German: the number and the 6 count.
             expect(page.locator("#wizard-progress")).to_have_text(
-                f"Passo {step} di 6", timeout=3000
+                re.compile(rf"{step} \D+ 6\s*$"), timeout=3000
             )
 
         return run

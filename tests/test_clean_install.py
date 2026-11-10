@@ -134,7 +134,11 @@ async def test_the_version_and_setup_are_known_to_any_signed_in_user(
     await reader.send_json({"id": 1, "type": "family_hub/info"})
     reply = await reader.receive_json()
     assert reply["success"] is True
-    assert reply["result"] == {"version": str(integration.version), "configured": True}
+    assert reply["result"] == {
+        "version": str(integration.version),
+        "configured": True,
+        "language": hass.config.language,
+    }
 
     await reader.send_json({"id": 2, "type": "family_hub/config/get"})
     refused = await reader.receive_json()

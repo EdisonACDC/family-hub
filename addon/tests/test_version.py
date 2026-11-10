@@ -11,7 +11,7 @@ from app.version import ADDON_VERSION, same_version
     ("first", "second"),
     [
         ("0.7.7b1", "0.7.7-beta.1"),
-        ("0.7.7b1", "v0.7.7-beta.1"),
+        ("0.7.7b2", "v0.7.7-beta.2"),
         ("0.7.7b1", "0.7.7b1"),
         ("0.7.7", "v0.7.7"),
     ],
@@ -34,5 +34,5 @@ def test_different_versions_are_different(first: str, second: str) -> None:
 
 
 def test_the_add_on_version_is_a_beta_with_the_expected_tag() -> None:
-    assert ADDON_VERSION == "0.7.7b1"
-    assert same_version(ADDON_VERSION, "v0.7.7-beta.1")
+    assert ADDON_VERSION == "0.7.7b2"
+    assert same_version(ADDON_VERSION, "v0.7.7-beta.2")
