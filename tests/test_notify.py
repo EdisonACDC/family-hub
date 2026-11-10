@@ -25,14 +25,16 @@ from custom_components.family_hub.const import (
     OPT_PERSONS,
 )
 from custom_components.family_hub.notifier import (
-    TEST_MESSAGE,
     Delivery,
     Target,
     async_send,
     restore_delay,
+    texts_for,
 )
 from custom_components.family_hub.notify_settings import alexa_targets, echo_entities
 from custom_components.family_hub.reminders import _tablet_allowed
+
+TEST_MESSAGE = texts_for("it")["test"]
 
 PHONE = "mobile_app_pixel"
 KITCHEN = "media_player.kueche"

@@ -102,7 +102,7 @@ def _seeded(stack: Stack) -> Iterator[None]:
         ),
     ]
     pickup = stored_event(
-        "Abfuhr: Bioabfall", f"{today + timedelta(days=1)}", f"{today + timedelta(days=2)}"
+        "Abfuhr: Umido", f"{today + timedelta(days=1)}", f"{today + timedelta(days=2)}"
     )
     stack.fake.events[FAMILY].extend(added)
     stack.fake.events[WASTE].append(pickup)

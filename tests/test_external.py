@@ -33,7 +33,7 @@ BEGIN:VEVENT
 UID:rest-1
 DTSTART;VALUE=DATE:20261109
 DTEND;VALUE=DATE:20261110
-SUMMARY:Restmüll
+SUMMARY:Indifferenziato
 RRULE:FREQ=WEEKLY;BYDAY=MO
 END:VEVENT
 END:VCALENDAR
@@ -107,7 +107,7 @@ def test_recurring_and_all_day_events_are_expanded() -> None:
 
     start = datetime(2026, 11, 1, tzinfo=external.dt_util.get_default_time_zone())
     events = list(timeline.overlapping(start, start + timedelta(days=30)))
-    assert [e.summary for e in events] == ["Restmüll"] * 4
+    assert [e.summary for e in events] == ["Indifferenziato"] * 4
     assert all(not isinstance(e.start, datetime) for e in events)  # all-day: dates
 
 
@@ -271,13 +271,13 @@ BEGIN:VEVENT
 UID:r1
 DTSTART;VALUE=DATE:20261109
 DTEND;VALUE=DATE:20261110
-SUMMARY:Restmüll
+SUMMARY:Indifferenziato
 END:VEVENT
 BEGIN:VEVENT
 UID:r2
 DTSTART;VALUE=DATE:20261109
 DTEND;VALUE=DATE:20261110
-SUMMARY:Biotonne
+SUMMARY:Organico
 END:VEVENT
 END:VCALENDAR
 """
@@ -301,11 +301,11 @@ def test_waste_kinds_are_recognised_from_the_title() -> None:
         "Abfuhr: Papierabfall": "papier",
         "Abfuhr: Gelbe Tonne": "gelb",
         # Anything else is "Altro", the type without a text to look for.
-        "Glas": "altro",
+        "Glas": "glas",
         "Abfuhr": "altro",
     }
     for title, kind in cases.items():
-        assert waste_kind(title) == kind, title
+        assert waste_kind(title, "de") == kind, title
 
 
 async def test_two_pickups_on_one_day_make_one_reminder(hass: HomeAssistant, freezer: Any) -> None:
@@ -407,7 +407,7 @@ async def test_a_home_assistant_rubbish_calendar_is_announced_like_an_ics_file(
 
     async def names_on(self: Any, entity_id: str, day: Any) -> list[str]:
         asked.append((entity_id, day.isoformat()))
-        return ["Restmüll"] if day.isoformat() == "2026-11-09" else []
+        return ["Indifferenziato"] if day.isoformat() == "2026-11-09" else []
 
     monkeypatch.setattr(external.ExternalManager, "_ha_names_on", names_on)
     await _setup(

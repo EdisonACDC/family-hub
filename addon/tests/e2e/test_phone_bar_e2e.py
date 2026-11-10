@@ -66,9 +66,7 @@ def test_the_phone_bar_stays_on_screen(
                 "shift_id": "",
                 "person_ids": "",
             }
-            for i, title in enumerate(
-                ["Abfuhr: Bioabfall", "Abfuhr: Papierabfall", "Abfuhr: Gelbe Tonne"]
-            )
+            for i, title in enumerate(["Abfuhr: Umido", "Abfuhr: Carta", "Abfuhr: Plastica"])
         ],
     )
     try:

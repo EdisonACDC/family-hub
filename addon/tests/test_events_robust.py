@@ -26,7 +26,7 @@ def test_a_home_assistant_rubbish_calendar_does_not_empty_the_week() -> None:
             WASTE: {"name": "Rifiuti", "type": "rifiuti", "color": "#64748B"}
         }
         fake.events[WASTE] = [
-            stored_event("Abfuhr: Bioabfall", today.isoformat(), (today + timedelta(1)).isoformat())
+            stored_event("Abfuhr: Umido", today.isoformat(), (today + timedelta(1)).isoformat())
         ]
         fake.events[FAMILY].append(
             stored_event("Visita", f"{today} 10:00:00", f"{today} 11:00:00", "mamma")

@@ -280,8 +280,23 @@
 
   // ---- data ----------------------------------------------------------------
 
+  // Says what is missing or out of date (the integration, its setup, or a different version).
+  function loadStatus() {
+    request({ op: "status" }).then(function (status) {
+      var text = "";
+      if (status.problem === "not_installed") text = t("statusNotInstalled");
+      else if (status.problem === "not_configured") text = t("statusNotConfigured");
+      else if (status.problem === "version") {
+        text = t("statusVersion").replace("{integration}", status.integration).replace("{addon}", status.addon);
+      }
+      $("version-note").textContent = text;
+      $("version-note").hidden = !text;
+    }).catch(function () {});
+  }
+
   function refreshCalendars() {
     loadWeather();
+    loadStatus();
     request({ op: "calendars" }).then(function (calendars) {
       state.calendars = calendars;
       calendars.forEach(function (cal, index) {

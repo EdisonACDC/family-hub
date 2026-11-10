@@ -313,6 +313,7 @@ class ReminderManager:
                 channels=channels,
                 tts_entity=settings["tts_entity"],
                 tablet=_tablet_allowed(targets),
+                language=self._entry.options.get(CONF_LANGUAGE, "en"),
                 actions=reminder_actions(uid, text),
                 uid=uid,
             ),
@@ -406,6 +407,7 @@ class ReminderManager:
                         channels=send_on,
                         tts_entity=None,
                         tablet=False,
+                        language=self._entry.options.get(CONF_LANGUAGE, "en"),
                     ),
                 )
         if "tablet" in channels:
@@ -419,6 +421,7 @@ class ReminderManager:
                     channels=frozenset({"tablet"}),
                     tts_entity=None,
                     tablet=True,
+                    language=self._entry.options.get(CONF_LANGUAGE, "en"),
                 ),
             )
 

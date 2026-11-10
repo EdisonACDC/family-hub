@@ -37,7 +37,10 @@ from .const import (
     OPT_REMINDERS,
     ROLES,
     WEEKDAYS,
+    category_id_for,
     default_categories,
+    first_weekday_for,
+    language_from_home,
 )
 from .reminders import parse_hhmm
 
@@ -86,13 +89,18 @@ def _bad_time(value: Any) -> bool:
     return False
 
 
-USER_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_FAMILY_NAME): vol.All(str, vol.Length(max=60)),
-        vol.Required(CONF_LANGUAGE, default="it"): _select(LANGUAGES),
-        vol.Required(CONF_FIRST_WEEKDAY, default="monday"): _select(WEEKDAYS, "weekday"),
-    }
-)
+def user_schema(hass: Any) -> vol.Schema:
+    """The first form, with the language and the first weekday of Home Assistant as defaults."""
+    language = language_from_home(hass.config.language)
+    weekday = first_weekday_for(language, hass.config.country)
+    return vol.Schema(
+        {
+            vol.Required(CONF_FAMILY_NAME): vol.All(str, vol.Length(max=60)),
+            vol.Required(CONF_LANGUAGE, default=language): _select(LANGUAGES),
+            vol.Required(CONF_FIRST_WEEKDAY, default=weekday): _select(WEEKDAYS, "weekday"),
+        }
+    )
+
 
 PERSON_SCHEMA = vol.Schema(
     {
@@ -179,7 +187,9 @@ class FamilyHubConfigFlow(ConfigFlow, domain=DOMAIN):
                     },
                 )
 
-        return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
+        return self.async_show_form(
+            step_id="user", data_schema=user_schema(self.hass), errors=errors
+        )
 
     @staticmethod
     @callback
@@ -280,10 +290,11 @@ class FamilyHubOptionsFlow(OptionsFlow):
                 errors[CONF_NAME] = "empty_name"
             else:
                 options = self._options()
+                taken = {str(c.get("id")) for c in options.get(OPT_CATEGORIES, [])}
                 options[OPT_CATEGORIES] = [
                     *options.get(OPT_CATEGORIES, []),
                     {
-                        "id": uuid.uuid4().hex[:8],
+                        "id": category_id_for(name, taken),
                         "name": name,
                         "color": user_input[CONF_COLOR],
                     },

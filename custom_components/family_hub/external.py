@@ -38,7 +38,7 @@ from ical.calendar_stream import IcsCalendarStream
 
 from .const import CONF_LANGUAGE, DOMAIN, OPT_PERSONS, OPT_REMINDERS
 from .notifier import Delivery, async_dismiss, async_send
-from .waste import DEFAULT_WASTE_TYPES, labels_for, type_of, types_from_options
+from .waste import default_waste_types, labels_for, type_of, types_from_options
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -47,11 +47,26 @@ LOGGER = logging.getLogger(__name__)
 
 TYPES = ["rifiuti", "vacanze_scuola", "vacanze_asilo", "festivita", "altro"]
 VACATION_TYPES = {"vacanze_scuola", "vacanze_asilo", "festivita"}
-# The one line a holiday gets in a summary (Italian, as the rubbish labels are).
-VACATION_LABELS = {
-    "vacanze_scuola": "Vacanze scuola",
-    "vacanze_asilo": "Vacanze asilo",
-    "festivita": "Festività",
+# The words of a summary line, by the family's language: "Rifiuti: Organico", a holiday's name.
+SUMMARY_TEXTS: dict[str, dict[str, str]] = {
+    "it": {
+        "rubbish": "Rifiuti",
+        "vacanze_scuola": "Vacanze scuola",
+        "vacanze_asilo": "Vacanze asilo",
+        "festivita": "Festività",
+    },
+    "de": {
+        "rubbish": "Müll",
+        "vacanze_scuola": "Schulferien",
+        "vacanze_asilo": "Kita-Ferien",
+        "festivita": "Feiertag",
+    },
+    "en": {
+        "rubbish": "Waste",
+        "vacanze_scuola": "School holidays",
+        "vacanze_asilo": "Nursery holidays",
+        "festivita": "Public holiday",
+    },
 }
 MAX_BYTES = 5 * 1024 * 1024
 MAX_EVENTS = 5000
@@ -65,9 +80,10 @@ WASTE_UID_PREFIX = "ext-"
 SNOOZE_MINUTES = 60
 
 
-def waste_kind(title: str) -> str | None:
-    """The id of the default rubbish type a title belongs to ("altro" when none matches)."""
-    kind = type_of(title, DEFAULT_WASTE_TYPES)
+def waste_kind(title: str, language: str = "en") -> str | None:
+    """The id of the default rubbish type of a language a title belongs to ("altro" when none
+    matches)."""
+    kind = type_of(title, default_waste_types(language))
     return kind["id"] if kind else None
 
 
@@ -257,6 +273,10 @@ class ExternalManager:
         """The rubbish types (label, icon, text to look for, colour): the family's or defaults."""
         return types_from_options(dict(self._entry.options))
 
+    def language(self) -> str:
+        """The family's language, for the words of a summary (English if none is set)."""
+        return str(self._entry.options.get(CONF_LANGUAGE) or "en")
+
     def waste_styles(self) -> dict[str, str]:
         """The colour of each rubbish type, by id."""
         return {kind["id"]: kind["color"] for kind in self.waste_types()}
@@ -324,7 +344,8 @@ class ExternalManager:
         """The lines of the linked calendars for one day's summary: each with the persons it is
         for (none: the whole family). Rubbish reads "Rifiuti: Organico" by its type, a holiday
         is one line ("Vacanze scuola") however many of its days are today, and other titles are
-        listed as they are."""
+        listed as they are, in the family's language."""
+        words = SUMMARY_TEXTS.get(self.language(), SUMMARY_TEXTS["en"])
         lines: list[tuple[str, list[str]]] = []
         for source in [*self.sources(), *self._ha_sources()]:
             kind = str(source.get("type") or "altro")
@@ -336,9 +357,9 @@ class ExternalManager:
                 for name in names:
                     found = type_of(name, self.waste_types())
                     label = found["label"] if found else name
-                    lines.append((f"Rifiuti: {label}", persons))
-            elif kind in VACATION_LABELS:
-                lines.append((VACATION_LABELS[kind], persons))
+                    lines.append((f"{words['rubbish']}: {label}", persons))
+            elif kind in VACATION_TYPES:
+                lines.append((words[kind], persons))
             else:
                 lines.extend((name, persons) for name in names)
         return lines
@@ -507,6 +528,7 @@ class ExternalManager:
                 channels=frozenset(reminders.get("channels", [])),
                 tts_entity=None,
                 tablet=True,
+                language=str(self._entry.options.get(CONF_LANGUAGE) or "en"),
                 actions=actions,
                 uid=uid,
             ),

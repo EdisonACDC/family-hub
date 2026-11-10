@@ -12,7 +12,7 @@ import uuid
 from typing import Any
 
 from aiohttp import WSMsgType, web
-from app.waste import DEFAULT_WASTE_TYPES
+from app.waste import default_waste_types
 
 TOKEN = "test-token"
 # The config entry of the fake Family Hub: its calendars' unique ids start with it, as the
@@ -177,7 +177,7 @@ ECHO_SPEAKERS = ["media_player.kueche", "media_player.wohnzimmer"]
 
 
 WASTE_KINDS = {
-    "restmuell": {"label": "Restmüll", "icon": "trash", "color": "#374151"},
+    "restmuell": {"label": "Indifferenziato", "icon": "trash", "color": "#374151"},
     "bio": {"label": "Bio", "icon": "leaf", "color": "#8B5A2B"},
     "papier": {"label": "Papier", "icon": "paper", "color": "#2563EB"},
     "gelb": {"label": "Gelber Sack", "icon": "bag", "color": "#EAB308"},
@@ -186,13 +186,19 @@ WASTE_KINDS = {
 
 
 class FakeHA:
+    # The integration version the fake answers with; a test changes it to make a mismatch.
+    integration_version = "0.7.5"
+    # Set to False to act as if the integration is not installed (the command is unknown).
+    integration_installed = True
+    configured = True
+
     def __init__(self, calendars: bool = True) -> None:
         self.calls: list[dict[str, Any]] = []
         self.notify_saves: list[dict[str, Any]] = []
         self.notify_tests: list[dict[str, Any]] = []
         # External calendars (ICS): id -> the calendar as the integration keeps it.
         self.ics: dict[str, dict[str, Any]] = {}
-        self.waste_types: list[dict[str, str]] = [dict(t) for t in DEFAULT_WASTE_TYPES]
+        self.waste_types: list[dict[str, str]] = [dict(t) for t in default_waste_types("it")]
         self.waste_styles: dict[str, str] = {t["id"]: t["color"] for t in self.waste_types}
         # Dashboards (url_path -> configuration); None is the default dashboard.
         self.dashboards: dict[str | None, dict[str, Any]] = {None: {"views": []}}
@@ -324,6 +330,13 @@ class FakeHA:
         elif kind == "get_services":
             notify = {name: {} for name in self.notify_services}
             await self._reply(ws, msg_id, True, {"notify": notify})
+        elif kind == "family_hub/info" and self.integration_installed:
+            await self._reply(
+                ws,
+                msg_id,
+                True,
+                {"version": self.integration_version, "configured": self.configured},
+            )
         elif kind == "family_hub/config/get":
             await self._reply(ws, msg_id, True, copy.deepcopy(self.config))
         elif kind == "family_hub/config/save":

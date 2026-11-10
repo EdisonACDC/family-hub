@@ -182,7 +182,7 @@ def _list_events(stack: Stack) -> Iterator[None]:
     styles[WASTE] = {"name": "Rifiuti", "type": "rifiuti", "color": "#64748B", "persons": []}
     waste_before = list(fake.events.get(WASTE, []))
     fake.events[WASTE] = [
-        stored_event("Abfuhr: Bioabfall", d3.isoformat(), (d3 + timedelta(1)).isoformat())
+        stored_event("Abfuhr: Umido", d3.isoformat(), (d3 + timedelta(1)).isoformat())
     ]
     fake.events[FAMILY].append(family)
     fake.events[SCHOOL].append(school)

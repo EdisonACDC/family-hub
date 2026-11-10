@@ -171,7 +171,8 @@ class FamilyHubCalendar(CalendarEntity):
         # The device keeps the calendars together; its name is not added to the friendly name
         # (has_entity_name is off), so the name shown is the one the family chose.
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry_id)}, name="Family Hub")
-        self._stem = "".join(ch if ch.isalnum() else "_" for ch in category["name"].lower()).strip(
+        # The category id, cleaned, for the proposed entity id (see suggested_object_id).
+        self._stem = "".join(ch if ch.isalnum() else "_" for ch in self.category_id.lower()).strip(
             "_"
         )
         self._persons = [dict(person) for person in persons or []]
@@ -243,7 +244,9 @@ class FamilyHubCalendar(CalendarEntity):
 
     @property
     def suggested_object_id(self) -> str:
-        """calendar.family_hub_<name>, as before, while the name shown is the category's."""
+        """The entity id proposed when the calendar is first made: Home Assistant puts the device's
+        name (Family Hub) in front, so the id is calendar.family_hub_<category id>. A taken id gets
+        a number from Home Assistant; the code never depends on the id."""
         return self._stem
 
     async def async_get_events(

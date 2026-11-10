@@ -182,7 +182,7 @@ def test_rubbish_pickups_carry_their_kind_and_colour() -> None:
             key = f"calendar.family_hub_ext_{source_id}"
             fake.events[key] = [
                 {
-                    "summary": "Restmüll, Biotonne",
+                    "summary": "Indifferenziato, Organico",
                     "start": "2026-11-09",
                     "end": "2026-11-10",
                     "location": "",

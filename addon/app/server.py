@@ -37,7 +37,8 @@ from .access import (
 )
 from .ha_link import HAClient, HAError
 from .notify import echo_speakers, phone_services, settings_of
-from .waste import DEFAULT_WASTE_TYPES, type_of, types_from_trashcard
+from .version import ADDON_VERSION
+from .waste import default_waste_types, type_of, types_from_trashcard
 
 LOGGER = logging.getLogger(__name__)
 
@@ -156,6 +157,22 @@ class Hub:
 
     async def _states(self) -> list[dict[str, Any]]:
         return list(await self.ha.call("get_states"))
+
+    async def status(self) -> dict[str, Any]:
+        """What is missing or out of date, so the page can say it. ``problem`` is None when all is
+        well; "not_installed" (no integration answers), "not_configured" (no family yet), or
+        "version" (the integration and the add-on are different versions)."""
+        try:
+            info = await self.ha.call("family_hub/info")
+        except HAError:
+            return {"addon": ADDON_VERSION, "integration": None, "problem": "not_installed"}
+        integration = str(info.get("version") or "")
+        problem: str | None = None
+        if not info.get("configured"):
+            problem = "not_configured"
+        elif integration != ADDON_VERSION:
+            problem = "version"
+        return {"addon": ADDON_VERSION, "integration": integration, "problem": problem}
 
     async def hub_calendars(self) -> dict[str, dict[str, str]]:
         """The calendars Family Hub made, by entity id, read from the entity registry.
@@ -286,7 +303,8 @@ class Hub:
     async def ics_info(self) -> dict[str, Any]:
         """The external calendars Family Hub keeps, and the colour of each rubbish kind.
         Empty if Home Assistant cannot say."""
-        defaults = [dict(t) for t in DEFAULT_WASTE_TYPES]
+        # Without Home Assistant the defaults are English; with it, the integration answers.
+        defaults = default_waste_types("en")
         try:
             result = await self.ha.call("family_hub/ics/list")
         except HAError:
@@ -725,7 +743,7 @@ class Hub:
                 }
                 if calendar.get("type") == "rifiuti":
                     # Shown as the type's label and icon ("Organico" with a flower).
-                    types = calendar.get("waste_types") or DEFAULT_WASTE_TYPES
+                    types = calendar.get("waste_types") or default_waste_types("en")
                     kind = type_of(str(raw.get("summary", "")), types)
                     if kind is not None:
                         item["waste"] = kind["id"]
@@ -783,6 +801,8 @@ class Hub:
                 return {"ok": True, "result": identity.as_dict()}
             if op == "calendars":
                 return {"ok": True, "result": await self.calendars()}
+            if op == "status":
+                return {"ok": True, "result": await self.status()}
             if op == "events":
                 start, end = str(request["start"]), str(request["end"])
                 return {"ok": True, "result": await self.events(start, end, identity)}

@@ -360,7 +360,7 @@
     it: {
       today: "Oggi", prevWeek: "Settimana precedente", nextWeek: "Settimana successiva",
       newEvent: "Nuovo evento", connected: "Collegato", offline: "Non collegato, riprovo…",
-      noCalendars: "Nessun calendario Family Hub. Avvia la procedura guidata dal pulsante qui sotto.", hubUnreachable: "Family Hub non raggiungibile. Riprova tra poco.",
+      noCalendars: "Nessun calendario Family Hub. Avvia la procedura guidata dal pulsante qui sotto.", hubUnreachable: "Family Hub non raggiungibile. Riprova tra poco.", statusNotInstalled: "Family Hub: l'integrazione non risponde. Se l'hai appena installata, riavvia Home Assistant e completa la configurazione in Impostazioni › Dispositivi e servizi; altrimenti installa o aggiorna l'integrazione Family Hub.", statusNotConfigured: "Family Hub non è ancora configurata: completa l'installazione dell'integrazione in Home Assistant.", statusVersion: "Versioni diverse: integrazione {integration}, add-on {addon}. Aggiorna entrambe alla stessa versione.",
       noEvents: "Nessun evento", allDay: "Tutto il giorno", cancel: "Annulla", save: "Salva",
       title: "Titolo", calendar: "Calendario", date: "Data", start: "Inizio", end: "Fine",
       wholeDay: "Tutto il giorno", required: "Scrivi un titolo e scegli un calendario.",
@@ -374,7 +374,7 @@
     de: {
       today: "Heute", prevWeek: "Vorherige Woche", nextWeek: "Nächste Woche",
       newEvent: "Neuer Termin", connected: "Verbunden", offline: "Nicht verbunden, neuer Versuch…",
-      noCalendars: "Kein Family-Hub-Kalender. Starte die Anleitung über den Knopf unten.", hubUnreachable: "Family Hub nicht erreichbar. Bitte gleich noch einmal versuchen.",
+      noCalendars: "Kein Family-Hub-Kalender. Starte die Anleitung über den Knopf unten.", hubUnreachable: "Family Hub nicht erreichbar. Bitte gleich noch einmal versuchen.", statusNotInstalled: "Family Hub: Die Integration antwortet nicht. Wenn du sie gerade installiert hast, starte Home Assistant neu und schließe die Einrichtung unter Einstellungen › Geräte & Dienste ab; sonst installiere oder aktualisiere die Family-Hub-Integration.", statusNotConfigured: "Family Hub ist noch nicht eingerichtet: Schließe die Einrichtung der Integration in Home Assistant ab.", statusVersion: "Verschiedene Versionen: Integration {integration}, Add-on {addon}. Aktualisiere beide auf dieselbe Version.",
       noEvents: "Keine Termine", allDay: "Ganztägig", cancel: "Abbrechen", save: "Speichern",
       title: "Titel", calendar: "Kalender", date: "Datum", start: "Beginn", end: "Ende",
       wholeDay: "Ganztägig", required: "Bitte Titel eingeben und Kalender wählen.",
@@ -388,7 +388,7 @@
     en: {
       today: "Today", prevWeek: "Previous week", nextWeek: "Next week",
       newEvent: "New event", connected: "Connected", offline: "Not connected, retrying…",
-      noCalendars: "No Family Hub calendar yet. Start the guided setup with the button below.", hubUnreachable: "Family Hub is not reachable. Try again in a moment.",
+      noCalendars: "No Family Hub calendar yet. Start the guided setup with the button below.", hubUnreachable: "Family Hub is not reachable. Try again in a moment.", statusNotInstalled: "Family Hub: the integration is not answering. If you have just installed it, restart Home Assistant and finish the setup under Settings › Devices & services; otherwise install or update the Family Hub integration.", statusNotConfigured: "Family Hub is not set up yet: finish the integration's setup in Home Assistant.", statusVersion: "Different versions: integration {integration}, add-on {addon}. Update both to the same version.",
       noEvents: "No events", allDay: "All day", cancel: "Cancel", save: "Save",
       title: "Title", calendar: "Calendar", date: "Date", start: "Start", end: "End",
       wholeDay: "All day", required: "Enter a title and choose a calendar.",

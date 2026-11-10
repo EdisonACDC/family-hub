@@ -12,37 +12,56 @@ import re
 import unicodedata
 from typing import Any
 
-DEFAULT_WASTE_TYPES: list[dict[str, str]] = [
-    {
-        "id": "restmuell",
-        "label": "Indifferenziato",
-        "icon": "mdi:trash-can-outline",
-        "pattern": "Restabfall, Restmüll",
-        "color": "#9E9E9E",
-    },
-    {
-        "id": "bio",
-        "label": "Organico",
-        "icon": "mdi:flower",
-        "pattern": "Bioabfall, Bio",
-        "color": "#8BC34A",
-    },
-    {
-        "id": "gelb",
-        "label": "Plastica",
-        "icon": "mdi:recycle",
-        "pattern": "Gelbe Tonne, Gelber Sack, Wertstoff",
-        "color": "#FFC107",
-    },
-    {
-        "id": "papier",
-        "label": "Carta",
-        "icon": "mdi:newspaper-variant",
-        "pattern": "Papierabfall, Papier",
-        "color": "#3F51B5",
-    },
-    {"id": "altro", "label": "Altro", "icon": "mdi:dump-truck", "pattern": "", "color": "#9C27B0"},
+# The same rubbish types in every language: the id, icon and colour are shared, the label and
+# the texts to look for are not. The family's language picks the list (English if unknown).
+_SHARED_KINDS = [
+    ("restmuell", "mdi:trash-can-outline", "#9E9E9E"),
+    ("bio", "mdi:flower", "#8BC34A"),
+    ("gelb", "mdi:recycle", "#FFC107"),
+    ("papier", "mdi:newspaper-variant", "#3F51B5"),
+    ("glas", "mdi:bottle-wine-outline", "#009688"),
+    ("altro", "mdi:dump-truck", "#9C27B0"),
 ]
+_LABELS: dict[str, list[tuple[str, str]]] = {
+    "it": [
+        ("Indifferenziato", "Indifferenziat, Secco, Residuo"),
+        ("Organico", "Organico, Umido, Frazione organica"),
+        ("Plastica", "Plastica, Multimateriale, Imballaggi"),
+        ("Carta", "Carta, Cartone"),
+        ("Vetro", "Vetro"),
+        ("Altro", ""),
+    ],
+    "de": [
+        ("Restmüll", "Restabfall, Restmüll"),
+        ("Biomüll", "Bioabfall, Biomüll, Bio"),
+        ("Gelbe Tonne", "Gelbe Tonne, Gelber Sack, Wertstoff"),
+        ("Papier", "Papierabfall, Papier"),
+        ("Glas", "Glas, Glascontainer"),
+        ("Sonstiges", ""),
+    ],
+    "en": [
+        ("General waste", "General waste, Residual, Rubbish, Black bin"),
+        ("Food waste", "Food waste, Organic, Compost, Green bin"),
+        ("Recycling", "Recycling, Plastic, Packaging, Yellow bin"),
+        ("Paper", "Paper, Cardboard"),
+        ("Glass", "Glass"),
+        ("Other", ""),
+    ],
+}
+
+
+def _kinds_for(language: str) -> list[dict[str, str]]:
+    labels = _LABELS.get(language, _LABELS["en"])
+    return [
+        {"id": kind_id, "label": label, "icon": icon, "pattern": pattern, "color": color}
+        for (kind_id, icon, color), (label, pattern) in zip(_SHARED_KINDS, labels, strict=True)
+    ]
+
+
+def default_waste_types(language: str) -> list[dict[str, str]]:
+    """The default rubbish types in the family's language ("it", "de" or "en")."""
+    return _kinds_for(language)
+
 
 NAMED_COLORS = {
     "red": "#F44336",
@@ -103,9 +122,9 @@ def type_of(title: str, types: list[dict[str, str]]) -> dict[str, str] | None:
     return fallback
 
 
-def waste_kind(title: str) -> str | None:
-    """The id of the default type of a title."""
-    kind = type_of(title, DEFAULT_WASTE_TYPES)
+def waste_kind(title: str, language: str = "en") -> str | None:
+    """The id of the default type of a language a title belongs to."""
+    kind = type_of(title, default_waste_types(language))
     return kind["id"] if kind else None
 
 

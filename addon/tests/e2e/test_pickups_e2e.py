@@ -37,10 +37,10 @@ def test_next_pickups_row_shows_label_icon_and_when(stack_full: Stack, tablet: P
         key,
         "ritiri",
         [
-            _pickup("Abfuhr: Bioabfall", today),
-            _pickup("Abfuhr: Papierabfall", today + timedelta(days=1)),
-            _pickup("Abfuhr: Gelbe Tonne", today + timedelta(days=3)),
-            _pickup("Abfuhr: Restabfall", today + timedelta(days=12)),  # too far: not shown
+            _pickup("Abfuhr: Umido", today),
+            _pickup("Abfuhr: Carta", today + timedelta(days=1)),
+            _pickup("Abfuhr: Plastica", today + timedelta(days=3)),
+            _pickup("Abfuhr: Indifferenziato", today + timedelta(days=12)),  # too far: not shown
         ],
     )
     try:
@@ -60,7 +60,7 @@ def test_next_pickups_row_shows_label_icon_and_when(stack_full: Stack, tablet: P
             expect(chips.nth(i).locator(".waste-icon.mdi svg path")).to_have_count(1)
         # The week shows the label too, not the raw title.
         expect(tablet.locator(".event.allday", has_text="Organico")).to_be_visible()
-        expect(tablet.locator(".event.allday", has_text="Abfuhr: Bioabfall")).to_have_count(0)
+        expect(tablet.locator(".event.allday", has_text="Abfuhr: Umido")).to_have_count(0)
         _shot(tablet, "tablet_next_pickups")
     finally:
         _remove_rubbish_calendar(stack_full, key, "ritiri")
@@ -71,7 +71,7 @@ def test_a_home_assistant_rubbish_calendar_feeds_the_row(stack_full: Stack, tabl
     styles = stack_full.fake.config["sources"].setdefault("calendar_styles", {})
     styles[WASTE] = {"name": "Rifiuti", "type": "rifiuti", "color": "#64748B"}
     old = stack_full.fake.events.get(WASTE, [])
-    stack_full.fake.events[WASTE] = [_pickup("Abfuhr: Papierabfall", today + timedelta(days=2))]
+    stack_full.fake.events[WASTE] = [_pickup("Abfuhr: Carta", today + timedelta(days=2))]
     try:
         tablet.goto(stack_full.url + "/?lang=it")
         chip = tablet.locator("#pickups .pickup-chip", has_text="Carta")
@@ -85,7 +85,7 @@ def test_a_home_assistant_rubbish_calendar_feeds_the_row(stack_full: Stack, tabl
 def test_on_the_phone_the_next_pickups_are_in_the_menu(stack_full: Stack, browser: Browser) -> None:
     today = date.today()
     key = "calendar.family_hub_ext_riga"
-    titles = ["Abfuhr: Bioabfall", "Abfuhr: Papierabfall", "Abfuhr: Gelbe Tonne"]
+    titles = ["Abfuhr: Umido", "Abfuhr: Carta", "Abfuhr: Plastica"]
     _add_rubbish_calendar(
         stack_full,
         key,
@@ -118,7 +118,7 @@ def test_on_the_phone_the_next_pickups_are_in_the_menu(stack_full: Stack, browse
 def test_a_type_name_that_does_not_fit_shows_only_the_icon(stack_full: Stack, tablet: Page) -> None:
     today = date.today()
     key = "calendar.family_hub_ext_pillola"
-    _add_rubbish_calendar(stack_full, key, "pillola", [_pickup("Abfuhr: Restabfall", today)])
+    _add_rubbish_calendar(stack_full, key, "pillola", [_pickup("Abfuhr: Indifferenziato", today)])
     try:
         tablet.goto(stack_full.url + "/?lang=it")
         pill = tablet.locator(".event.waste-pill[aria-label='Indifferenziato']")
@@ -137,6 +137,6 @@ def test_a_type_name_that_does_not_fit_shows_only_the_icon(stack_full: Stack, ta
         pill.click()
         card = tablet.locator("#card-overlay")
         expect(card.locator(".card-title")).to_have_text("Indifferenziato")
-        expect(card.locator(".card-raw")).to_have_text("Abfuhr: Restabfall")
+        expect(card.locator(".card-raw")).to_have_text("Abfuhr: Indifferenziato")
     finally:
         _remove_rubbish_calendar(stack_full, key, "pillola")

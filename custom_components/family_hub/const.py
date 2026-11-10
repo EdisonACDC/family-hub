@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
+import uuid
 from typing import Any, Final
 
 DOMAIN: Final = "family_hub"
@@ -60,6 +63,33 @@ DEFAULT_CATEGORIES: Final[list[dict[str, str]]] = [
     {"id": "dottore", "name": "Dottore", "color": "#EF4444"},
     {"id": "compleanni", "name": "Compleanni", "color": "#F59E0B"},
 ]
+
+
+def category_id_for(name: str, taken: set[str]) -> str:
+    """A readable id for a new category, from its name: "Sport" becomes "sport", so its calendar is
+    calendar.family_hub_sport. A number is added when the id is taken; a name with no letters
+    gets a random id."""
+    text = unicodedata.normalize("NFKD", name.lower()).encode("ascii", "ignore").decode("ascii")
+    base = re.sub(r"[^a-z0-9]+", "_", text).strip("_")[:24] or uuid.uuid4().hex[:8]
+    candidate, number = base, 2
+    while candidate in taken:
+        candidate = f"{base}_{number}"
+        number += 1
+    return candidate
+
+
+def language_from_home(language: str | None) -> str:
+    """The family's language as a default: Home Assistant's language when the app has it, else
+    English. Never a fixed language."""
+    code = str(language or "").split("-")[0].lower()
+    return code if code in LANGUAGES else "en"
+
+
+def first_weekday_for(language: str, country: str | None) -> str:
+    """Monday, or Sunday for the countries and languages that start the week on Sunday."""
+    if language == "en" and str(country or "").upper() in {"US", "CA", "JP", "IL"}:
+        return "sunday"
+    return "monday"
 
 
 def default_categories(language: str) -> list[dict[str, str]]:

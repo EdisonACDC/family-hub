@@ -35,7 +35,7 @@ def _seeded(stack: Stack) -> Iterator[str]:
         SCHOOL: [stored_event("Scuola", f"{day} 15:00:00", f"{day} 17:00:00", "sofia")],
     }
     waste_before = list(stack.fake.events.get(WASTE, []))
-    stack.fake.events[WASTE] = [stored_event("Restmüll", day, day)]
+    stack.fake.events[WASTE] = [stored_event("Indifferenziato", day, day)]
     for entity, events in added.items():
         stack.fake.events[entity].extend(events)
     try:
@@ -103,7 +103,7 @@ def test_a_free_slot_opens_new_event_with_date_and_time(stack_full: Stack, table
         expect(slots.nth(0)).to_have_attribute("data-from", "14:00")
         expect(slots.nth(1)).to_have_attribute("data-to", "21:00")
         # Shown, but not counted: the rubbish calendar of Home Assistant.
-        expect(dayview.locator(".day-note", has_text="Restmüll")).to_be_visible()
+        expect(dayview.locator(".day-note", has_text="Indifferenziato")).to_be_visible()
         _shot(tablet, "tablet_day_free_slots")
         slots.nth(1).click()
         form = tablet.locator("#event-form")

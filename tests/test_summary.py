@@ -111,7 +111,7 @@ async def test_rubbish_and_holidays_of_the_linked_calendars_are_in_the_summary(
 ) -> None:
     freezer.move_to(local(8))
     days = {
-        "calendar.rifiuti_bio": ["Abfuhr: Bioabfall"],
+        "calendar.rifiuti_bio": ["Umido"],
         "calendar.ferien": ["Herbstferien", "Ferien Nebenzeile"],
     }
 

@@ -24,6 +24,7 @@ from homeassistant.components.websocket_api.decorators import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.loader import async_get_integration
 
 from .config_flow import _bad_time
 from .const import (
@@ -60,7 +61,7 @@ from .const import (
 )
 from .external import TYPES as ICS_TYPES
 from .external_api import async_register_external_commands
-from .notifier import TEST_MESSAGE, announce_on_echos, phone_os, sound_data
+from .notifier import announce_on_echos, phone_os, sound_data, texts_for
 from .notify_settings import alexa_targets, available_services, echo_entities
 from .shifts import ShiftError, apply_to_future, clean_shifts
 
@@ -435,6 +436,18 @@ def _entry(hass: HomeAssistant, entry_id: str | None) -> ConfigEntry | None:
     return entries[0] if len(entries) == 1 else None
 
 
+@websocket_command({vol.Required("type"): "family_hub/info"})
+@async_response
+async def ws_info(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
+    """The integration's version and whether Family Hub is set up. Any signed-in user may ask:
+    it holds no family data. The tablet add-on uses it to say what is missing or out of date."""
+    integration = await async_get_integration(hass, DOMAIN)
+    connection.send_result(
+        msg["id"],
+        {"version": str(integration.version), "configured": _entry(hass, None) is not None},
+    )
+
+
 @require_admin
 @websocket_command({vol.Required("type"): "family_hub/config/get", vol.Optional("entry_id"): str})
 @async_response
@@ -623,10 +636,12 @@ async def ws_notify_test(
             connection.send_error(msg["id"], "no_service", "No phone is chosen")
             return
         # The test sounds as the reminders will.
+        language = str(entry.options.get(CONF_LANGUAGE) or "en")
         sound = sound_data(
-            person.get(CONF_PHONE_SOUND) or DEFAULT_PHONE_SOUND, phone_os(hass, phone)
+            person.get(CONF_PHONE_SOUND) or DEFAULT_PHONE_SOUND, phone_os(hass, phone), language
         )
-        payload: dict[str, Any] = {"title": "Family Hub", "message": TEST_MESSAGE}
+        test_text = texts_for(language)["test"]
+        payload: dict[str, Any] = {"title": "Family Hub", "message": test_text}
         if sound:
             payload["data"] = sound
         await hass.services.async_call("notify", phone, payload, blocking=True)
@@ -648,7 +663,8 @@ async def ws_notify_test(
         if not speakers:
             connection.send_error(msg["id"], "no_service", "No Echo is chosen")
             return
-        await announce_on_echos(hass, speakers, TEST_MESSAGE, volume)
+        test_text = texts_for(str(entry.options.get(CONF_LANGUAGE) or "en"))["test"]
+        await announce_on_echos(hass, speakers, test_text, volume)
         connection.send_result(msg["id"], {"sent": len(speakers)})
         return
     connection.send_error(msg["id"], "bad_request", "Unknown kind")
@@ -735,6 +751,7 @@ async def ws_summary_save(
 @callback
 def async_register_commands(hass: HomeAssistant) -> None:
     """Register the websocket commands once."""
+    async_register_command(hass, ws_info)
     async_register_command(hass, ws_config_get)
     async_register_command(hass, ws_config_save)
     async_register_command(hass, ws_shifts_save)

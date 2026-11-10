@@ -14,6 +14,15 @@
   l'annuncio parte dopo che il volume è cambiato e il volume precedente torna dopo il messaggio.
 - Procedura guidata: piede su una riga; finestra Calendari entro lo schermo con nomi lunghi.
 - CLAUDE.md: regole di prodotto (nessuna dipendenza dai nomi, dati di prova generici).
+- Lingua: la prima schermata propone la lingua di Home Assistant (inglese se non è it, de o en) e
+  il primo giorno della settimana (domenica solo per inglese degli USA, Canada, Giappone, Israele).
+  I tipi di rifiuti predefiniti, i testi di riepiloghi, annunci, notifiche e il nome del canale
+  del telefono seguono la lingua della famiglia. Nuovo tipo predefinito: vetro (Vetro, Glas, Glass).
+  Prima i tipi predefiniti erano tedeschi anche per una famiglia italiana.
+- Installazione: un nuovo calendario prende l'id calendar.family_hub_<categoria>, se libero; una
+  categoria nuova prende un id leggibile dal nome («Sport» → sport).
+- Stato: la pagina dice cosa manca o non coincide (integrazione non risponde, non ancora
+  configurata, versioni di add-on e integrazione diverse).
 
 ## 0.7.4
 

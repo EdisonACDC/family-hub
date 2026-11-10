@@ -133,7 +133,7 @@ def test_rubbish_pickups_show_their_icon_and_colour_in_the_week(
     )
     stack_full.fake.events[key] = [
         {
-            "summary": "Restmüll, Biotonne",
+            "summary": "Indifferenziato, Organico",
             "start": today,
             "end": today,
             "location": "",
@@ -225,7 +225,7 @@ def test_rubbish_types_are_edited_and_the_week_shows_the_new_label(
         "farben",
         [
             {
-                "summary": "Abfuhr: Bioabfall",
+                "summary": "Abfuhr: Umido",
                 "start": today,
                 "end": today,
                 "location": "",
@@ -239,8 +239,8 @@ def test_rubbish_types_are_edited_and_the_week_shows_the_new_label(
     try:
         _open(tablet, stack_full)
         rows = tablet.locator("#ics-body .waste-type")
-        expect(rows).to_have_count(5)
-        for i in range(5):
+        expect(rows).to_have_count(6)
+        for i in range(6):
             expect(rows.nth(i).locator(".waste-icon.mdi svg path")).to_have_count(1)
         organico = rows.nth(1)
         expect(organico.get_by_label("Etichetta")).to_have_value("Organico")

@@ -36,9 +36,6 @@ VOLUME_TOLERANCE = 0.02
 # How often the speakers' volumes are looked at while waiting for them to change.
 ECHO_POLL_SECONDS = 0.2
 
-# The text of a test message from the "Avvisi" page.
-TEST_MESSAGE = "Prova: questo è un avviso di prova di Family Hub."
-
 # Notification texts, shown on phones and tablets. Keys are language codes.
 TEXTS: dict[str, dict[str, str]] = {
     "it": {
@@ -52,6 +49,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "dismiss": "Ferma",
         "snooze_10": "Posticipa 10 min",
         "snooze_60": "Posticipa 1 ora",
+        "test": "Prova: questo è un avviso di prova di Family Hub.",
+        "channel": "Promemoria Family Hub",
+        "channel_urgent": "Promemoria Family Hub urgenti",
     },
     "de": {
         "reminder": "Erinnerung",
@@ -64,6 +64,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "dismiss": "Stopp",
         "snooze_10": "10 Min. später",
         "snooze_60": "1 Stunde später",
+        "test": "Test: Das ist eine Testmitteilung von Family Hub.",
+        "channel": "Erinnerungen Family Hub",
+        "channel_urgent": "Dringende Erinnerungen Family Hub",
     },
     "en": {
         "reminder": "Reminder",
@@ -76,6 +79,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "dismiss": "Dismiss",
         "snooze_10": "Snooze 10 min",
         "snooze_60": "Snooze 1 hour",
+        "test": "Test: this is a test message from Family Hub.",
+        "channel": "Family Hub reminders",
+        "channel_urgent": "Urgent Family Hub reminders",
     },
 }
 
@@ -125,6 +131,8 @@ class Delivery:
     tablet: bool
     actions: list[dict[str, str]] = field(default_factory=list)
     uid: str = ""
+    # The family's language: the phone's channel name follows it.
+    language: str = "en"
 
 
 async def _call(hass: HomeAssistant, domain: str, service: str, data: dict[str, Any]) -> None:
@@ -234,10 +242,6 @@ async def announce_on_echos(
         async_call_later(hass, restore_delay(message), _restore)
 
 
-ANDROID_CHANNEL = "Promemoria Family Hub"
-ANDROID_CHANNEL_URGENT = "Promemoria Family Hub urgenti"
-
-
 def phone_os(hass: HomeAssistant, service: str) -> str | None:
     """ "ios" or "android" for a notify.mobile_app_<device> service, from the Companion app's
     registration; None when it cannot be told."""
@@ -253,7 +257,7 @@ def phone_os(hass: HomeAssistant, service: str) -> str | None:
     return None
 
 
-def sound_data(level: str, os_name: str | None) -> dict[str, Any]:
+def sound_data(level: str, os_name: str | None, language: str = "en") -> dict[str, Any]:
     """The notification data that makes a reminder ring: time sensitive ("important") or
     critical. Unknown phones get both the iOS and the Android keys (each ignores the other's)."""
     if level not in ("important", "critical"):
@@ -272,7 +276,7 @@ def sound_data(level: str, os_name: str | None) -> dict[str, Any]:
                 "priority": "high",
                 "ttl": 0,
                 "importance": "high",
-                "channel": ANDROID_CHANNEL_URGENT if critical else ANDROID_CHANNEL,
+                "channel": texts_for(language)["channel_urgent" if critical else "channel"],
             }
         )
         if critical:
@@ -292,7 +296,13 @@ async def async_send(hass: HomeAssistant, delivery: Delivery) -> None:
                 data: dict[str, Any] = {"tag": delivery.notification_id}
                 if delivery.actions:
                     data["actions"] = delivery.actions
-                data.update(sound_data(target.phone_sound, phone_os(hass, target.phone_notify)))
+                data.update(
+                    sound_data(
+                        target.phone_sound,
+                        phone_os(hass, target.phone_notify),
+                        delivery.language,
+                    )
+                )
                 await _call(
                     hass,
                     "notify",
