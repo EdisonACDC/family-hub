@@ -33,3 +33,11 @@ Se Family Hub non ha ancora calendari, la procedura guidata è aperta per tutti,
 - Fonti (festività, vacanze, rifiuti) ancora non disponibili: il passo le indica come «in arrivo».
 - Non ci sono colori per persona negli eventi, né trascinamento, PIN o screensaver.
 - Eventi ricorrenti e layout per PC e telefono non sono ancora inclusi.
+
+## Support / Supporta / Unterstützen
+
+**English:** Family Hub is free. If it helps your family, you can buy me a coffee ☕ [ko-fi.com/edisonacdc](https://ko-fi.com/edisonacdc)
+
+**Italiano:** Family Hub è gratuito. Se ti aiuta in famiglia, puoi offrirmi un caffè ☕ [ko-fi.com/edisonacdc](https://ko-fi.com/edisonacdc)
+
+**Deutsch:** Family Hub ist kostenlos. Wenn es deiner Familie hilft, kannst du mir einen Kaffee spendieren ☕ [ko-fi.com/edisonacdc](https://ko-fi.com/edisonacdc)

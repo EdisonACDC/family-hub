@@ -1,5 +1,11 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.8b1
+
+- Sostegno: una voce discreta in fondo al menu (☕ Supporta il progetto) apre la pagina di
+  sostegno in una nuova scheda. Nessun popup né promemoria. Il badge e la sezione «Support» sono
+  nel README e nella documentazione dell'add-on.
+
 ## 0.7.7
 
 Versione stabile. Riassume le modifiche dalla 0.7.5 alla beta 0.7.7b3.

@@ -3801,6 +3801,7 @@
     $("todos-close").textContent = I.f("closeLists");
     applyStatic();
     $("wizard-start").textContent = t("wizardStart");
+    $("menu-support").textContent = I.f("menuSupport");
     $("guide-start").textContent = I.f("guideStart");
     $("wizard-close").setAttribute("aria-label", I.f("wizardClose"));
     $("wizard-leave-title").textContent = I.f("leaveTitle");

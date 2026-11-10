@@ -1639,3 +1639,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 /* 0.7.7b2: the primary button keeps its light face on hover and focus (the glass hover made its
    dark text unreadable on the night glass). */
 .btn-primary:hover, .btn-primary:focus-visible { background: rgba(255,255,255,.95); }
+
+/* 0.7.8b1: a discreet link at the foot of the menu. No pop-up, no reminder. */
+.support-link { display: block; margin-top: 10px; min-height: 44px; line-height: 44px;
+  text-align: center; font-size: 15px; color: var(--ink-soft); text-decoration: underline; }

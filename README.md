@@ -1,5 +1,7 @@
 # Family Hub
 
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20on%20Ko--fi-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/edisonacdc)
+
 Calendario di famiglia per Home Assistant: persone, un calendario per categoria, promemoria
 con notifiche su telefono, altoparlanti e tablet, e un pannello da parete per tablet. Tutto si
 configura dall'interfaccia, senza YAML.
@@ -106,3 +108,11 @@ pytest
 ## Licenza
 
 MIT, vedi [LICENSE](LICENSE). Changelog dell'add-on: [addon/CHANGELOG.md](addon/CHANGELOG.md).
+
+## Support / Supporta / Unterstützen
+
+**English:** Family Hub is free. If it helps your family, you can buy me a coffee ☕ [ko-fi.com/edisonacdc](https://ko-fi.com/edisonacdc)
+
+**Italiano:** Family Hub è gratuito. Se ti aiuta in famiglia, puoi offrirmi un caffè ☕ [ko-fi.com/edisonacdc](https://ko-fi.com/edisonacdc)
+
+**Deutsch:** Family Hub ist kostenlos. Wenn es deiner Familie hilft, kannst du mir einen Kaffee spendieren ☕ [ko-fi.com/edisonacdc](https://ko-fi.com/edisonacdc)
