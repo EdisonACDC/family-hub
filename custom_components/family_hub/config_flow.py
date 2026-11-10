@@ -31,6 +31,7 @@ from .const import (
     CONF_SPEAKER,
     DEFAULT_REMINDERS,
     DOMAIN,
+    LANGUAGE_NAMES,
     LANGUAGES,
     OPT_CATEGORIES,
     OPT_PERSONS,
@@ -70,6 +71,19 @@ def _select(options: list[str], translation_key: str | None = None) -> selector.
     return selector.SelectSelector(config)
 
 
+def _language_select() -> selector.SelectSelector:
+    """The languages with their own names (Italiano, Deutsch, English), not the codes."""
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[
+                selector.SelectOptionDict(value=code, label=LANGUAGE_NAMES[code])
+                for code in LANGUAGES
+            ],
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
 def _parse_offsets(text: str) -> list[int] | None:
     """Turn "30, 10" into [30, 10]. Returns None if a value is not a whole number >= 0."""
     parts = [part for part in re.split(r"[,\s]+", text.strip()) if part]
@@ -96,7 +110,7 @@ def user_schema(hass: Any) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_FAMILY_NAME): vol.All(str, vol.Length(max=60)),
-            vol.Required(CONF_LANGUAGE, default=language): _select(LANGUAGES),
+            vol.Required(CONF_LANGUAGE, default=language): _language_select(),
             vol.Required(CONF_FIRST_WEEKDAY, default=weekday): _select(WEEKDAYS, "weekday"),
         }
     )

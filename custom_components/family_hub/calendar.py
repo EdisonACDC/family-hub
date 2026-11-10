@@ -136,6 +136,7 @@ async def async_setup_entry(
     # External calendars (ICS from a link or a file) are read-only entities of their own.
     external = data.external.build_entities() if data.external else []
     _remove_orphans(hass, entry, {str(c.unique_id) for c in [*calendars, *external]})
+    _reserve_entity_ids(hass, entry, calendars)
     async_add_entities([*calendars, *external])
 
 
@@ -146,6 +147,24 @@ def _remove_orphans(hass: HomeAssistant, entry: FamilyHubConfigEntry, keep: set[
     for item in er.async_entries_for_config_entry(registry, entry.entry_id):
         if item.domain == "calendar" and item.unique_id not in keep:
             registry.async_remove(item.entity_id)
+
+
+def _reserve_entity_ids(
+    hass: HomeAssistant, entry: FamilyHubConfigEntry, calendars: list[FamilyHubCalendar]
+) -> None:
+    """Enter each new calendar in the registry as calendar.family_hub_<category id> before it is
+    added. Home Assistant adds the device's area and name to a new entity's id, so without this the
+    id depends on where the device sits. An entry that already exists keeps its id, even if the
+    family renamed it by hand. A taken id gets a number from Home Assistant."""
+    registry = er.async_get(hass)
+    for cal in calendars:
+        registry.async_get_or_create(
+            "calendar",
+            DOMAIN,
+            str(cal.unique_id),
+            config_entry=entry,
+            suggested_object_id=f"family_hub_{cal.stem}",
+        )
 
 
 class FamilyHubCalendar(CalendarEntity):
@@ -171,8 +190,9 @@ class FamilyHubCalendar(CalendarEntity):
         # The device keeps the calendars together; its name is not added to the friendly name
         # (has_entity_name is off), so the name shown is the one the family chose.
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry_id)}, name="Family Hub")
-        # The category id, cleaned, for the proposed entity id (see suggested_object_id).
-        self._stem = "".join(ch if ch.isalnum() else "_" for ch in self.category_id.lower()).strip(
+        # The category id, cleaned, for the entity id calendar.family_hub_<stem> (see
+        # _reserve_entity_ids).
+        self.stem = "".join(ch if ch.isalnum() else "_" for ch in self.category_id.lower()).strip(
             "_"
         )
         self._persons = [dict(person) for person in persons or []]
@@ -241,13 +261,6 @@ class FamilyHubCalendar(CalendarEntity):
             if as_datetime(ev.end) > now
         ]
         return min(upcoming, key=lambda ev: as_datetime(ev.start), default=None)
-
-    @property
-    def suggested_object_id(self) -> str:
-        """The entity id proposed when the calendar is first made: Home Assistant puts the device's
-        name (Family Hub) in front, so the id is calendar.family_hub_<category id>. A taken id gets
-        a number from Home Assistant; the code never depends on the id."""
-        return self._stem
 
     async def async_get_events(
         self, hass: HomeAssistant, start_date: datetime, end_date: datetime

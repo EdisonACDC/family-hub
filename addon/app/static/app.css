@@ -1545,3 +1545,10 @@ html, body { overflow-x: hidden; max-width: 100%; }
   body:has(#filters.calendars-panel:not([hidden])) #tabbar,
   body:has(#filters.calendars-panel:not([hidden])) #add-btn { visibility: hidden; }
 }
+
+/* 0.7.6-beta.2: the wizard's text fields take the full width, as the other fields do. */
+#wizard-body label:has(> input[type="text"]) { flex-direction: column; align-items: stretch; }
+#wizard-body label > input[type="text"] { width: 100%; box-sizing: border-box; }
+/* The setup link is shown only when it has a job (a `hidden` link must not show through .btn). */
+#setup-link[hidden] { display: none !important; }
+#setup-link { margin: 8px 0 0; text-decoration: none; }

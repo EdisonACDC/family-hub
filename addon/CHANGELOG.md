@@ -6,6 +6,13 @@
   schermo è troppo basso), sfondo pieno come le altre finestre, velo scuro dietro, barra in basso e
   pulsante + nascosti mentre è aperta.
 - Versione 0.7.6 di integrazione e add-on.
+- Prima che l'integrazione sia aggiunta, la pagina mostra solo il messaggio giusto con il pulsante
+  «Aggiungi integrazione» (o «Completa la configurazione»), non più due messaggi insieme.
+- Calendari: il nome dell'entità è calendar.family_hub_<categoria> anche con il dispositivo in
+  un'area; un nome cambiato a mano resta com'è.
+- Prima schermata dell'integrazione: la lingua si sceglie per nome (Italiano, Deutsch, English).
+- Procedura guidata: il campo «Nome della famiglia» occupa tutta la larghezza.
+- Pagina senza calendari ma già configurata: il pulsante della procedura guidata è visibile.
 
 ## 0.7.5
 

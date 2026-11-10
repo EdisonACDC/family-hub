@@ -24,6 +24,8 @@ OPT_CATEGORIES: Final = "categories"
 OPT_SHARED_USERS: Final = "shared_users"
 
 LANGUAGES: Final[list[str]] = ["it", "de", "en"]
+# Each language named in its own words, for the language selector (never the bare code).
+LANGUAGE_NAMES: Final[dict[str, str]] = {"it": "Italiano", "de": "Deutsch", "en": "English"}
 # Family settings, kept in the entry options since config entry version 2.
 CONF_COUNTRY: Final = "country"
 CONF_REGION: Final = "region"

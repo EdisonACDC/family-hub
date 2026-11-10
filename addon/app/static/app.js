@@ -203,7 +203,6 @@
       // tablet offers nothing either, and it is told again once the connection is there.
       var limited = msg.role === "guest" || msg.role === "pending";
       $("add-btn").hidden = limited;
-      $("wizard-start").hidden = true;  // the guide is in the menu
       $("menu-wizard").hidden = msg.role !== "adult";
       $("menu-shifts").hidden = limited;
       $("menu-notify").hidden = limited;
@@ -280,23 +279,53 @@
 
   // ---- data ----------------------------------------------------------------
 
-  // Says what is missing or out of date (the integration, its setup, or a different version).
-  function loadStatus() {
-    request({ op: "status" }).then(function (status) {
-      var text = "";
-      if (status.problem === "not_installed") text = t("statusNotInstalled");
-      else if (status.problem === "not_configured") text = t("statusNotConfigured");
-      else if (status.problem === "version") {
-        text = t("statusVersion").replace("{integration}", status.integration).replace("{addon}", status.addon);
-      }
-      $("version-note").textContent = text;
-      $("version-note").hidden = !text;
-    }).catch(function () {});
+  // Says what is missing or out of date, and offers the one button that fixes it. Only one message
+  // shows at a time: the status decides whether the calendar list is read at all (see refreshCalendars).
+  function showSetupNote(status) {
+    var note = $("version-note"), link = $("setup-link");
+    var text = "", href = "", label = "";
+    if (status && status.problem === "not_installed") {
+      text = t("statusNotInstalled");
+      href = "/config/integrations/dashboard/add?domain=family_hub";
+      label = t("addIntegrationBtn");
+    } else if (status && status.problem === "not_configured") {
+      text = t("statusNotConfigured");
+      href = "/config/integrations/integration/family_hub";
+      label = t("finishSetupBtn");
+    } else if (status && status.problem === "version") {
+      text = t("statusVersion").replace("{integration}", status.integration).replace("{addon}", status.addon);
+    }
+    note.textContent = text;
+    note.hidden = !text;
+    link.href = href || "#";
+    link.textContent = label;
+    link.hidden = !href;
+  }
+
+  function isSetupMissing(status) {
+    return !!status && (status.problem === "not_installed" || status.problem === "not_configured");
   }
 
   function refreshCalendars() {
     loadWeather();
-    loadStatus();
+    // A status that cannot be read is not a reason to stop: the calendars then say what they can.
+    request({ op: "status" }).then(function (status) {
+      showSetupNote(status);
+      if (isSetupMissing(status)) {
+        // Nothing else to say: the setup note above is the message and its button.
+        $("empty-note").hidden = true;
+        $("wizard-start").hidden = true;
+        document.body.setAttribute("data-ready", "1");  // decided: the page is ready to show its note
+        return;
+      }
+      loadCalendars();
+    }).catch(function () {
+      showSetupNote(null);
+      loadCalendars();
+    });
+  }
+
+  function loadCalendars() {
     request({ op: "calendars" }).then(function (calendars) {
       state.calendars = calendars;
       calendars.forEach(function (cal, index) {
@@ -307,15 +336,18 @@
       if (calendars.length === 0) {
         $("empty-note").textContent = t("noCalendars");
         $("empty-note").hidden = false;
-        // Opening the guide is decided by Home Assistant's "configured" flag (see openGuideIfNeeded).
+        // The guide button is there for the adults; opening it by itself is decided by openGuideIfNeeded.
+        $("wizard-start").hidden = state.role !== "adult";
       } else {
         $("empty-note").hidden = true;
+        $("wizard-start").hidden = true;
       }
       refreshEvents();
     }).catch(function () {
       // Not "no calendars": the calendars could not be read (Home Assistant or the add-on is busy).
       $("empty-note").textContent = t("hubUnreachable");
       $("empty-note").hidden = false;
+      $("wizard-start").hidden = true;
     });
   }
 
