@@ -187,10 +187,12 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.7.7b3"
+    integration_version = "0.7.7b4"
     ha_language = "it"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
+    manual: dict = {"rules": [], "extra": [], "skip": [], "moves": []}
+    saved_manual: list = []
     configured = True
 
     def __init__(self, calendars: bool = True) -> None:
@@ -331,6 +333,29 @@ class FakeHA:
         elif kind == "get_services":
             notify = {name: {} for name in self.notify_services}
             await self._reply(ws, msg_id, True, {"notify": notify})
+        elif kind == "family_hub/manual_waste/get":
+            await self._reply(
+                ws,
+                msg_id,
+                True,
+                {
+                    "schedule": self.manual,
+                    "types": [
+                        {"id": "bio", "label": "Organico"},
+                        {"id": "restmuell", "label": "Indifferenziato"},
+                    ],
+                },
+            )
+        elif kind == "family_hub/manual_waste/save":
+            rules = msg.get("schedule", {}).get("rules", [])
+            if any(rule.get("weekday") and rule.get("weekday") != "tue" for rule in rules):
+                await self._reply(
+                    ws, msg_id, False, None, error="weekday_mismatch", code="invalid_config"
+                )
+            else:
+                self.manual = msg.get("schedule")
+                self.saved_manual.append(self.manual)
+                await self._reply(ws, msg_id, True, {"schedule": self.manual})
         elif kind == "family_hub/info" and self.integration_installed:
             await self._reply(
                 ws,

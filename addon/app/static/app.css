@@ -1639,3 +1639,10 @@ html, body { overflow-x: hidden; max-width: 100%; }
 /* 0.7.7b2: the primary button keeps its light face on hover and focus (the glass hover made its
    dark text unreadable on the night glass). */
 .btn-primary:hover, .btn-primary:focus-visible { background: rgba(255,255,255,.95); }
+
+/* 0.7.7b4: rubbish pickups made by hand. Each row is one line of fields, full width on a phone. */
+.manual-title { margin: 14px 0 4px; font-size: 18px; }
+.manual-row { display: grid; gap: 8px; margin: 8px 0 12px; }
+.manual-row label { min-width: 0; }
+.manual-row input, .manual-row select { width: 100%; min-width: 0; box-sizing: border-box; }
+.manual .dialog-body { max-height: calc(100dvh - 180px); overflow-y: auto; }

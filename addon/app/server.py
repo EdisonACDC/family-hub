@@ -826,6 +826,19 @@ class Hub:
             if op == "events":
                 start, end = str(request["start"]), str(request["end"])
                 return {"ok": True, "result": await self.events(start, end, identity)}
+            if op in ("manual_get", "manual_save"):
+                identity = await self.identity_for(user_id)
+                if identity.role != ADULT:
+                    raise PermissionError(op)
+                if op == "manual_get":
+                    return {"ok": True, "result": await self.ha.call("family_hub/manual_waste/get")}
+                schedule = request.get("schedule")
+                if not isinstance(schedule, dict):
+                    raise TypeError("schedule must be an object")
+                # Home Assistant checks the pickups and refuses a schedule that cannot be used.
+                result = await self.ha.call("family_hub/manual_waste/save", schedule=schedule)
+                self.schedule_resync()
+                return {"ok": True, "result": result}
             if op in ("config_get", "config_save"):
                 identity = await self.identity_for(user_id)
                 if identity.role != ADULT:

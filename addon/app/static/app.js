@@ -1822,6 +1822,7 @@
 
   // The "Fonti" step: adults pick the to-do lists and calendars to show.
   function buildSourceFields(box) {
+    box.appendChild(button(I.f("manualOpen"), "btn", openManual));
     var f = I.f, sources = state.draft.sources;
     var status = el("p", { class: "hint" }, f("loading"));
     box.appendChild(status);
@@ -2406,6 +2407,177 @@
     state.icsMode = state.icsMode || "link";
     loadIcs();
   }
+
+  // ---- rubbish pickups made by hand ---------------------------------------------------
+  // A rule per rubbish type (weekday from the first date, frequency), then single extra dates,
+  // dates to skip and moved pickups. The integration checks it and writes the pickups out.
+
+  var MANUAL_FREQUENCIES = ["weekly", "biweekly", "four_weeks", "monthly"];
+  var MANUAL_WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  // The words for each refusal and each frequency, by their own keys (the key of a text is
+  // checked by name, so no key is built from a piece of a name).
+  var MANUAL_ERROR_KEYS = {
+    weekday_mismatch: "manualErr_weekday_mismatch", invalid_date: "manualErr_invalid_date",
+    move_not_found: "manualErr_move_not_found", type_twice: "manualErr_type_twice",
+    unknown_type: "manualErr_unknown_type", invalid_frequency: "manualErr_invalid_frequency",
+    too_many: "manualErr_too_many"
+  };
+  var MANUAL_FREQUENCY_KEYS = {
+    weekly: "manualFreq_weekly", biweekly: "manualFreq_biweekly",
+    four_weeks: "manualFreq_four_weeks", monthly: "manualFreq_monthly"
+  };
+  var manual = { types: [], extra: [], skip: [], moves: [] };
+
+  // 0 = Monday ... 6 = Sunday, for a date written YYYY-MM-DD.
+  function weekdayOf(iso) {
+    return (new Date(iso + "T12:00:00").getDay() + 6) % 7;
+  }
+
+  function openManual() {
+    $("manual-error").hidden = true;
+    $("manual-overlay").hidden = false;
+    $("manual-body").textContent = "";
+    request({ op: "manual_get" }).then(function (data) {
+      fillManual(data);
+      drawManual();
+    }).catch(showManualError);
+  }
+
+  function closeManual() { $("manual-overlay").hidden = true; }
+
+  function showManualError(err) {
+    var box = $("manual-error");
+    var code = err && err.message;
+    box.textContent = MANUAL_ERROR_KEYS.hasOwnProperty(code)
+      ? I.f(MANUAL_ERROR_KEYS[code])
+      : I.f("manualErrInvalid") + " " + errorText(err);
+    box.hidden = false;
+  }
+
+  // The stored schedule as the page edits it: one row per type, and lists of the other parts.
+  function fillManual(data) {
+    var s = data.schedule;
+    manual = {
+      types: data.types.map(function (kind) {
+        var rule = (s.rules || []).filter(function (r) { return r.type === kind.id; })[0];
+        return { id: kind.id, label: kind.label, on: !!rule,
+          frequency: rule ? rule.frequency : "weekly", first: rule ? rule.first : "" };
+      }),
+      extra: (s.extra || []).map(function (x) { return { type: x.type, date: x.date }; }),
+      skip: (s.skip || []).map(function (x) { return { type: x.type, date: x.date }; }),
+      moves: (s.moves || []).map(function (x) { return { type: x.type, from: x.from, to: x.to }; })
+    };
+  }
+
+  function typeSelect(item, withAll) {
+    var options = manual.types.map(function (kind) { return [kind.id, kind.label]; });
+    if (withAll) options.unshift(["", I.f("manualAllTypes")]);
+    return selectInput(options, item.type, function (v) { item.type = v; });
+  }
+
+  function dateInput(item, key) {
+    var input = el("input", { type: "date" });
+    input.value = item[key] || "";
+    input.addEventListener("input", function () { item[key] = input.value; });
+    return input;
+  }
+
+  function manualRow(pairs, remove) {
+    var box = el("div", { class: "manual-row" });
+    pairs.forEach(function (pair) { box.appendChild(fieldRow(pair[0], pair[1])); });
+    box.appendChild(button(I.f("manualRemove"), "btn", remove));
+    return box;
+  }
+
+  // A list of items with an "Aggiungi" button; each row is built by rowFor(item, remove).
+  function manualList(body, title, items, blank, rowFor) {
+    body.appendChild(el("h3", { class: "manual-title" }, title));
+    var holder = el("div", { class: "manual-list" });
+    body.appendChild(holder);
+    function redraw() {
+      holder.textContent = "";
+      items.forEach(function (item, index) {
+        holder.appendChild(rowFor(item, function () { items.splice(index, 1); redraw(); }));
+      });
+    }
+    body.appendChild(button(I.f("manualAdd"), "btn", function () { items.push(blank()); redraw(); }));
+    redraw();
+  }
+
+  function drawManual() {
+    var body = $("manual-body");
+    body.textContent = "";
+    body.appendChild(el("p", { class: "hint" }, I.f("manualHint")));
+    manual.types.forEach(function (kind) {
+      var card = el("fieldset", { class: "card" });
+      card.appendChild(el("legend", {}, kind.label));
+      var toggle = el("input", { type: "checkbox" });
+      toggle.checked = kind.on;
+      toggle.addEventListener("change", function () { kind.on = toggle.checked; });
+      var label = el("label", { class: "check" });
+      label.appendChild(toggle);
+      label.appendChild(document.createTextNode(" " + I.f("manualOn")));
+      card.appendChild(label);
+      card.appendChild(fieldRow(I.f("manualFrequency"),
+        selectInput(MANUAL_FREQUENCIES.map(function (f) { return [f, I.f(MANUAL_FREQUENCY_KEYS[f])]; }),
+          kind.frequency, function (v) { kind.frequency = v; })));
+      var first = dateInput(kind, "first");
+      var weekday = el("p", { class: "hint" });
+      function showWeekday() {
+        weekday.textContent = kind.first ? t("days")[weekdayOf(kind.first)] : "";
+      }
+      first.addEventListener("input", showWeekday);
+      showWeekday();
+      card.appendChild(fieldRow(I.f("manualFirst"), first));
+      card.appendChild(weekday);
+      body.appendChild(card);
+    });
+    manualList(body, I.f("manualExtra"), manual.extra,
+      function () { return { type: manual.types[0] ? manual.types[0].id : "", date: "" }; },
+      function (item, remove) {
+        return manualRow([[I.f("manualType"), typeSelect(item, false)],
+          [I.f("manualDate"), dateInput(item, "date")]], remove);
+      });
+    manualList(body, I.f("manualSkip"), manual.skip,
+      function () { return { type: "", date: "" }; },
+      function (item, remove) {
+        return manualRow([[I.f("manualType"), typeSelect(item, true)],
+          [I.f("manualDate"), dateInput(item, "date")]], remove);
+      });
+    manualList(body, I.f("manualMoved"), manual.moves,
+      function () { return { type: manual.types[0] ? manual.types[0].id : "", from: "", to: "" }; },
+      function (item, remove) {
+        return manualRow([[I.f("manualType"), typeSelect(item, false)],
+          [I.f("manualFrom"), dateInput(item, "from")], [I.f("manualTo"), dateInput(item, "to")]], remove);
+      });
+  }
+
+  function collectManual() {
+    var dated = function (list, key) { return list.filter(function (x) { return x[key]; }); };
+    return {
+      rules: manual.types.filter(function (k) { return k.on; }).map(function (k) {
+        return { type: k.id, frequency: k.frequency,
+          weekday: MANUAL_WEEKDAYS[weekdayOf(k.first)], first: k.first };
+      }),
+      extra: dated(manual.extra, "date").map(function (x) { return { type: x.type, date: x.date }; }),
+      skip: dated(manual.skip, "date").map(function (x) { return { type: x.type, date: x.date }; }),
+      moves: manual.moves.filter(function (x) { return x.from && x.to; })
+        .map(function (x) { return { type: x.type, from: x.from, to: x.to }; })
+    };
+  }
+
+  function saveManual() {
+    $("manual-error").hidden = true;
+    var missing = manual.types.some(function (k) { return k.on && !k.first; });
+    if (missing) { showManualError({ message: "invalid_date" }); return; }
+    request({ op: "manual_save", schedule: collectManual() }).then(function () {
+      closeManual();
+      showStatusNote(I.f("manualSaved"));
+      // Home Assistant rebuilds the calendar of the pickups; the page reads it again after that.
+      window.setTimeout(refreshCalendars, 2500);
+    }).catch(showManualError);
+  }
+
 
   function closeIcs() { $("ics-overlay").hidden = true; }
 
@@ -3801,6 +3973,10 @@
     $("todos-close").textContent = I.f("closeLists");
     applyStatic();
     $("wizard-start").textContent = t("wizardStart");
+    $("ics-manual-open").textContent = I.f("manualOpen");
+    $("manual-title").textContent = I.f("manualTitle");
+    $("manual-cancel").textContent = t("cancel");
+    $("manual-save").textContent = t("save");
     $("guide-start").textContent = I.f("guideStart");
     $("wizard-close").setAttribute("aria-label", I.f("wizardClose"));
     $("wizard-leave-title").textContent = I.f("leaveTitle");
@@ -3937,6 +4113,9 @@
       openNotify();
     });
     $("notify-close").addEventListener("click", closeNotify);
+    $("ics-manual-open").addEventListener("click", openManual);
+    $("manual-cancel").addEventListener("click", closeManual);
+    $("manual-save").addEventListener("click", saveManual);
     $("menu-ics").addEventListener("click", function () {
       toggleMenu(false);
       openIcs();
@@ -3981,6 +4160,7 @@
       if (e.key === "Escape" && !$("shifts-overlay").hidden) closeShifts();
       if (e.key === "Escape" && !$("event-overlay").hidden) closeForm();
       if (e.key === "Escape" && !$("wizard-overlay").hidden) requestClose();
+      if (e.key === "Escape" && !$("manual-overlay").hidden) closeManual();
     });
 
     document.querySelectorAll("#reminder-overlay [data-act]").forEach(function (button) {

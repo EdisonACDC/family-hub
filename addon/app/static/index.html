@@ -177,7 +177,23 @@
         <p class="error" id="ics-error" role="alert" hidden></p>
       </div>
       <div class="dialog-foot actions">
+        <button type="button" class="btn" id="ics-manual-open">Crea a mano</button>
         <button type="button" class="btn" id="ics-close">Chiudi</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Rubbish pickups made by hand (adults only): a rule per type, extra and skipped dates, moves -->
+  <div class="overlay" id="manual-overlay" hidden>
+    <section class="dialog notify manual" role="dialog" aria-modal="true" aria-labelledby="manual-title">
+      <h2 id="manual-title"></h2>
+      <div class="dialog-body">
+        <div id="manual-body"></div>
+        <p class="error" id="manual-error" role="alert" hidden></p>
+      </div>
+      <div class="dialog-foot actions">
+        <button type="button" class="btn" id="manual-cancel"></button>
+        <button type="button" class="btn btn-primary" id="manual-save"></button>
       </div>
     </section>
   </div>

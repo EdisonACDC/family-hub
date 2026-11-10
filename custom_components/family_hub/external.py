@@ -36,7 +36,8 @@ from homeassistant.util import dt as dt_util
 from ical.calendar import Calendar
 from ical.calendar_stream import IcsCalendarStream
 
-from .const import CONF_LANGUAGE, DOMAIN, OPT_PERSONS, OPT_REMINDERS
+from . import manual_waste
+from .const import CONF_LANGUAGE, DOMAIN, OPT_MANUAL_WASTE, OPT_PERSONS, OPT_REMINDERS
 from .notifier import Delivery, async_dismiss, async_send
 from .waste import default_waste_types, labels_for, type_of, types_from_options
 
@@ -267,7 +268,24 @@ class ExternalManager:
         await self._store.async_save(self.data)
 
     def sources(self) -> list[dict[str, Any]]:
-        return [dict(s) for s in self._entry.options.get(OPT_EXTERNAL, [])]
+        found = [dict(s) for s in self._entry.options.get(OPT_EXTERNAL, [])]
+        schedule = self.manual_schedule()
+        if schedule["rules"] or schedule["extra"] or schedule["moves"]:
+            # The pickups the family made by hand: a source like a file, with no link to refresh.
+            found.append(
+                {
+                    "id": manual_waste.SOURCE_ID,
+                    "name": manual_waste.calendar_name(self.language()),
+                    "type": "rifiuti",
+                    "manual": True,
+                }
+            )
+        return found
+
+    def manual_schedule(self) -> dict[str, Any]:
+        """The pickups made by hand, as stored (empty when there are none)."""
+        stored = self._entry.options.get(OPT_MANUAL_WASTE)
+        return dict(stored) if isinstance(stored, dict) else manual_waste.empty()
 
     def waste_types(self) -> list[dict[str, str]]:
         """The rubbish types (label, icon, text to look for, colour): the family's or defaults."""
@@ -285,6 +303,9 @@ class ExternalManager:
         return dict(self.data["status"].get(source_id, {}))
 
     def content(self, source_id: str) -> str | None:
+        if source_id == manual_waste.SOURCE_ID:
+            labels = {kind["id"]: kind["label"] for kind in self.waste_types()}
+            return manual_waste.ics_text(self.manual_schedule(), labels, today=dt_util.now().date())
         value = self.data["contents"].get(source_id)
         return value if isinstance(value, str) else None
 
