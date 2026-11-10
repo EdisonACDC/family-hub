@@ -60,6 +60,10 @@ ITALIAN_LABELS = [
     "Eventi",
     "Liste",
     "Promemoria",
+    "Sett.",
+    "Continua",
+    "Esci",
+    "Uscire senza salvare?",
 ]
 # Words that are German too: "Liste" and "Promemoria" are not Italian in a German page.
 GERMAN_WORDS = {"Liste", "Promemoria"}
@@ -108,6 +112,7 @@ def test_the_page_speaks_the_family_language_not_the_browsers(
         with _device(browser, 1024, 768) as page:
             _open(page, stack_full)
             expect(page.locator("[data-i18n='sWeek']").first).to_have_text(week, timeout=5000)
+            expect(page.locator("#view-switch [data-view='week'] .label-short")).to_have_text(week)
             expect(page.locator("[data-i18n='sMonth']").first).to_have_text(month)
             assert page.evaluate("document.documentElement.lang") == language
     finally:
@@ -159,3 +164,27 @@ def test_no_italian_label_is_left_on_any_screen(
     finally:
         _family_language(stack_full, "it")
     assert not problems, f"Italian left in {language}:\n" + "\n".join(problems)
+
+
+def test_no_italian_is_left_after_a_live_switch(stack_empty: Stack, admin_tablet: Page) -> None:
+    """Switching to German in the guide redraws the page at once: the view buttons, the guide and
+    its question about leaving are all German, and nothing drawn afterwards is Italian."""
+    stack_empty.fake.config["configured"] = False  # the guide opens by itself
+    tablet = admin_tablet
+    tablet.goto(stack_empty.url + "/?lang=it")
+    expect(tablet.locator("#wizard-overlay")).to_be_visible(timeout=3000)
+    tablet.get_by_label("Lingua").select_option("de")
+    expect(tablet.locator("#view-switch [data-view='week'] .label-short")).to_have_text("Woche")
+
+    tablet.keyboard.press("Escape")  # changes were made: the question is asked
+    expect(tablet.locator("#wizard-leave")).to_be_visible()
+    expect(tablet.locator("#wizard-leave-title")).to_have_text("Ohne Speichern verlassen?")
+    expect(tablet.locator("#wizard-leave-stay")).to_have_text("Weiter bearbeiten")
+    expect(tablet.locator("#wizard-leave-exit")).to_have_text("Verlassen")
+
+    words = [w for w in ITALIAN_LABELS if w not in GERMAN_WORDS]
+    problems = tablet.evaluate(FIND_ITALIAN_JS, words)
+    assert not problems, "\n".join(problems)
+
+    tablet.locator("#wizard-leave-exit").click()
+    expect(tablet.locator("#wizard-overlay")).to_be_hidden()

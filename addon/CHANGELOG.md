@@ -1,5 +1,11 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.7b3
+
+- Vista settimana: il pulsante nella barra segue la lingua («Woche», «Week»), anche dopo un cambio.
+- Conferma di chiusura della procedura guidata tradotta: «Ohne Speichern verlassen?», «Weiter
+  bearbeiten», «Verlassen»; «Leave without saving?», «Keep editing», «Leave».
+
 ## 0.7.7b2
 
 - Lingua: la pagina usa la lingua della famiglia (poi quella di Home Assistant, poi quella del

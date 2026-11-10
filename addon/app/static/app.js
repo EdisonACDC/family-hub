@@ -482,6 +482,7 @@
   function setLanguage(code) {
     if (!I.setLang(code)) return;
     applyStatic();
+    applyTexts();  // the view buttons and the guide's own labels, drawn from the language's words
     refreshCalendars();
     if ($("wizard-overlay") && !$("wizard-overlay").hidden) renderWizard();
   }
