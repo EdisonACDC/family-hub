@@ -1,28 +1,24 @@
 # Changelog: Family Hub UI (add-on)
 
-## 0.7.7b3
+## 0.7.7
 
-- Vista settimana: il pulsante nella barra segue la lingua («Woche», «Week»), anche dopo un cambio.
-- Conferma di chiusura della procedura guidata tradotta: «Ohne Speichern verlassen?», «Weiter
-  bearbeiten», «Verlassen»; «Leave without saving?», «Keep editing», «Leave».
+Versione stabile. Riassume le modifiche dalla 0.7.5 alla beta 0.7.7b3.
 
-## 0.7.7b2
-
-- Lingua: la pagina usa la lingua della famiglia (poi quella di Home Assistant, poi quella del
-  browser, infine l'inglese). Cambiandola nella procedura guidata, tutta la pagina cambia subito:
-  barra, viste, giorni e mesi, finestre, meteo; uscendo senza salvare torna quella salvata.
-- Tema scuro: testo della barra in alto, meteo, titolo del periodo e titolo del mese leggibili
-  (contrasto di almeno 4,5:1); il pulsante principale resta chiaro al passaggio del mouse.
-
-## 0.7.7b1
-
-- Versione di rilascio: ogni beta ha un numero nuovo (0.7.7b1, tag v0.7.7-beta.1), uguale per
-  add-on e integrazione. Il confronto tra le versioni accetta entrambe le scritture.
-- Procedura guidata: si chiude con la X in alto a destra, con Esc o con un tocco fuori dalla
-  finestra. Modifiche non salvate: «Uscire senza salvare?» (Esci / Continua). Chiudere non salva
-  nulla e rimette il tema salvato. Senza calendari la pagina offre «Avvia la procedura guidata».
-- Tema: Chiaro (vetro caldo), Scuro (vetro notturno blu-grafite), Automatico (segue il sistema).
-  La scelta si vede subito; una riga spiega le tre opzioni.
+- Calendari: il nome dell'entità è calendar.family_hub_<categoria>, anche con il dispositivo in
+  un'area; un nome cambiato a mano resta com'è. Il registro trova i calendari, non il loro nome.
+- Procedura guidata: si chiude con la X, con Esc o con un tocco fuori; con modifiche non salvate
+  chiede «Uscire senza salvare?». Chiudere non salva nulla. Senza calendari la pagina offre
+  «Avvia la procedura guidata». Il campo Nome della famiglia occupa tutta la larghezza.
+- Pagina prima dell'integrazione: un solo messaggio, con il pulsante giusto (aggiungi, o
+  completa la configurazione).
+- Lingua: la pagina usa quella della famiglia (poi Home Assistant, poi il browser, infine
+  l'inglese). Cambiandola nella procedura guidata, tutta la pagina cambia subito, e torna quella
+  salvata se si esce senza salvare. La barra, la vista settimana e la conferma sono tradotte.
+- Tema: Chiaro, Scuro e Automatico (segue il sistema). Testo della barra, meteo e titoli leggibili
+  nel tema scuro (contrasto di almeno 4,5:1).
+- Icona e logo dell'add-on: prima erano file rovinati, ora si vedono nell'elenco di Home Assistant.
+- Versioni: integrazione e add-on hanno la stessa versione; il controllo accetta sia 0.7.7 sia
+  v0.7.7-beta.N come la stessa versione.
 
 ## 0.7.6
 

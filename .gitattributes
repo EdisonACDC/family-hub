@@ -2,3 +2,8 @@
 *.sh text eol=lf
 **/services.d/**/run text eol=lf
 **/services.d/**/finish text eol=lf
+
+# Pictures are binary: Git never changes their bytes, on Windows or elsewhere.
+*.png binary
+*.jpg binary
+*.ico binary
