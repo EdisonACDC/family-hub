@@ -1,5 +1,15 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.7b1
+
+- Versione di rilascio: ogni beta ha un numero nuovo (0.7.7b1, tag v0.7.7-beta.1), uguale per
+  add-on e integrazione. Il confronto tra le versioni accetta entrambe le scritture.
+- Procedura guidata: si chiude con la X in alto a destra, con Esc o con un tocco fuori dalla
+  finestra. Modifiche non salvate: «Uscire senza salvare?» (Esci / Continua). Chiudere non salva
+  nulla e rimette il tema salvato. Senza calendari la pagina offre «Avvia la procedura guidata».
+- Tema: Chiaro (vetro caldo), Scuro (vetro notturno blu-grafite), Automatico (segue il sistema).
+  La scelta si vede subito; una riga spiega le tre opzioni.
+
 ## 0.7.6
 
 - Finestra Calendari su telefono: foglio in basso alto quanto il suo contenuto (scorre solo se lo

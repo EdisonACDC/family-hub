@@ -315,6 +315,7 @@
         // Nothing else to say: the setup note above is the message and its button.
         $("empty-note").hidden = true;
         $("wizard-start").hidden = true;
+        $("guide-start").hidden = true;
         document.body.setAttribute("data-ready", "1");  // decided: the page is ready to show its note
         return;
       }
@@ -337,17 +338,18 @@
         $("empty-note").textContent = t("noCalendars");
         $("empty-note").hidden = false;
         // The guide button is there for the adults; opening it by itself is decided by openGuideIfNeeded.
-        $("wizard-start").hidden = state.role !== "adult";
+        // It stays after the guide is closed unsaved, so the family can always start it again.
+        $("guide-start").hidden = state.role !== "adult";
       } else {
         $("empty-note").hidden = true;
-        $("wizard-start").hidden = true;
+        $("guide-start").hidden = true;
       }
       refreshEvents();
     }).catch(function () {
       // Not "no calendars": the calendars could not be read (Home Assistant or the add-on is busy).
       $("empty-note").textContent = t("hubUnreachable");
       $("empty-note").hidden = false;
-      $("wizard-start").hidden = true;
+      $("guide-start").hidden = true;
     });
   }
 
@@ -1483,7 +1485,11 @@
 
   function buildScreenFields(box) {
     var f = I.f, screen = state.draft.screen;
-    box.appendChild(fieldRow(f("theme"), selectInput([["auto", f("themeAuto")], ["light", f("themeLight")], ["dark", f("themeDark")]], screen.theme, function (v) { screen.theme = v; })));
+    box.appendChild(fieldRow(f("theme"), selectInput([["auto", f("themeAuto")], ["light", f("themeLight")], ["dark", f("themeDark")]], screen.theme, function (v) {
+      screen.theme = v;
+      applyTheme(v);  // a preview: it goes back if the guide is left without saving
+    })));
+    box.appendChild(el("p", { class: "hint" }, f("themeHelp")));
     box.appendChild(switchRow(f("weekFromToday"), screen.week_from_today !== false, function (on) { screen.week_from_today = on; }));
     box.appendChild(el("p", { class: "hint" }, f("weekFromTodayHint")));
   }
@@ -1510,6 +1516,9 @@
           calendar_styles: Object.assign({}, config.sources.calendar_styles || {})
         }
       };
+      // What is saved: leaving without saving goes back to it (the theme is previewed live).
+      state.savedTheme = config.screen.theme || "auto";
+      state.draftSnapshot = JSON.stringify(draftForSave());
       showWizard();
     }).catch(function (err) {
       showStatusNote(I.f("loadError") + " " + errorText(err));
@@ -1533,7 +1542,28 @@
 
   function closeWizard() {
     $("wizard-overlay").hidden = true;
+    $("wizard-leave").hidden = true;
     state.draft = null;
+  }
+
+  // Leaving the guide (the X, Esc, or a tap outside the window) never saves. Changes not yet
+  // saved are asked about first; "Esci" throws them away and puts the saved theme back.
+  function hasUnsavedChanges() {
+    return !!state.draft && JSON.stringify(draftForSave()) !== state.draftSnapshot;
+  }
+
+  function requestClose() {
+    if (!hasUnsavedChanges()) {
+      closeWizard();
+      return;
+    }
+    $("wizard-leave").hidden = false;
+    $("wizard-leave-stay").focus();
+  }
+
+  function discardAndClose() {
+    applyTheme(state.savedTheme);
+    closeWizard();
   }
 
   function renderWizard() {
@@ -1619,7 +1649,7 @@
   function skipWizard() {
     // "Salta": this step is left as it is. Skipping the last step closes the guide unsaved.
     if (state.wizardStep >= I.stepCount - 1) {
-      closeWizard();
+      requestClose();
     } else {
       renderWizardStep(state.wizardStep + 1);
     }
@@ -3719,6 +3749,11 @@
     $("todos-title").textContent = I.f("listsTitle");
     $("todos-close").textContent = I.f("closeLists");
     $("wizard-start").textContent = t("wizardStart");
+    $("guide-start").textContent = I.f("guideStart");
+    $("wizard-close").setAttribute("aria-label", I.f("wizardClose"));
+    $("wizard-leave-title").textContent = I.f("leaveTitle");
+    $("wizard-leave-stay").textContent = I.f("leaveStay");
+    $("wizard-leave-exit").textContent = I.f("leaveExit");
     $("prev-week").setAttribute("aria-label", t("prevWeek"));
     $("next-week").setAttribute("aria-label", t("nextWeek"));
     $("add-btn").setAttribute("aria-label", t("newEvent"));
@@ -3893,6 +3928,7 @@
       if (e.key === "Escape" && !$("todo-overlay").hidden) closeTodos();
       if (e.key === "Escape" && !$("shifts-overlay").hidden) closeShifts();
       if (e.key === "Escape" && !$("event-overlay").hidden) closeForm();
+      if (e.key === "Escape" && !$("wizard-overlay").hidden) requestClose();
     });
 
     document.querySelectorAll("#reminder-overlay [data-act]").forEach(function (button) {
@@ -3906,6 +3942,14 @@
     $("wizard-back").addEventListener("click", function () { renderWizardStep(state.wizardStep - 1); });
 
     $("wizard-start").addEventListener("click", function () { state.draft = null; openWizard(0); });
+    $("guide-start").addEventListener("click", function () { state.draft = null; openWizard(0); });
+    $("wizard-close").addEventListener("click", requestClose);
+    $("wizard-leave-stay").addEventListener("click", function () { $("wizard-leave").hidden = true; });
+    $("wizard-leave-exit").addEventListener("click", discardAndClose);
+    // A tap on the veil outside the window is a way out too (a tap inside the window is not).
+    $("wizard-overlay").addEventListener("click", function (e) {
+      if (e.target === $("wizard-overlay")) requestClose();
+    });
 
     connect();
   }

@@ -37,7 +37,7 @@ from .access import (
 )
 from .ha_link import HAClient, HAError
 from .notify import echo_speakers, phone_services, settings_of
-from .version import ADDON_VERSION
+from .version import ADDON_VERSION, same_version
 from .waste import default_waste_types, type_of, types_from_trashcard
 
 LOGGER = logging.getLogger(__name__)
@@ -170,7 +170,7 @@ class Hub:
         problem: str | None = None
         if not info.get("configured"):
             problem = "not_configured"
-        elif integration != ADDON_VERSION:
+        elif not same_version(integration, ADDON_VERSION):
             problem = "version"
         return {"addon": ADDON_VERSION, "integration": integration, "problem": problem}
 

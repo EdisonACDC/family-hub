@@ -42,9 +42,9 @@ def test_configured_but_no_calendar_offers_the_guide_button(
         tablet.set_viewport_size({"width": 390, "height": 844})
         tablet.goto(stack_empty.url + "/?lang=it")
         expect(tablet.locator("#empty-note")).to_contain_text("Nessun calendario", timeout=3000)
-        expect(tablet.locator("#empty-note")).to_contain_text("menu")
-        # The guide is in the menu for an adult (on a phone the top-bar button is not shown).
-        expect(tablet.locator("#menu-wizard")).not_to_have_attribute("hidden", "")
+        # The page's own button starts the guide (the top bar's one is not shown on a phone).
+        expect(tablet.locator("#guide-start")).to_be_visible()
+        expect(tablet.locator("#guide-start")).to_have_text("Avvia la procedura guidata")
         expect(tablet.locator("#setup-link")).to_be_hidden()
         expect(tablet.locator("#version-note")).to_be_hidden()
     finally:

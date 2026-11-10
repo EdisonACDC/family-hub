@@ -91,6 +91,7 @@
   <p id="empty-note" class="empty-note" hidden></p>
   <p id="version-note" class="empty-note" hidden></p>
   <a id="setup-link" class="btn setup-link" target="_top" hidden></a>
+  <button type="button" id="guide-start" class="btn guide-start" hidden></button>
   <p id="status-note" class="status-note" role="status" hidden></p>
   <p id="guest-note" class="status-note guest-note" hidden></p>
 
@@ -224,6 +225,7 @@
   <!-- Setup guide: fields are built by app.js from the configuration Home Assistant holds -->
   <div class="overlay" id="wizard-overlay" hidden>
     <section class="dialog wizard" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+      <button type="button" class="wizard-close" id="wizard-close" aria-label="Chiudi">&times;</button>
       <p class="wizard-progress" id="wizard-progress"></p>
       <h2 id="wizard-title"></h2>
       <div class="dialog-body">
@@ -231,6 +233,13 @@
         <p class="example" id="wizard-example"></p>
         <div id="wizard-body"></div>
         <p class="error" id="wizard-error" role="alert" hidden></p>
+        <div class="leave-confirm" id="wizard-leave" role="alertdialog" aria-labelledby="wizard-leave-title" hidden>
+          <p id="wizard-leave-title"></p>
+          <div class="leave-actions">
+            <button type="button" class="btn" id="wizard-leave-stay"></button>
+            <button type="button" class="btn btn-primary" id="wizard-leave-exit"></button>
+          </div>
+        </div>
       </div>
       <div class="dialog-foot actions">
         <button type="button" class="btn" id="wizard-back">Indietro</button>
