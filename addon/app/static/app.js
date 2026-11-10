@@ -487,9 +487,11 @@
     var panel = $("filters");
     panel.hidden = !open;
     $("calendars-btn").setAttribute("aria-expanded", open ? "true" : "false");
-    if (open) {
-      var anchor = state.mode === "phone" ? $("topbar") : $("subbar");
-      panel.style.top = Math.round(anchor.getBoundingClientRect().bottom + 6) + "px";
+    if (open && state.mode !== "phone") {
+      // On a larger screen the window hangs under the sub-bar; on a phone it is a sheet at the bottom.
+      panel.style.top = Math.round($("subbar").getBoundingClientRect().bottom + 6) + "px";
+    } else {
+      panel.style.top = "";
     }
   }
 

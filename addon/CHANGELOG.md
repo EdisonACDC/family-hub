@@ -1,5 +1,12 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.6
+
+- Finestra Calendari su telefono: foglio in basso alto quanto il suo contenuto (scorre solo se lo
+  schermo è troppo basso), sfondo pieno come le altre finestre, velo scuro dietro, barra in basso e
+  pulsante + nascosti mentre è aperta.
+- Versione 0.7.6 di integrazione e add-on.
+
 ## 0.7.5
 
 - Calendari: l'add-on trova i calendari di Family Hub nel registro delle entità, non dal nome

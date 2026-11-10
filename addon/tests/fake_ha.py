@@ -187,7 +187,7 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.7.5"
+    integration_version = "0.7.6"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
     configured = True

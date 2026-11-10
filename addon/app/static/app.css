@@ -1527,3 +1527,21 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .unsaved { color: #fde68a; font-weight: 600; overflow-wrap: anywhere; }
 .summary-kind { margin: 10px 0 4px; font-size: 16px; }
 .summary-channels-title { font-weight: 600; margin: 10px 0 4px; }
+
+/* 0.7.6: the calendars window is a panel like the others: its own surface, a veil behind it, the
+   bottom bar and the + hidden while it is open, and only as tall as its content (it scrolls only
+   when the screen is too short). On a phone it sits at the bottom. */
+#filters.calendars-panel {
+  background: #1E293B; color: #F8FAFC; border: 0; /* opaque: the glass surface is see-through */
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  height: auto; align-content: start; grid-auto-rows: max-content;
+}
+#filters.calendars-panel .panel-title { color: #F8FAFC; }
+@media (max-width: 599px) {
+  #filters.calendars-panel { top: auto !important; bottom: calc(12px + env(safe-area-inset-bottom)); left: 12px; right: 12px; }
+  body:has(#filters.calendars-panel:not([hidden]))::after {
+    content: ""; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 39;
+  }
+  body:has(#filters.calendars-panel:not([hidden])) #tabbar,
+  body:has(#filters.calendars-panel:not([hidden])) #add-btn { visibility: hidden; }
+}
