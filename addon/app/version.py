@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-ADDON_VERSION = "0.7.8b2"
+ADDON_VERSION = "0.7.8"
 
 _BETA = re.compile(r"^(\d+\.\d+\.\d+)(?:[-.]?(?:beta|b)[-.]?(\d+))?$")
 

@@ -1,4 +1,4 @@
-"""0.7.8b1: the project's support link is one discreet entry at the foot of the menu, in the family's
+"""0.7.8: the project's support link is one discreet entry at the foot of the menu, in the family's
 language, opening the Ko-fi page in a new tab. Nothing else in the app asks for money."""
 
 from __future__ import annotations

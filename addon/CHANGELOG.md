@@ -1,17 +1,13 @@
 # Changelog: Family Hub UI (add-on)
 
-## 0.7.8b2
+## 0.7.8
 
-- Aggiornamenti senza cache vecchia: la pagina è inviata con «no-cache»; i file con la versione
-  nell'indirizzo (?v=) restano in cache un anno. Dopo un aggiornamento la voce del menu e le
-  modifiche compaiono subito.
-- Un tablet con una pagina di versione vecchia si ricarica da solo una volta.
-
-## 0.7.8b1
-
-- Sostegno: una voce discreta in fondo al menu (☕ Supporta il progetto) apre la pagina di
-  sostegno in una nuova scheda. Nessun popup né promemoria. Il badge e la sezione «Support» sono
-  nel README e nella documentazione dell'add-on.
+- Sostegno del progetto: una voce discreta in fondo al menu (☕ Supporta il progetto) apre la
+  pagina di sostegno (Ko-fi) in una nuova scheda; badge e sezione nel README e nella
+  documentazione. Nessun popup né promemoria.
+- Aggiornamento automatico della pagina: la pagina è inviata senza cache, i file con la versione
+  nell'indirizzo restano in cache un anno. Dopo un aggiornamento un tablet con una pagina vecchia si
+  ricarica da solo una volta, senza toccarlo.
 
 ## 0.7.7
 

@@ -1,13 +1,15 @@
-"""0.7.8b2: after an update the browser gets the new page and files. The page is sent no-cache; the
-files named with their version are kept a year; a page of an older version reloads once by itself."""
+"""0.7.8: after an update the browser gets the new page and files.
+
+The page is sent no-cache; files named with their version are kept a year; a page of an older
+version reloads once by itself."""
 
 from __future__ import annotations
 
 import urllib.request
 
+from app.version import ADDON_VERSION
 from playwright.sync_api import Browser, expect
 
-from app.version import ADDON_VERSION
 from tests.e2e.conftest import Stack
 from tests.e2e.test_tablet import _device
 
