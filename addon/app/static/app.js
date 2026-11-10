@@ -307,10 +307,29 @@
     return !!status && (status.problem === "not_installed" || status.problem === "not_configured");
   }
 
+  // The page was made for one version of the add-on. When the add-on is another, the page is out of
+  // date (the browser kept it): it reloads once, so a wall tablet updates by itself. The mark in the
+  // session stops a second reload for the same version, so a failing storage cannot loop.
+  function reloadIfOutdated(serverVersion) {
+    var meta = document.querySelector('meta[name="fh-version"]');
+    var page = meta ? meta.getAttribute("content") : "";
+    if (!serverVersion || !page || page === "__VERSION__" || serverVersion === page) return false;
+    var key = "fh-reloaded-" + serverVersion;
+    try {
+      if (window.sessionStorage.getItem(key)) return false;
+      window.sessionStorage.setItem(key, "1");
+    } catch (err) {
+      return false;
+    }
+    window.location.reload();
+    return true;
+  }
+
   function refreshCalendars() {
     loadWeather();
     // A status that cannot be read is not a reason to stop: the calendars then say what they can.
     request({ op: "status" }).then(function (status) {
+      if (reloadIfOutdated(status && status.addon)) return;
       showSetupNote(status);
       if (isSetupMissing(status)) {
         // Nothing else to say: the setup note above is the message and its button.

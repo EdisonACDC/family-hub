@@ -1179,11 +1179,38 @@ def _user_of(request: web.Request) -> str | None:
     return None
 
 
-async def _index(request: web.Request) -> web.FileResponse:
-    response = web.FileResponse(STATIC_DIR / "index.html")
+async def _index(request: web.Request) -> web.Response:
+    # The page names its own version (for the static files and for the check that it is current).
+    # It is sent with no-cache: a browser always asks again, so an update is seen at once.
+    page = (
+        (STATIC_DIR / "index.html").read_text(encoding="utf-8").replace(VERSION_MARK, ADDON_VERSION)
+    )
+    response = web.Response(
+        text=page,
+        content_type="text/html",
+        charset="utf-8",
+        headers={"Cache-Control": "no-cache"},
+    )
     user_id = request.headers.get(USER_HEADER)
     if user_id and test_cookie_enabled():
         response.set_cookie(USER_COOKIE, user_id, httponly=True, samesite="Strict", path="/")
+    return response
+
+
+# The page's own version, written into index.html when it is served.
+VERSION_MARK = "__VERSION__"
+
+
+@web.middleware
+async def cache_headers(request: web.Request, handler: Any) -> web.StreamResponse:
+    """Static files with a version in the address (?v=...) never change, so the browser keeps them a
+    year. Any other static file is checked again each time."""
+    response = await handler(request)
+    if request.path.startswith("/static/"):
+        if request.query.get("v"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "no-cache"
     return response
 
 
@@ -1203,7 +1230,7 @@ def create_app(
     ha: HAClient, allowed_peers: frozenset[str] = frozenset({INGRESS_PEER_DEFAULT})
 ) -> web.Application:
     """Build the web application around an HAClient (started and stopped with the app)."""
-    app = web.Application(middlewares=[ingress_only])
+    app = web.Application(middlewares=[ingress_only, cache_headers])
     app[HUB] = Hub(ha)
     app[PEERS] = allowed_peers
 

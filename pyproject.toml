@@ -1,6 +1,6 @@
 [project]
 name = "family-hub"
-version = "0.7.8b1"
+version = "0.7.8b2"
 requires-python = ">=3.13"
 
 [tool.pytest.ini_options]

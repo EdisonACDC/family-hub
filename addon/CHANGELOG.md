@@ -1,5 +1,12 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.7.8b2
+
+- Aggiornamenti senza cache vecchia: la pagina è inviata con «no-cache»; i file con la versione
+  nell'indirizzo (?v=) restano in cache un anno. Dopo un aggiornamento la voce del menu e le
+  modifiche compaiono subito.
+- Un tablet con una pagina di versione vecchia si ricarica da solo una volta.
+
 ## 0.7.8b1
 
 - Sostegno: una voce discreta in fondo al menu (☕ Supporta il progetto) apre la pagina di
