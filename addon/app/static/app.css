@@ -1643,3 +1643,9 @@ html, body { overflow-x: hidden; max-width: 100%; }
 /* 0.7.8b1: a discreet link at the foot of the menu. No pop-up, no reminder. */
 .support-link { display: block; margin-top: 10px; min-height: 44px; line-height: 44px;
   text-align: center; font-size: 15px; color: var(--ink-soft); text-decoration: underline; }
+/* 0.7.7b4: rubbish pickups made by hand. Each row is one line of fields, full width on a phone. */
+.manual-title { margin: 14px 0 4px; font-size: 18px; }
+.manual-row { display: grid; gap: 8px; margin: 8px 0 12px; }
+.manual-row label { min-width: 0; }
+.manual-row input, .manual-row select { width: 100%; min-width: 0; box-sizing: border-box; }
+.manual .dialog-body { max-height: calc(100dvh - 180px); overflow-y: auto; }

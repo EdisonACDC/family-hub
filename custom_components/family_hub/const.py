@@ -22,6 +22,8 @@ OPT_CATEGORIES: Final = "categories"
 # Home Assistant users that are shared screens (not linked to a person): they may add,
 # change and tick events and lists, but not open the settings.
 OPT_SHARED_USERS: Final = "shared_users"
+# Rubbish pickups the family enters by hand (see manual_waste.py): rules, extra, skipped, moved.
+OPT_MANUAL_WASTE: Final = "manual_waste"
 
 LANGUAGES: Final[list[str]] = ["it", "de", "en"]
 # Each language named in its own words, for the language selector (never the bare code).

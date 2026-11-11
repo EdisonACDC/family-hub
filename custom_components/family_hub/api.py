@@ -26,6 +26,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.loader import async_get_integration
 
+from . import manual_waste
 from .config_flow import _bad_time
 from .const import (
     ALEXA_ALL,
@@ -47,6 +48,7 @@ from .const import (
     DOMAIN,
     LANGUAGES,
     OPT_CATEGORIES,
+    OPT_MANUAL_WASTE,
     OPT_PERSONS,
     OPT_REMINDERS,
     OPT_SHARED_USERS,
@@ -64,6 +66,7 @@ from .external_api import async_register_external_commands
 from .notifier import announce_on_echos, phone_os, sound_data, texts_for
 from .notify_settings import alexa_targets, available_services, echo_entities
 from .shifts import ShiftError, apply_to_future, clean_shifts
+from .waste import types_from_options
 
 PERSON_TEXT_KEYS = (
     "phone_notify",
@@ -599,6 +602,64 @@ async def ws_shifts_save(
     connection.send_result(msg["id"], {"saved": True, "updated": updated})
 
 
+@require_admin
+@websocket_command(
+    {vol.Required("type"): "family_hub/manual_waste/get", vol.Optional("entry_id"): str}
+)
+@async_response
+async def ws_manual_waste_get(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """The pickups made by hand, and the rubbish types they can be made for."""
+    entry = _entry(hass, msg.get("entry_id"))
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Family Hub is not set up")
+        return
+    connection.send_result(
+        msg["id"],
+        {
+            "schedule": manual_waste.normalize(
+                dict(entry.options.get(OPT_MANUAL_WASTE) or manual_waste.empty()),
+                {kind["id"] for kind in types_from_options(dict(entry.options))},
+            ),
+            "types": [
+                {"id": kind["id"], "label": kind["label"]}
+                for kind in types_from_options(dict(entry.options))
+            ],
+        },
+    )
+
+
+@require_admin
+@websocket_command(
+    {
+        vol.Required("type"): "family_hub/manual_waste/save",
+        vol.Optional("entry_id"): str,
+        vol.Required("schedule"): dict,
+    }
+)
+@async_response
+async def ws_manual_waste_save(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Save the pickups made by hand. They are checked first; the calendar is rebuilt by the
+    options change, so a new or changed pickup shows at once."""
+    entry = _entry(hass, msg.get("entry_id"))
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Family Hub is not set up")
+        return
+    kinds = {kind["id"] for kind in types_from_options(dict(entry.options))}
+    try:
+        schedule = manual_waste.normalize(msg["schedule"], kinds)
+    except manual_waste.ManualWasteError as err:
+        connection.send_error(msg["id"], "invalid_config", err.code)
+        return
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, OPT_MANUAL_WASTE: schedule}
+    )
+    connection.send_result(msg["id"], {"schedule": schedule})
+
+
 def _kept(stored: dict[str, Any], key: str) -> list[str]:
     value = stored.get(key)
     return [value] if value else []
@@ -764,4 +825,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
     async_register_command(hass, ws_notify_test)
     async_register_command(hass, ws_summary_save)
     async_register_command(hass, ws_shared_save)
+    async_register_command(hass, ws_manual_waste_get)
+    async_register_command(hass, ws_manual_waste_save)
     async_register_external_commands(hass)
