@@ -122,6 +122,9 @@ ATTR_PERSONS: Final = "persons"
 ATTR_REMINDER_OFFSETS: Final = "reminder_offsets"
 ATTR_MINUTES: Final = "minutes"
 ATTR_SHIFT_ID: Final = "shift_id"
+# A repeat rule (iCalendar RRULE text), and which occurrences a change or delete reaches.
+ATTR_RRULE: Final = "rrule"
+ATTR_RECURRENCE_RANGE: Final = "recurrence_range"
 # Entry options: shift models, a dict of person id -> list of models.
 OPT_SHIFTS: Final = "shifts"
 

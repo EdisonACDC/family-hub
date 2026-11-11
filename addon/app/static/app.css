@@ -1649,3 +1649,17 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .manual-row label { min-width: 0; }
 .manual-row input, .manual-row select { width: 100%; min-width: 0; box-sizing: border-box; }
 .manual .dialog-body { max-height: calc(100dvh - 180px); overflow-y: auto; }
+
+/* 0.8.0b1: repeating events. The days wrap to a new line on a phone; the scope buttons fill the width. */
+.repeat-days { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.repeat-day { min-height: 44px; display: inline-flex; align-items: center; }
+.repeat-fieldset label, .scope-fieldset label { min-width: 0; }
+.repeat-fieldset select, .repeat-fieldset input { min-width: 0; }
+.scope-choices { display: grid; gap: 10px; }
+.scope-choices .btn { width: 100%; min-height: 48px; }
+
+/* 0.8.0b1: a word is never broken in the middle of a narrow week column. A word too long for
+   its place is cut with an ellipsis (see fitWastePills in app.js). */
+.event.waste-pill, .event.waste-pill .allday-name, .event.waste-pill .ev-title {
+  hyphens: none; overflow-wrap: normal; word-break: normal;
+}

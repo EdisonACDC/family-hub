@@ -501,6 +501,7 @@
   function setLanguage(code) {
     if (!I.setLang(code)) return;
     applyStatic();
+    updateClock();  // the date under the time is drawn in the new language at once
     applyTexts();  // the view buttons and the guide's own labels, drawn from the language's words
     refreshCalendars();
     if ($("wizard-overlay") && !$("wizard-overlay").hidden) renderWizard();
@@ -712,13 +713,33 @@
 
   // A rubbish pill whose type name does not fit ("Org…") shows only a big icon in its colour;
   // the whole name is in its label and on the card that a tap opens.
+  // The text of a name (not its icon): the first text node inside it.
+  function nameText(name) {
+    return Array.prototype.filter.call(name.childNodes, function (node) {
+      return node.nodeType === 3 && node.nodeValue.trim() !== "";
+    })[0] || null;
+  }
+
+  // Words are never broken in the middle (see app.css). A word too long for its place is cut with
+  // "…", and the whole name stays in the tooltip; only when not even that fits does the pill show
+  // its icon alone.
   function fitWastePills(root) {
     Array.prototype.forEach.call(root.querySelectorAll(".event.waste-pill"), function (row) {
       row.classList.remove("icon-only");
       var name = row.querySelector(".allday-name, .ev-title");
-      if (name && name.scrollWidth > name.clientWidth + 1) {
+      var node = name ? nameText(name) : null;
+      if (!node) return;
+      var full = name.getAttribute("data-full") || node.nodeValue.trim();
+      name.setAttribute("data-full", full);
+      node.nodeValue = full;
+      var text = full;
+      while (name.scrollWidth > name.clientWidth + 1 && text.length > 1) {
+        text = text.slice(0, -1);
+        node.nodeValue = text.replace(/\s+$/, "") + "…";
+      }
+      if (name.scrollWidth > name.clientWidth + 1) {
         row.classList.add("icon-only");
-        row.setAttribute("title", row.getAttribute("aria-label") || name.textContent);
+        row.setAttribute("title", row.getAttribute("aria-label") || full);
       }
     });
   }
@@ -1069,6 +1090,182 @@
     return found ? found.name : id;
   }
 
+  // ---- repeating events ------------------------------------------------------------------
+  // The repeat rule (an RRULE) is built from the controls: every day; every week on the chosen days;
+  // every 2 weeks; every month on the same day, or on "the 2nd Tuesday"; every year. The end is never,
+  // a date, or a number of times. Changing an event that repeats asks which occurrences it reaches.
+
+  var REPEAT_KINDS = ["never", "daily", "weekly", "biweekly", "monthly_day", "monthly_nth", "yearly"];
+  var REPEAT_KEYS = {
+    never: "repeatNever", daily: "repeatDaily", weekly: "repeatWeekly",
+    biweekly: "repeatBiweekly", monthly_day: "repeatMonthDay", monthly_nth: "repeatMonthNth",
+    yearly: "repeatYearly"
+  };
+  var REPEAT_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+  var REPEAT_ENDS = ["never", "until", "count"];
+  var REPEAT_END_KEYS = { never: "repeatEndNever", until: "repeatEndUntil", count: "repeatEndCount" };
+  var ORDINALS_EN = ["1st", "2nd", "3rd", "4th", "5th"];
+  var repeatTouched = false;
+
+  // 0 = Monday ... 6 = Sunday, for a day written YYYY-MM-DD.
+  function repeatWeekday(isoDay) { return (parseLocalDay(isoDay).getDay() + 6) % 7; }
+
+  // Which occurrence of its weekday the day is in its month: 1 to 5.
+  function repeatNth(isoDay) { return Math.ceil(parseLocalDay(isoDay).getDate() / 7); }
+
+  function repeatOrdinal(n) {
+    if (I.lang === "de") return n + ".";
+    if (I.lang === "it") return n + "°";
+    return ORDINALS_EN[n - 1] || String(n);
+  }
+
+  function repeatKindLabel(value, startDay) {
+    var label = I.f(REPEAT_KEYS[value]);
+    if (value === "monthly_nth") {
+      label = label.replace("{ord}", repeatOrdinal(repeatNth(startDay)))
+        .replace("{day}", t("days")[repeatWeekday(startDay)]);
+    }
+    return label;
+  }
+
+  function currentStartDay() {
+    return parseDate($("event-form").elements.date.value) || ymd(new Date());
+  }
+
+  function fillRepeatControls() {
+    var kind = $("repeat-kind");
+    kind.textContent = "";
+    REPEAT_KINDS.forEach(function (value) {
+      kind.appendChild(el("option", { value: value }, repeatKindLabel(value, currentStartDay())));
+    });
+    var end = $("repeat-end");
+    end.textContent = "";
+    REPEAT_ENDS.forEach(function (value) {
+      end.appendChild(el("option", { value: value }, I.f(REPEAT_END_KEYS[value])));
+    });
+    var days = $("repeat-days");
+    days.textContent = "";
+    REPEAT_CODES.forEach(function (code, index) {
+      var label = el("label", { class: "repeat-day" });
+      var box = el("input", { type: "checkbox", value: code });
+      label.appendChild(box);
+      label.appendChild(document.createTextNode(" " + t("days")[index]));
+      days.appendChild(label);
+    });
+  }
+
+  function refreshRepeatLabels() {
+    Array.prototype.forEach.call($("repeat-kind").options, function (option) {
+      option.textContent = repeatKindLabel(option.value, currentStartDay());
+    });
+  }
+
+  function refreshRepeatVisibility() {
+    var kind = $("repeat-kind").value;
+    var end = $("repeat-end").value;
+    $("repeat-days").hidden = kind !== "weekly" && kind !== "biweekly";
+    $("repeat-until-row").hidden = end !== "until";
+    $("repeat-count-row").hidden = end !== "count";
+  }
+
+  // The rule of an event, read into the controls: its kind, days, end.
+  function parseRule(rule) {
+    var parts = {};
+    String(rule || "").split(";").forEach(function (item) {
+      var pos = item.indexOf("=");
+      if (pos > 0) parts[item.slice(0, pos).trim().toUpperCase()] = item.slice(pos + 1).trim().toUpperCase();
+    });
+    var freq = parts.FREQ || "";
+    var interval = parseInt(parts.INTERVAL || "1", 10);
+    var days = parts.BYDAY ? parts.BYDAY.split(",") : [];
+    var kind = "never";
+    if (freq === "DAILY") kind = "daily";
+    else if (freq === "WEEKLY") kind = interval === 2 ? "biweekly" : "weekly";
+    else if (freq === "MONTHLY") kind = days.length ? "monthly_nth" : "monthly_day";
+    else if (freq === "YEARLY") kind = "yearly";
+    var until = parts.UNTIL ? parts.UNTIL.slice(0, 4) + "-" + parts.UNTIL.slice(4, 6) + "-" + parts.UNTIL.slice(6, 8) : "";
+    return { kind: kind, days: days, until: until, count: parts.COUNT || "" };
+  }
+
+  // The controls show the rule of the event being edited, or the defaults of a new one.
+  function setRepeatControls(ev) {
+    fillRepeatControls();
+    var parts = ev && ev.rrule ? parseRule(ev.rrule) : { kind: "never", days: [], until: "", count: "" };
+    $("repeat-kind").value = parts.kind;
+    Array.prototype.forEach.call($("repeat-days").querySelectorAll("input"), function (box) {
+      box.checked = parts.days.indexOf(box.value) !== -1;
+    });
+    $("repeat-end").value = parts.until ? "until" : (parts.count ? "count" : "never");
+    $("repeat-until").value = parts.until ? showDate(parts.until) : "";
+    $("repeat-count").value = parts.count || "4";
+    repeatTouched = false;
+    refreshRepeatVisibility();
+    $("event-scope").hidden = !(ev && ev.rrule);
+    $("event-scope").querySelector("input[value='']").checked = true;
+  }
+
+  // The rule the controls describe, as RRULE text; "" for no repeat; null when the end date is not
+  // a date.
+  function buildRepeatRule() {
+    var kind = $("repeat-kind").value;
+    if (kind === "never") return "";
+    var startDay = currentStartDay();
+    var rule;
+    if (kind === "daily") {
+      rule = "FREQ=DAILY";
+    } else if (kind === "weekly" || kind === "biweekly") {
+      var days = Array.prototype.filter.call($("repeat-days").querySelectorAll("input"), function (box) {
+        return box.checked;
+      }).map(function (box) { return box.value; });
+      if (!days.length) days = [REPEAT_CODES[repeatWeekday(startDay)]];
+      rule = "FREQ=WEEKLY" + (kind === "biweekly" ? ";INTERVAL=2" : "") + ";BYDAY=" + days.join(",");
+    } else if (kind === "monthly_day") {
+      rule = "FREQ=MONTHLY";
+    } else if (kind === "monthly_nth") {
+      rule = "FREQ=MONTHLY;BYDAY=" + repeatNth(startDay) + REPEAT_CODES[repeatWeekday(startDay)];
+    } else {
+      rule = "FREQ=YEARLY";
+    }
+    var end = $("repeat-end").value;
+    if (end === "until") {
+      var until = parseDate($("repeat-until").value);
+      if (!until) return null;
+      rule += ";UNTIL=" + until.replace(/-/g, "");
+    }
+    if (end === "count") {
+      rule += ";COUNT=" + Math.max(2, parseInt($("repeat-count").value, 10) || 2);
+    }
+    return rule;
+  }
+
+  // Which occurrences a change reaches: "" (this one), "THISANDFUTURE", "ALL".
+  function changeScope() {
+    var box = $("event-scope").querySelector("input[name='scope']:checked");
+    return box ? box.value : "";
+  }
+
+  // The choice for a delete: an ordinary event asks "yes or no"; a repeating one asks which
+  // occurrences. Resolves to the range ("" for this one), or null when cancelled.
+  function chooseDeleteScope(ev) {
+    if (!ev.rrule) {
+      return askConfirm(I.f("cardDeleteAsk").replace("{name}", ev.summary), I.f("cardDelete"))
+        .then(function (yes) { return yes ? "" : null; });
+    }
+    return new Promise(function (resolve) {
+      state.scopeResolve = resolve;
+      $("scope-title").textContent = I.f("scopeDeleteTitle").replace("{name}", ev.summary);
+      $("scope-overlay").hidden = false;
+      $("scope-this").focus();
+    });
+  }
+
+  function resolveScope(value) {
+    $("scope-overlay").hidden = true;
+    var done = state.scopeResolve;
+    state.scopeResolve = null;
+    if (done) done(value);
+  }
+
   function openForm(item) {
     var form = $("event-form");
     form.reset();
@@ -1087,6 +1284,7 @@
     form.elements.end_time.value = editing && !isAllDay(ev.start)
       ? showTime(timeOfHHMM(ev.end), state.timeFormat) : showTime("10:00", state.timeFormat);
     form.elements.reminders.value = editing && ev.reminder_offsets !== "default" ? ev.reminder_offsets : "";
+    setRepeatControls(editing ? ev : null);
     if (editing) {
       var cat = state.calendars.filter(function (c) { return c.category_id === ev.category_id; })[0];
       if (cat) form.elements.category.value = cat.category_id;
@@ -1305,6 +1503,18 @@
       data.alexa_volume = alexa ? n.alexa_volume : null;
       data.phone_sound = n.channels.indexOf("phone") !== -1 ? n.phone_sound || "important" : null;
     }
+    var rule = buildRepeatRule();
+    if (rule === null) {
+      showFormError(I.f("repeatBadUntil"));
+      return;
+    }
+    if (state.editing) {
+      if (repeatTouched) data.rrule = rule;
+      var scope = changeScope();
+      if (state.editing.ev.rrule && scope) data.recurrence_range = scope;
+    } else if (rule) {
+      data.rrule = rule;
+    }
     var editing = state.editing;
     var call;
     if (editing) {
@@ -1395,9 +1605,11 @@
         openForm(state.cardItem);
       }));
       foot.appendChild(button(I.f("cardDelete"), "btn", function () {
-        askConfirm(I.f("cardDeleteAsk").replace("{name}", ev.summary), I.f("cardDelete")).then(function (yes) {
-          if (!yes) return;
-          request({ op: "service", service: "delete_event", data: { uid: ev.record_id } }).then(function () {
+        chooseDeleteScope(ev).then(function (scope) {
+          if (scope === null) return;
+          var payload = { uid: ev.record_id };
+          if (scope) payload.recurrence_range = scope;
+          request({ op: "service", service: "delete_event", data: payload }).then(function () {
             $("card-overlay").hidden = true;
             refreshEvents();
           }).catch(function (err) { showStatusNote(I.f("saveError") + errorText(err)); });
@@ -4133,6 +4345,16 @@
       openNotify();
     });
     $("notify-close").addEventListener("click", closeNotify);
+    $("event-repeat").addEventListener("change", function () {
+      repeatTouched = true;
+      refreshRepeatVisibility();
+    });
+    $("event-repeat").addEventListener("input", function () { repeatTouched = true; });
+    $("event-form").elements.date.addEventListener("input", refreshRepeatLabels);
+    $("scope-this").addEventListener("click", function () { resolveScope(""); });
+    $("scope-future").addEventListener("click", function () { resolveScope("THISANDFUTURE"); });
+    $("scope-all").addEventListener("click", function () { resolveScope("ALL"); });
+    $("scope-cancel").addEventListener("click", function () { resolveScope(null); });
     $("ics-manual-open").addEventListener("click", openManual);
     $("manual-cancel").addEventListener("click", closeManual);
     $("manual-save").addEventListener("click", saveManual);
@@ -4181,6 +4403,7 @@
       if (e.key === "Escape" && !$("event-overlay").hidden) closeForm();
       if (e.key === "Escape" && !$("wizard-overlay").hidden) requestClose();
       if (e.key === "Escape" && !$("manual-overlay").hidden) closeManual();
+      if (e.key === "Escape" && !$("scope-overlay").hidden) resolveScope(null);
     });
 
     document.querySelectorAll("#reminder-overlay [data-act]").forEach(function (button) {

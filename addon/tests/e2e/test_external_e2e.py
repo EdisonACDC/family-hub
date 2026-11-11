@@ -145,7 +145,9 @@ def test_rubbish_pickups_show_their_icon_and_colour_in_the_week(
     try:
         tablet.goto(stack_full.url + "/?lang=it")
         # Shown as the type, as in the TrashCard: "Indifferenziato" with its icon.
-        event = tablet.locator(".event", has_text="Indifferenziato")
+        event = tablet.locator(
+            ".event[aria-label='Indifferenziato'], .event:has-text('Indifferenz')"
+        ).first
         expect(event).to_be_visible(timeout=5000)
         expect(event.locator(".waste-icon.mdi svg path")).to_have_count(1)
         assert (

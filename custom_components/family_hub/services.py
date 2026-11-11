@@ -28,7 +28,9 @@ from .const import (
     ATTR_MINUTES,
     ATTR_PERSONS,
     ATTR_PHONE_SOUND,
+    ATTR_RECURRENCE_RANGE,
     ATTR_REMINDER_OFFSETS,
+    ATTR_RRULE,
     ATTR_SHIFT_ID,
     ATTR_START,
     ATTR_SUMMARY,
@@ -114,6 +116,7 @@ ADD_EVENT_SCHEMA = vol.Schema(
         vol.Optional(ATTR_REMINDER_OFFSETS): REMINDER_OFFSETS,
         vol.Optional(ATTR_ALL_DAY_REMINDER): HH_MM,
         vol.Optional(ATTR_SHIFT_ID): cv.string,
+        vol.Optional(ATTR_RRULE): cv.string,
         **NOTIFY_FIELDS,
     }
 )
@@ -122,6 +125,8 @@ UPDATE_EVENT_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_ENTRY_ID): cv.string,
         vol.Required(ATTR_UID): cv.string,
+        vol.Optional(ATTR_RRULE): cv.string,
+        vol.Optional(ATTR_RECURRENCE_RANGE): vol.In(["THISANDFUTURE", "ALL"]),
         vol.Optional(ATTR_SUMMARY): SUMMARY,
         vol.Optional(ATTR_START): TIME,
         vol.Optional(ATTR_END): TIME,
@@ -153,6 +158,7 @@ DELETE_EVENT_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_ENTRY_ID): cv.string,
         vol.Required(ATTR_UID): cv.string,
+        vol.Optional(ATTR_RECURRENCE_RANGE): vol.In(["THISANDFUTURE", "ALL"]),
     }
 )
 
@@ -233,6 +239,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             all_day_reminder=call.data.get(ATTR_ALL_DAY_REMINDER),
             shift_id=call.data.get(ATTR_SHIFT_ID),
             notify=_notify_of(dict(call.data)),
+            rrule=call.data.get(ATTR_RRULE),
         )
 
     async def update_event(call: ServiceCall) -> None:
@@ -253,12 +260,20 @@ def async_register_services(hass: HomeAssistant) -> None:
             changes[ATTR_ALL_DAY_REMINDER] = call.data[ATTR_ALL_DAY_REMINDER]
         if ATTR_CHANNELS in call.data:
             changes["notify"] = _notify_of(dict(call.data))
-        await calendar.async_update_event(call.data[ATTR_UID], changes)
+        if ATTR_RRULE in call.data:
+            changes["rrule"] = call.data[ATTR_RRULE] or ""
+        await calendar.async_update_event(
+            call.data[ATTR_UID],
+            changes,
+            recurrence_range=call.data.get(ATTR_RECURRENCE_RANGE),
+        )
 
     async def delete_event(call: ServiceCall) -> None:
         entry = _resolve_entry(hass, call.data.get(ATTR_ENTRY_ID))
         calendar, _ = _find_event(entry, call.data[ATTR_UID])
-        await calendar.async_delete_event(call.data[ATTR_UID])
+        await calendar.async_delete_event(
+            call.data[ATTR_UID], recurrence_range=call.data.get(ATTR_RECURRENCE_RANGE)
+        )
 
     async def snooze_reminder(call: ServiceCall) -> None:
         entry = _resolve_entry(hass, call.data.get(ATTR_ENTRY_ID))

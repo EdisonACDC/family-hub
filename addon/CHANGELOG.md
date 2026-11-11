@@ -1,5 +1,20 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.8.0b1
+
+- Ritiri a mano: per chi non ha un file, ogni tipo di rifiuto ha un giorno, una frequenza (ogni
+  settimana, 2, 4, o ogni mese) e un primo ritiro. Si aggiungono date singole, date da saltare e
+  ritiri spostati. Si crea da «Calendari esterni» e dalla procedura guidata. I ritiri si leggono
+  come un calendario da file (icone, colori, «Prossimi ritiri», promemoria, riepiloghi).
+- Appuntamenti che si ripetono: ogni giorno, ogni settimana (con i giorni scelti), ogni 2
+  settimane, ogni mese (lo stesso giorno o «il 2° martedì»), ogni anno; fine: mai, a una data, o
+  dopo un numero di volte. Modifica ed eliminazione chiedono: «solo questo», «questo e i
+  successivi», «tutti».
+- Vista settimana: un nome di rifiuto non si spezza più a metà parola; una parola troppo lunga
+  si accorcia con «…».
+- Lasciando la procedura guidata senza salvare, la data sotto l'ora torna subito nella lingua
+  salvata.
+
 ## 0.7.8
 
 - Sostegno del progetto: una voce discreta in fondo al menu (☕ Supporta il progetto) apre la

@@ -117,6 +117,20 @@
           <div id="event-persons" class="switch-list"></div>
           <div id="event-notify" class="event-notify" hidden></div>
         </fieldset>
+        <fieldset class="card repeat-fieldset" id="event-repeat">
+          <legend>Si ripete</legend>
+          <label>Si ripete <select name="repeat" id="repeat-kind"></select></label>
+          <div class="repeat-days" id="repeat-days" hidden></div>
+          <label>Fine <select name="repeat_end" id="repeat-end"></select></label>
+          <label id="repeat-until-row" hidden>Fino al <input type="text" name="repeat_until" id="repeat-until" inputmode="numeric" placeholder="gg/mm/aaaa"></label>
+          <label id="repeat-count-row" hidden>Numero di volte <input type="number" name="repeat_count" id="repeat-count" min="2" max="500" value="4"></label>
+        </fieldset>
+        <fieldset class="card scope-fieldset" id="event-scope" hidden>
+          <legend>Modifica</legend>
+          <label class="scope-option"><input type="radio" name="scope" value="" checked><span>Solo questo</span></label>
+          <label class="scope-option"><input type="radio" name="scope" value="THISANDFUTURE"><span>Questo e i successivi</span></label>
+          <label class="scope-option"><input type="radio" name="scope" value="ALL"><span>Tutti</span></label>
+        </fieldset>
         <label>Promemoria (minuti prima, separati da virgola) <input name="reminders" inputmode="numeric" placeholder="30, 10"></label>
         <p class="hint" id="event-reminders-hint">Vuoto: quelli di famiglia.</p>
         <p class="error" id="event-error" role="alert" hidden></p>
@@ -171,6 +185,21 @@
   </div>
 
   <!-- External calendars (ICS from a link or a file), adults only -->
+  <!-- Which occurrences a delete reaches (a repeating event) -->
+  <div class="overlay" id="scope-overlay" hidden>
+    <section class="dialog notify scope" role="alertdialog" aria-modal="true" aria-labelledby="scope-title">
+      <h2 id="scope-title"></h2>
+      <div class="dialog-body scope-choices">
+        <button type="button" class="btn" id="scope-this">Solo questo</button>
+        <button type="button" class="btn" id="scope-future">Questo e i successivi</button>
+        <button type="button" class="btn btn-primary" id="scope-all">Tutti</button>
+      </div>
+      <div class="dialog-foot actions">
+        <button type="button" class="btn" id="scope-cancel">Annulla</button>
+      </div>
+    </section>
+  </div>
+
   <div class="overlay" id="ics-overlay" hidden>
     <section class="dialog notify" role="dialog" aria-modal="true" aria-labelledby="ics-title">
       <h2 id="ics-title">Calendari esterni</h2>

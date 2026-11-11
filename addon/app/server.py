@@ -791,6 +791,8 @@ class Hub:
                     "reminder_offsets": raw.get("reminder_offsets", "default"),
                     # "Avvisa su": the event's own channels as text, "" for the persons' own.
                     "notify": raw.get("notify") or "",
+                    # The repeat rule (RRULE); "" for an event that does not repeat.
+                    "rrule": raw.get("rrule") or "",
                     "category_id": calendar.get("category_id", ""),
                     "calendar": calendar.get("name", ""),
                 }
