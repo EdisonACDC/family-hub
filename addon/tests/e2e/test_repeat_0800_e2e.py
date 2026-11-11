@@ -148,3 +148,57 @@ def test_the_repeat_windows_fit_the_screen(
             **stack_full.fake.config.get("family", {}),
             "language": "it",
         }
+
+
+@pytest.mark.parametrize(("width", "height"), [(320, 640), (390, 844), (1024, 768)])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_the_repeat_controls_are_readable_and_laid_out(
+    stack_full: Stack, browser: Browser, width: int, height: int, theme: str
+) -> None:
+    stack_full.fake.config["screen"] = {**stack_full.fake.config.get("screen", {}), "theme": theme}
+    try:
+        with _device(browser, width, height) as page:
+            _open(page, stack_full)
+            _fill_new(page, "Prova", "03/11/2026")
+            page.locator("#repeat-kind").select_option("weekly")
+            page.locator("#repeat-end").select_option("count")
+            count = page.locator("#repeat-count")
+            expect(count).to_be_visible()
+            colours = count.evaluate(
+                "el => ({text: getComputedStyle(el).color,"
+                " back: getComputedStyle(el).backgroundColor})"
+            )
+            # White text on a dark glass field: the number is readable in both themes.
+            assert colours["text"] == "rgb(255, 255, 255)", colours
+            back = [
+                float(n)
+                for n in colours["back"].replace("rgba(", "").replace(")", "").split(",")[:3]
+            ]
+            assert sum(back) / 3 < 120, colours
+            # The day of the event is already chosen for a weekly repeat (Tuesday, 3 November 2026).
+            assert page.locator("#repeat-days input[value='TU']").is_checked()
+            # The scope choice's marker sits to the left of its words, on the same line.
+            page.locator("#event-form").evaluate("f => f.dataset.noop = '1'")
+            page.locator("#event-form input[name='summary']").fill("Prova")
+            page.locator("#event-form .dialog-foot .btn-primary").click()
+            expect(page.locator("#event-overlay")).to_be_hidden(timeout=3000)
+    finally:
+        stack_full.fake.config["screen"] = {
+            **stack_full.fake.config.get("screen", {}),
+            "theme": "auto",
+        }
+
+
+def test_the_scope_marker_is_left_of_its_words(stack_full: Stack, browser: Browser) -> None:
+    _seed_repeating(stack_full, "Visita del pallino")
+    with _device(browser, 390, 844) as page:
+        _open(page, stack_full)
+        _tap(page, "Visita del pallino")
+        page.locator("#card-foot .btn-primary").click()
+        expect(page.locator("#event-scope")).to_be_visible(timeout=3000)
+        option = page.locator("#event-scope .scope-option").first
+        marker = option.locator("input").bounding_box()
+        words = option.locator("span").bounding_box()
+        assert marker and words
+        assert marker["x"] + marker["width"] <= words["x"] + 1, (marker, words)
+        assert abs((marker["y"] + marker["height"] / 2) - (words["y"] + words["height"] / 2)) < 12

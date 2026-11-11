@@ -129,3 +129,14 @@ def remaining(rule: str, before: int) -> str:
     return ";".join(
         f"COUNT={left}" if item.upper().startswith("COUNT=") else item for item in items
     )
+
+
+def complete(rule: str, horizon: datetime, generated: int) -> bool:
+    """True when every occurrence of the rule is already written: its count is reached, or its
+    end date is before the horizon."""
+    parts = _parts(rule)
+    if "COUNT" in parts:
+        return generated >= int(parts["COUNT"])
+    if "UNTIL" in parts:
+        return horizon.strftime("%Y%m%d") >= parts["UNTIL"][:8]
+    return False

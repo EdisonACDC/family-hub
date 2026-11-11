@@ -1158,6 +1158,17 @@
     Array.prototype.forEach.call($("repeat-kind").options, function (option) {
       option.textContent = repeatKindLabel(option.value, currentStartDay());
     });
+    ensureRepeatDay();
+  }
+
+  // A weekly repeat with no day chosen takes the day of the event (it follows the date and the kind).
+  function ensureRepeatDay() {
+    var kind = $("repeat-kind").value;
+    if (kind !== "weekly" && kind !== "biweekly") return;
+    var boxes = $("repeat-days").querySelectorAll("input");
+    if (Array.prototype.some.call(boxes, function (box) { return box.checked; })) return;
+    var box = $("repeat-days").querySelector("input[value='" + REPEAT_CODES[repeatWeekday(currentStartDay())] + "']");
+    if (box) box.checked = true;
   }
 
   function refreshRepeatVisibility() {
@@ -4347,6 +4358,7 @@
     $("notify-close").addEventListener("click", closeNotify);
     $("event-repeat").addEventListener("change", function () {
       repeatTouched = true;
+      ensureRepeatDay();
       refreshRepeatVisibility();
     });
     $("event-repeat").addEventListener("input", function () { repeatTouched = true; });

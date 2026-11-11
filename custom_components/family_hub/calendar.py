@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
@@ -90,7 +90,7 @@ def localize(value: date | datetime) -> date | datetime:
 def as_datetime(value: date | datetime) -> datetime:
     """Convert a date or datetime to an aware datetime for comparisons."""
     if isinstance(value, datetime):
-        return localize(value)  # type: ignore[return-value]
+        return dt_util.as_local(localize(value))  # type: ignore[arg-type]
     return datetime.combine(value, datetime.min.time(), dt_util.get_default_time_zone())
 
 
@@ -405,10 +405,24 @@ class FamilyHubCalendar(CalendarEntity):
         rule: str | None,
         recurrence_range: str | None,
     ) -> None:
-        """A new repeat rule: the affected occurrences are replaced by occurrences of the new rule,
-        from the edited one on. Values not given keep the edited occurrence's own."""
+        """A new repeat rule. THISANDFUTURE: the affected occurrences are replaced, from the edited
+        one on. ALL: the whole series is replaced, and the new rule starts from the series' first
+        occurrence (its date kept; the time and the length are the edited ones)."""
         values = _values(record)
         _apply_fields(values, event)
+        span = as_datetime(end) - as_datetime(start)
+        if recurrence_range == "ALL" and record.get("series"):
+            first = self._series_records(str(record["series"]))[0]
+            if is_all_day(start):
+                day = _when(first)
+                if isinstance(day, datetime):
+                    day = as_datetime(day).date()
+                start = day
+            else:
+                day = as_datetime(_when(first)).date()
+                zone = dt_util.get_default_time_zone()
+                start = as_datetime(datetime.combine(day, as_datetime(start).time(), tzinfo=zone))
+            end = as_datetime(start) + span if not is_all_day(start) else start + span
         for item in affected:
             self._store.events.pop(item["uid"], None)
         self._insert_series(values, rule, start, end)
@@ -420,36 +434,47 @@ class FamilyHubCalendar(CalendarEntity):
         start: date | datetime,
         end: date | datetime,
     ) -> str:
-        """Store one event, or every occurrence of a rule, and return the first uid."""
-        series = uuid.uuid4().hex if rule else ""
-        starts = self._occurrence_starts(rule, start) if rule else [start]
-        span = as_datetime(end) - as_datetime(start)
+        """Store one event, or every occurrence of a rule, and return the first uid. Times are kept
+        in the local time zone, whatever offset the start came with, so the occurrences keep the
+        local time across a change of clocks."""
         all_day = is_all_day(start)
+        if not all_day:
+            start = as_datetime(start)
+            end = as_datetime(end)
+        span = as_datetime(end) - as_datetime(start)
+        series = uuid.uuid4().hex if rule else ""
+        if rule:
+            starts, horizon = self._occurrence_starts(rule, start)
+            complete_flag = recurrence.complete(rule, horizon, len(starts))
+            written = horizon.isoformat()
+        else:
+            starts, complete_flag, written = [start], False, ""
         first_uid = ""
         for when in starts:
             uid = uuid.uuid4().hex
-            when_end = as_datetime(when) + span
             self._store.events[uid] = {
                 **values,
                 "uid": uid,
                 "category": self.category_id,
                 "start": _stored(when, all_day),
-                "end": _stored(when_end, all_day),
+                "end": _stored(as_datetime(when) + span, all_day),
                 "all_day": all_day,
                 "series": series,
                 "rrule": rule or "",
+                "written": written,
+                "complete": complete_flag,
             }
             first_uid = first_uid or uid
         return first_uid
 
-    def _occurrence_starts(self, rule: str, start: date | datetime) -> list[Any]:
-        """The start of each occurrence, written out to the horizon."""
-        now = dt_util.now()
+    def _occurrence_starts(self, rule: str, start: date | datetime) -> tuple[list[Any], datetime]:
+        """The start of each occurrence, written out to the horizon, and the horizon itself."""
+        horizon = recurrence.horizon_for(dt_util.now(), as_datetime(start))
         if is_all_day(start):
-            horizon = recurrence.horizon_for(now, as_datetime(start)).date()
-            return recurrence.all_day_starts(rule, start, horizon)
-        horizon = recurrence.horizon_for(now, as_datetime(start))
-        return recurrence.starts_for(rule, as_datetime(start), horizon)
+            return recurrence.all_day_starts(rule, start, horizon.date()), horizon
+        return recurrence.starts_for(rule, as_datetime(start), horizon), horizon
+
+    # ----- Family Hub API (used by the actions) -------------------------
 
     # ----- Family Hub API (used by the actions) -------------------------
 
@@ -535,38 +560,58 @@ def _stored(value: Any, all_day: bool) -> str:
 
 
 def extend_series(store: EventStore, now: datetime) -> bool:
-    """Write the occurrences of repeating events on, up to the horizon. True if any were added."""
+    """Write the occurrences of repeating events on, up to the horizon. True if the store changed.
+
+    Each series keeps the date it was written to (``written``) and whether it has ended
+    (``complete``). Only the occurrences after ``written`` are added, so an occurrence that was
+    deleted or moved away never comes back, and a series that has ended is not extended.
+    """
     groups: dict[str, list[dict[str, Any]]] = {}
     for record in store.events.values():
         if record.get("series") and record.get("rrule"):
             groups.setdefault(str(record["series"]), []).append(record)
-    target = now + timedelta(days=recurrence.HORIZON_DAYS)
-    added = False
+    target = recurrence.horizon_for(now, now)
+    changed = False
     for items in groups.values():
         items.sort(key=lambda r: as_datetime(_when(r)))
-        first, last = items[0], items[-1]
-        last_when = as_datetime(_when(last))
-        if last_when >= target - timedelta(days=60):
+        if all(r.get("complete") for r in items):
             continue
-        rule = str(last["rrule"])
-        all_day = bool(last["all_day"])
-        starts: list[Any]
+        marks = [datetime.fromisoformat(r["written"]) for r in items if r.get("written")]
+        written = max(marks) if marks else as_datetime(_when(items[-1]))
+        if written >= target - timedelta(days=60):
+            continue
+        first, template = items[0], items[-1]
+        rule = str(template["rrule"])
+        all_day = bool(template["all_day"])
+        span = as_datetime(_when_end(template)) - as_datetime(_when(template))
         if all_day:
-            starts = recurrence.all_day_starts(rule, _when(first), target.date())
+            days = recurrence.all_day_starts(rule, _when(first), target.date())
+            new_starts: list[Any] = [
+                day
+                for day in days
+                if datetime.combine(day, time(0), tzinfo=written.tzinfo) > written
+            ]
+            generated = len(days)
         else:
             starts = recurrence.starts_for(rule, as_datetime(_when(first)), target)
-        span = as_datetime(_when_end(last)) - as_datetime(_when(last))
-        for when in starts:
-            if as_datetime(when) <= last_when:
-                continue
+            new_starts = [when for when in starts if when > written]
+            generated = len(starts)
+        created: list[dict[str, Any]] = []
+        for when in new_starts:
             uid = uuid.uuid4().hex
-            store.events[uid] = {
-                **last,
+            record = {
+                **template,
                 "uid": uid,
                 "start": _stored(when, all_day),
                 "end": _stored(as_datetime(when) + span, all_day),
                 "reminders_off": False,
                 "sent": [],
             }
-            added = True
-    return added
+            store.events[uid] = record
+            created.append(record)
+        complete = recurrence.complete(rule, target, generated)
+        for record in [*items, *created]:
+            record["written"] = target.isoformat()
+            record["complete"] = complete
+        changed = True
+    return changed

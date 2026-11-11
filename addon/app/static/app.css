@@ -1663,3 +1663,26 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .event.waste-pill, .event.waste-pill .allday-name, .event.waste-pill .ev-title {
   hyphens: none; overflow-wrap: normal; word-break: normal;
 }
+
+/* 0.8.0b2: the repeat and scope controls read like the rest of the app: light text on the glass field, the day choices as pills, the scope choice with its marker on the left. */
+#event-form input[type='number'], #event-form input[type='text'], #event-form input[type='date'], #event-form select {
+  color: #fff; background: var(--field-bg); border: none; border-radius: 18px; min-height: 50px; padding: 10px 16px; box-sizing: border-box; color-scheme: dark;
+}
+#event-form .repeat-fieldset select option { color: #111827; }
+#event-form .repeat-day {
+  display: inline-flex; flex-direction: row; align-items: center; min-height: 44px;
+  padding: 6px 14px; margin: 0; border-radius: 999px; border: 2px solid var(--glass-line);
+  background: var(--field-bg); color: #fff; font-weight: 600; position: relative; cursor: pointer;
+}
+#event-form .repeat-day input {
+  position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none;
+}
+#event-form .repeat-day:has(input:checked) { background: rgba(255, 255, 255, 0.85); color: #3b4a5e; }
+#event-form .repeat-day:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+#event-form .scope-option {
+  display: flex; flex-direction: row; align-items: center; gap: 12px; min-height: 48px;
+  margin: 4px 0; font-weight: 600;
+}
+#event-form .scope-option input[type='radio'] {
+  flex: 0 0 22px; width: 22px; height: 22px; margin: 0;
+}

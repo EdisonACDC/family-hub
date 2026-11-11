@@ -1,5 +1,18 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.8.0b2
+
+- Occorrenze che si ripetono: una serie scrive le occorrenze solo dopo quella data già scritta.
+  Un'occorrenza cancellata o spostata non torna più, né di notte né al riavvio; una serie con
+  fine (numero di volte o data) già scritta tutta non si estende più.
+- «Tutti» con una regola nuova parte dalla prima occorrenza della serie (data originale, ora e
+  durata modificate), non da quella aperta: il passato non sparisce.
+- Cambio d'ora: un inizio con un fuso fisso viene riportato all'ora locale, così le occorrenze
+  dopo il cambio d'ora restano alla stessa ora locale.
+- Finestra Nuovo/Modifica: numeri e date leggibili, giorni della settimana a pillole, scelta
+  «solo questo / questo e i successivi / tutti» con il pallino a sinistra, una sola etichetta
+  «Si ripete»; con «Ogni settimana» è già scelto il giorno dell'evento.
+
 ## 0.8.0b1
 
 - Ritiri a mano: per chi non ha un file, ogni tipo di rifiuto ha un giorno, una frequenza (ogni

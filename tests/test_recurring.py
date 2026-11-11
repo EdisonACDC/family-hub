@@ -179,3 +179,90 @@ async def test_a_reminder_belongs_to_one_occurrence(hass: HomeAssistant) -> None
     start = datetime.fromisoformat(second["start"])
     assert moments, "the occurrence has reminders"
     assert min(moments) < start
+
+
+async def _add(hass: HomeAssistant, start: str, end: str, rule: str) -> None:
+    await hass.services.async_call(
+        DOMAIN,
+        "add_event",
+        {"category": CATEGORY, "summary": "Visita", "start": start, "end": end, "rrule": rule},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+
+async def test_a_deleted_last_occurrence_does_not_come_back(hass: HomeAssistant) -> None:
+    from datetime import timedelta as _td
+
+    await _setup(hass)
+    await _create_weekly(hass, "FREQ=WEEKLY;BYDAY=TU;COUNT=4")
+    last = _series_records(hass)[-1]
+    await _calendar(hass).async_delete_event(last["uid"])
+    store = _store(hass)
+    assert extend_series(store, dt_util.now() + _td(days=1)) is False
+    assert extend_series(store, dt_util.now() + _td(days=300)) is False
+    assert len(_series_records(hass)) == 3
+
+
+async def test_a_moved_last_occurrence_of_a_repeat_with_an_end_makes_no_double(
+    hass: HomeAssistant,
+) -> None:
+    from datetime import timedelta as _td
+
+    await _setup(hass)
+    await _create_weekly(hass, "FREQ=WEEKLY;BYDAY=TU;UNTIL=20261201")
+    before = len(_series_records(hass))
+    last = _series_records(hass)[-1]
+    await _calendar(hass).async_update_event(
+        last["uid"],
+        {
+            "start": datetime.fromisoformat("2026-12-02T10:00:00+01:00"),
+            "end": datetime.fromisoformat("2026-12-02T11:00:00+01:00"),
+        },
+    )
+    extend_series(_store(hass), dt_util.now() + _td(days=200))
+    records = _series_records(hass)
+    assert len(records) == before
+    assert len({r["start"] for r in records}) == before
+
+
+async def test_all_with_a_new_rule_starts_from_the_first_occurrence(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    await _create_weekly(hass, "FREQ=WEEKLY;BYDAY=TU;COUNT=8")
+    sixth = _series_records(hass)[5]
+    assert sixth["start"][:10] == "2026-12-08"
+    await _calendar(hass).async_update_event(
+        sixth["uid"],
+        {"rrule": "FREQ=WEEKLY;INTERVAL=2;BYDAY=TU"},
+        recurrence_range="ALL",
+    )
+    days = [r["start"][:10] for r in _series_records(hass)][:5]
+    assert days == ["2026-11-03", "2026-11-17", "2026-12-01", "2026-12-15", "2026-12-29"]
+
+
+async def test_a_fixed_offset_start_keeps_the_local_hour_after_the_clock_changes(
+    hass: HomeAssistant,
+) -> None:
+    await _setup(hass)
+    await _add(
+        hass,
+        "2026-10-13T10:00:00+02:00",
+        "2026-10-13T11:00:00+02:00",
+        "FREQ=WEEKLY;BYDAY=TU;COUNT=4",
+    )
+    starts = [r["start"] for r in _series_records(hass)]
+    assert starts[0].endswith("T10:00:00+02:00")
+    late = [s for s in starts if s[:10] >= "2026-10-27"]
+    assert late and all(s.endswith("T10:00:00+01:00") for s in late), starts
+
+
+async def test_a_summer_series_extended_in_winter_keeps_the_local_hour(hass: HomeAssistant) -> None:
+    await _setup(hass)
+    await _add(
+        hass, "2026-07-07T10:00:00+02:00", "2026-07-07T11:00:00+02:00", "FREQ=WEEKLY;BYDAY=TU"
+    )
+    zone = dt_util.get_default_time_zone()
+    extend_series(_store(hass), datetime(2027, 12, 1, 12, tzinfo=zone))
+    winter = [r["start"] for r in _series_records(hass) if r["start"][:7] == "2028-01"]
+    assert winter, "the series was written on into January"
+    assert all(s.endswith("T10:00:00+01:00") for s in winter), winter
