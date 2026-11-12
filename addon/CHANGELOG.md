@@ -33,20 +33,26 @@
   «solo questo / questo e i successivi / tutti» con il pallino a sinistra, una sola etichetta
   «Si ripete»; con «Ogni settimana» è già scelto il giorno dell'evento.
 
-## 0.8.0b1
+## 0.8.0
+
+Versione stabile. Riassume le beta 0.8.0b1 → 0.8.0b4.
 
 - Ritiri a mano: per chi non ha un file, ogni tipo di rifiuto ha un giorno, una frequenza (ogni
-  settimana, 2, 4, o ogni mese) e un primo ritiro. Si aggiungono date singole, date da saltare e
-  ritiri spostati. Si crea da «Calendari esterni» e dalla procedura guidata. I ritiri si leggono
-  come un calendario da file (icone, colori, «Prossimi ritiri», promemoria, riepiloghi).
+  settimana, 2, 4, o ogni mese) e un primo ritiro, con date singole, date da saltare e ritiri
+  spostati. Si crea da «Calendari esterni» e dalla procedura guidata. Il calendario compare nel
+  pannello come «Ritiri a mano»; i ritiri si vedono nel mese, nella settimana e in «Prossimi
+  ritiri», e hanno promemoria e riepiloghi come quelli da file.
 - Appuntamenti che si ripetono: ogni giorno, ogni settimana (con i giorni scelti), ogni 2
   settimane, ogni mese (lo stesso giorno o «il 2° martedì»), ogni anno; fine: mai, a una data, o
   dopo un numero di volte. Modifica ed eliminazione chiedono: «solo questo», «questo e i
-  successivi», «tutti».
-- Vista settimana: un nome di rifiuto non si spezza più a metà parola; una parola troppo lunga
-  si accorcia con «…».
-- Lasciando la procedura guidata senza salvare, la data sotto l'ora torna subito nella lingua
-  salvata.
+  successivi», «tutti». La scheda dice la ripetizione in una riga («Ogni giovedì · 4 volte»).
+  Un'occorrenza cancellata o spostata non torna; un cambio d'ora non sposta l'ora locale.
+- Correzioni grafiche: nella vista settimana un nome di rifiuto non si spezza più a metà parola
+  (si accorcia con «…»); numeri e date leggibili nella finestra Nuovo/Modifica; le finestre
+  aperte dalla procedura guidata (ritiri, calendari esterni) stanno sopra di essa.
+- Lingua dopo il riavvio di Home Assistant: finché HA non risponde il pannello non riceve una
+  lingua di ripiego; appena risponde riceve la lingua, il tema, l'orario e il primo giorno della
+  famiglia, senza ricaricare la pagina.
 
 ## 0.7.8
 

@@ -8,6 +8,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e.conftest import Stack
+from tests.e2e.settle import settle
 from tests.e2e.test_layout_071_e2e import _open, _screens, _seeded
 from tests.e2e.test_tablet import _device
 
@@ -151,7 +152,7 @@ def test_no_italian_label_is_left_on_any_screen(
                 _open(page, stack_full)
                 try:
                     go(page)
-                    page.wait_for_timeout(150)
+                    settle(page)
                     words = [
                         w for w in ITALIAN_LABELS if not (language == "de" and w in GERMAN_WORDS)
                     ]

@@ -19,6 +19,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e.conftest import Stack
+from tests.e2e.settle import settle
 from tests.e2e.test_tablet import _device, _push
 from tests.fake_ha import FAMILY, WASTE, stored_event
 
@@ -286,7 +287,7 @@ def test_every_screen_fits_and_its_buttons_are_reachable(
             _open(page, stack_full)
             try:
                 go(page)
-                page.wait_for_timeout(150)
+                settle(page)
                 for item in page.evaluate(CHECK_JS):
                     problems.append(f"{name}: {item}")
             except Exception as err:  # the screen could not be reached at this size
@@ -306,9 +307,11 @@ def test_lists_entry_line_fits_and_adds_an_item(
         expect(overlay).to_be_visible(timeout=3000)
         entry = overlay.locator(".todo-add")
         expect(entry).to_be_visible(timeout=5000)
-        entry.locator("input").fill("Latte di prova")
+        # A name of its own for each size: the list is shared by the tests of this module.
+        item = f"Latte {width}x{height}"
+        entry.locator("input").fill(item)
         entry.locator("button[type='submit']").click()
-        expect(overlay.get_by_text("Latte di prova", exact=True)).to_be_visible(timeout=5000)
+        expect(overlay.get_by_text(item, exact=True)).to_be_visible(timeout=5000)
         problems = page.evaluate(CHECK_JS)
         assert not problems, f"at {width}x{height}: {problems}"
 

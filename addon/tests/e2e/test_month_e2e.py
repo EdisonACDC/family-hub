@@ -66,8 +66,19 @@ def test_busy_bar_counts_hours_and_not_rubbish(stack_full: Stack, tablet: Page) 
         width = cell.locator(".occ-fill").evaluate("e => e.style.width")
         assert width == "64%", width
         # As many lines as the cell has room for, the rest in "+N altri" (4 events that day).
-        # The lines that fit are chosen once the month is drawn: wait for that to settle.
-        tablet.wait_for_timeout(300)
+        # The lines that fit are chosen once the month is drawn: wait until the lines shown and the
+        # "+N" agree (no fixed time).
+        tablet.wait_for_function(
+            """day => {
+              const c = document.querySelector('.month-day[data-day="' + day + '"]');
+              if (!c) return false;
+              const shown = c.querySelectorAll('.month-ev:not([hidden])').length;
+              const more = c.querySelector('.month-more');
+              if (!more) return shown === 4;
+              return parseInt(more.textContent.replace('+', ''), 10) === 4 - shown;
+            }""",
+            arg=day,
+        )
         lines = cell.locator(".month-ev:not([hidden])").count()
         assert lines >= 1
         expect(cell.locator(".month-more")).to_have_text(f"+{4 - lines} altri")

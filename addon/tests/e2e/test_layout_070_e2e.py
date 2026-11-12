@@ -18,6 +18,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e.conftest import Stack
+from tests.e2e.settle import settle
 from tests.e2e.test_tablet import _shot
 from tests.fake_ha import FAMILY, stored_event
 from tests.helpers import ADULT_USER
@@ -189,7 +190,11 @@ def test_phone_bars_tabs_and_the_plus_never_covers_an_event(
         # Scrolled to the end, the last event is above the + and the tabs.
         page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
         page.locator("#week").evaluate("w => w.scrollTo(0, w.scrollHeight)")
-        page.wait_for_timeout(200)
+        # Wait until the week has scrolled to its end (no fixed time).
+        page.wait_for_function(
+            "() => { const w = document.getElementById('week');"
+            " return w.scrollTop + w.clientHeight >= w.scrollHeight - 2; }"
+        )
         last = page.locator("#week .event").last.bounding_box()
         plus = page.locator("#add-btn").bounding_box()
         assert last and plus and last["y"] + last["height"] <= bar["y"] + 1, (last, plus)
@@ -340,7 +345,7 @@ def test_a_day_shows_as_many_events_as_fit_then_how_many_are_hidden(
             cell = page.locator(f".month-day[data-day='{day.isoformat()}']")
             expect(cell).to_be_visible(timeout=5000)
             expect(cell.locator(".month-ev").first).to_be_attached(timeout=5000)
-            page.wait_for_timeout(200)
+            settle(page)
             shown = cell.locator(".month-ev:not([hidden])").count()
             assert shown >= 2, shown
             more = cell.locator(".month-more")

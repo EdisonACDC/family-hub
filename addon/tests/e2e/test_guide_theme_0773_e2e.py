@@ -10,6 +10,7 @@ import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e.conftest import Stack
+from tests.e2e.settle import settle
 from tests.e2e.test_layout_071_e2e import CHECK_JS, _open, _screens, _seeded
 from tests.e2e.test_tablet import _device
 
@@ -143,7 +144,7 @@ def test_every_screen_fits_in_the_dark_theme(
                 _open(page, stack_full)
                 try:
                     go(page)
-                    page.wait_for_timeout(150)
+                    settle(page)
                     for item in page.evaluate(CHECK_JS):
                         problems.append(f"{name}: {item}")
                 except Exception as err:  # the screen could not be reached at this size
