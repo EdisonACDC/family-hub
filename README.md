@@ -1,92 +1,117 @@
-# Family Hub
+<p align="center">
+  <img src="addon/icon.png" width="96" alt="Family Hub icon">
+</p>
 
-[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20on%20Ko--fi-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/edisonacdc)
+<h1 align="center">Family Hub</h1>
 
-Calendario di famiglia per Home Assistant: persone, un calendario per categoria, promemoria
-con notifiche su telefono, altoparlanti e tablet, e un pannello da parete per tablet. Tutto si
-configura dall'interfaccia, senza YAML.
+<p align="center">
+  <b>English</b> · <a href="README.it.md">Italiano</a> · <a href="README.de.md">Deutsch</a>
+</p>
 
-Il progetto è composto da due parti:
+<p align="center">
+  The family calendar Home Assistant was missing: one colour per person, reminders on phone, Alexa
+  and wall tablet, bin days and school holidays – set up in minutes, no YAML.
+</p>
 
-- **Integrazione** `custom_components/family_hub`: calendari, eventi, promemoria, riepiloghi,
-  turni, avvisi per persona, meteo, calendari esterni (ICS).
-- **Add-on** «Family Hub UI» (`addon/`): l'interfaccia per tablet, nel pannello laterale di
-  Home Assistant.
+<p align="center">
+  <a href="https://github.com/EdisonACDC/family-hub/releases/latest"><img src="https://img.shields.io/github/v/release/EdisonACDC/family-hub" alt="Release"></a>
+  <a href="https://hacs.xyz/"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS custom"></a>
+  <a href="https://ko-fi.com/edisonacdc"><img src="https://img.shields.io/badge/Ko--fi-Support%20on%20Ko--fi-FF5E5B?logo=kofi&logoColor=white" alt="Support on Ko-fi"></a>
+</p>
 
-## Installazione
+<p align="center">
+  <a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=EdisonACDC&repository=family-hub&category=integration"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Open your Home Assistant and open the Family Hub integration in HACS"></a>
+  &nbsp;
+  <a href="https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FEdisonACDC%2Ffamily-hub"><img src="https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg" alt="Open your Home Assistant and add the Family Hub add-on repository"></a>
+</p>
 
-### 1. L'integrazione, da HACS
+<p align="center">
+  <img src="docs/images/demo.gif" width="320" alt="Family Hub on a wall tablet">
+</p>
 
-1. In HACS: **⋮ → Repository personalizzati**, indirizzo `https://github.com/EdisonACDC/family-hub`,
-   categoria **Integrazione**.
-2. Cerca **Family Hub** in HACS e installalo.
-3. Riavvia Home Assistant.
-4. Impostazioni → Dispositivi e servizi → **Aggiungi integrazione** → **Family Hub**.
+<p align="center">
+  <img src="docs/images/screenshots.png" alt="Family Hub screenshots: week view, reminders, pickups and repeating events">
+</p>
 
-### 2. L'add-on, dallo store
+## Features
 
-1. Impostazioni → Add-on → **Store** (in basso a destra) → **⋮ → Repository**.
-2. Incolla `https://github.com/EdisonACDC/family-hub` e conferma.
-3. Apri **Family Hub UI**, premi **Installa**, poi **Avvia**.
-4. Nel menu laterale compare **Family Hub**: è il pannello del tablet.
+- **Week view** on the wall tablet and the PC, and an **agenda** on the phone (today and tomorrow).
+- **One colour per person**, all-day and timed events, filters per calendar, and a **+** button for new events.
+- **Repeating events**: every day, weekly on the days you choose, every 2 weeks, monthly, yearly. They
+  end never, on a date, or after a number of times. Editing or deleting asks: *only this*, *this and
+  the following*, or *all*.
+- **Reminders**: pop-ups on the tablet (*Done*, *Snooze*, *Stop*), phone notifications with buttons,
+  Alexa or text-to-speech, and morning and evening summaries.
+- **Bin days**: one reminder per pickup, the evening before and in the morning. Types are recognised
+  from the event title (Restmüll, Bio, Papier, Gelber Sack, Glas), colours can be changed. Pickups can
+  also be made by hand: weekly, every 2 or 4 weeks, or monthly, with extra and skipped dates.
+- **Weather** from the entity you choose: at the top, under each day, and in the summaries.
+- **Shifts** per person, entered across several days.
+- **Shopping lists** from Home Assistant's to-do lists.
+- **Roles**: adults see everything, children see their own events and reminders, guests can only read.
+- **External calendars** (ICS): school holidays, public holidays, bins from your municipality. Read-only.
 
-L'add-on richiede che l'integrazione sia già configurata. Per la prima configurazione il pannello
-apre la procedura guidata da sola.
+## Installation
 
-## Configurazione
+1. **Install the integration.** In HACS, open **⋮ → Custom repositories**, add
+   `https://github.com/EdisonACDC/family-hub` as an **Integration**, install **Family Hub**, then restart
+   Home Assistant. Add it under **Settings → Devices & services → Add integration**.
+2. **Install the add-on.** Use the button above, or go to **Settings → Add-ons → Add-on Store → ⋮ →
+   Repositories** and paste `https://github.com/EdisonACDC/family-hub`. Open **Family Hub UI**, press
+   **Install**, then **Start**.
+3. **Open Family Hub** from the side menu. The setup guide opens by itself the first time: name the
+   family, add the people, choose the calendars, and you are done.
 
-Dalla procedura guidata (o da Impostazioni → Dispositivi e servizi → Family Hub → Configura):
+The add-on needs the integration to be set up first.
 
-- **Famiglia**: nome, lingua, primo giorno della settimana, orario 24 h o 12 h.
-- **Persone**: nome, colore, ruolo (adulto, bambino, ospite), utente Home Assistant collegato,
-  telefono e altoparlante per gli avvisi, orari di silenzio.
-- **Calendari**: categorie (Famiglia, Scuola, Dottore, Compleanni, o altre).
-- **Promemoria**: anticipi, canali, silenzio della famiglia, orari del riepilogo.
-- **Fonti**: liste della spesa (to-do), calendari già presenti in Home Assistant, un'entità
-  meteo (`weather.*`).
-- **Calendari esterni** (solo adulti): un file ICS da link o da file, per esempio rifiuti,
-  vacanze o festività. Sola lettura, aggiornamento ogni 12 ore.
-- **Avvisi**: per ogni persona, telefono ed Echo scelti tra quelli che Home Assistant conosce,
-  canali, volume dell'annuncio, silenzio, prova.
+## Configuration
 
-## Cosa fa
+Everything is set from the guide, or later from **Settings → Devices & services → Family Hub → Configure**:
 
-- **Settimana a colonne** sul tablet e sul PC, **agenda** sul telefono (oggi e domani).
-- **Eventi** di tutto il giorno e a orario, con filtri per calendario; nuovo evento con il pulsante **+**.
-- **Promemoria** con popup sul tablet (*Fatto*, *Posticipa*, *Ferma*), notifiche con pulsanti,
-  altoparlanti Alexa o tts, riepiloghi del mattino e della sera.
-- **Rifiuti**: un promemoria per giorno di ritiro, la sera prima e la mattina, con i tipi
-  riconosciuti dal titolo (Restmüll, Bio, Papier, Gelber Sack, Glas) e colori modificabili.
-- **Meteo** dall'entità scelta: in alto, sotto ogni giorno, e nei riepiloghi.
-- **Turni** per persona, inseriti su più giorni.
-- **Liste** della spesa dal to-do di Home Assistant.
+- **Family**: name, language, first day of the week, 24 h or 12 h clock.
+- **People**: name, colour, role (adult, child, guest), linked Home Assistant user, phone and speaker for
+  alerts, quiet hours.
+- **Calendars**: categories such as Family, School, Doctor, Birthdays, or your own.
+- **Reminders**: how early, which channels, family quiet time, summary times.
+- **Sources**: to-do lists, calendars already in Home Assistant, one weather entity (`weather.*`).
+- **External calendars** (adults only): an ICS file from a link or a file. Refreshed every 12 hours.
+- **Alerts**: per person, the phone and Echo speaker chosen from those Home Assistant knows, channels,
+  announcement volume, quiet time, and a test.
 
-Chi usa il tablet vede ciò che gli spetta: l'adulto tutto, il bambino i propri eventi e avvisi,
-l'ospite solo la lettura.
+## FAQ
 
-## Sicurezza e dati
+**Do I need Alexa?** No. Speakers are optional; without them the other channels still work.
 
-- Nessun database: la configurazione è nelle opzioni dell'integrazione, il contenuto dei
-  calendari esterni nello storage di Home Assistant.
-- L'add-on parla con Home Assistant solo tramite la sua WebSocket, con il token del supervisor,
-  e il browser parla con l'add-on solo tramite Ingress. Le richieste da fuori Ingress ricevono 403.
-- I comandi che cambiano la configurazione richiedono un amministratore di Home Assistant. Il
-  controllo di ruolo (adulto, bambino, ospite) è nel server dell'add-on.
-- Il link di un calendario esterno può contenere un token: è mostrato solo agli adulti e non viene
-  scritto nei log.
+**Do I need the Home Assistant mobile app?** No. Phone notifications need it; without it those options
+are simply hidden.
 
-## Stato e limiti
+**Do I need YAML?** No. Everything is set up in the interface.
 
-- Testato con Home Assistant 2026.10.4 su un'installazione finta (test automatici) e su un
-  tablet nel browser. **Non ancora provato su un'installazione reale**: scaricare un calendario
-  da un link, i pulsanti delle notifiche sul telefono (evento `mobile_app_notification_action`
-  dell'app Companion) e l'invio ad Alexa vanno verificati su casa propria.
-- L'icona del meteo e quelle dei rifiuti sono disegnate per il progetto.
-- Le persone e i calendari di esempio nei test sono inventati.
+**Do I need the add-on?** The calendars and reminders work with the integration alone. The wall-tablet
+screen is the add-on.
 
-## Test
+**Where is my data kept?** There is no database. The settings are in the integration's options, and the
+content of external calendars is in Home Assistant's storage.
 
-Integrazione (da cartella principale, con Home Assistant di test):
+**Does it work in other languages?** Italian, German and English, from the Home Assistant language.
+
+## Status and limits
+
+- Tested with Home Assistant 2026.10.4 on a test installation (automated tests) and on a tablet in the
+  browser. Still to check on a real home: downloading an external calendar from a link, the notification
+  buttons on the phone (the Companion app's `mobile_app_notification_action` event), and Alexa announcements.
+- The weather and bin icons were drawn for this project.
+- The people and calendars in the tests are invented.
+
+## Support
+
+If Family Hub helps your family, you can buy me a coffee ☕ [ko-fi.com/edisonacdc](https://ko-fi.com/edisonacdc)
+
+If it helps your family, please ⭐ the repo – it helps other families find it.
+
+## Development
+
+Integration (from the main folder, with a test Home Assistant):
 
 ```bash
 python -m venv .venv
@@ -97,7 +122,7 @@ ruff check . && ruff format --check .
 mypy
 ```
 
-Add-on (con un Home Assistant finto e il browser Microsoft Edge):
+Add-on (with a fake Home Assistant and the Microsoft Edge browser):
 
 ```bash
 cd addon
@@ -105,14 +130,6 @@ pip install -r requirements.txt pytest playwright
 pytest
 ```
 
-## Licenza
+## License
 
-MIT, vedi [LICENSE](LICENSE). Changelog dell'add-on: [addon/CHANGELOG.md](addon/CHANGELOG.md).
-
-## Support / Supporta / Unterstützen
-
-**English:** Family Hub is free. If it helps your family, you can buy me a coffee ☕ [ko-fi.com/edisonacdc](https://ko-fi.com/edisonacdc)
-
-**Italiano:** Family Hub è gratuito. Se ti aiuta in famiglia, puoi offrirmi un caffè ☕ [ko-fi.com/edisonacdc](https://ko-fi.com/edisonacdc)
-
-**Deutsch:** Family Hub ist kostenlos. Wenn es deiner Familie hilft, kannst du mir einen Kaffee spendieren ☕ [ko-fi.com/edisonacdc](https://ko-fi.com/edisonacdc)
+MIT, see [LICENSE](LICENSE). Add-on changelog: [addon/CHANGELOG.md](addon/CHANGELOG.md).
