@@ -356,8 +356,16 @@ class FamilyHubCalendar(CalendarEntity):
         """Delete an event. For a repeating event, the range says which occurrences: this one only
         (no range), this one and the ones after it (THISANDFUTURE), or all of them (ALL)."""
         record = self._get_own_record(uid)
+        series = record.get("series")
         for item in self._affected(record, recurrence_range):
             self._store.events.pop(item["uid"], None)
+        if series and recurrence_range == "THISANDFUTURE":
+            # The occurrences left keep their rule, saying how many they are or where they end.
+            left = self._series_records(str(series))
+            if left:
+                rule = recurrence.ended_rule(str(left[0]["rrule"]), len(left), _when(left[-1]))
+                for item in left:
+                    item["rrule"] = rule
         await self._async_save_and_refresh()
 
     # ----- repeating events --------------------------------------------

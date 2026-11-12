@@ -74,6 +74,7 @@ Handler = Callable[[web.Request], Awaitable[web.StreamResponse]]
 
 
 class Hub:
+    settings_pending: bool = False
     """Connects browsers (sockets) to Home Assistant (one HAClient)."""
 
     def __init__(self, ha: HAClient) -> None:
@@ -94,6 +95,8 @@ class Hub:
                 await self.ha.subscribe("subscribe_events", self.on_reminder, event_type=event_type)
             await self.sync_entities()
         await self.broadcast({"type": "connection", "connected": connected})
+        if connected:
+            await self.broadcast_settings()
         # Who each browser is depends on Home Assistant: tell every browser again.
         for ws, user in list(self.browsers.items()):
             await self.send_identity(ws, user)
@@ -566,58 +569,42 @@ class Hub:
         calendars = await self.family_calendars()
         return list(calendars[0]["persons"]) if calendars else []
 
-    async def language(self) -> str:
-        """The page's language: the family's own once it is chosen, else Home Assistant's, else
-        English. Never a fixed language."""
+    async def settings_message(self) -> dict[str, Any] | None:
+        """The page's settings from Home Assistant: theme, language, clock, first day of the week.
+        None while Home Assistant does not answer: the page keeps what it has, not a guess."""
         try:
             config = await self.ha.call("family_hub/config/get")
         except HAError:
-            config = {}
-        family = str((config.get("family") or {}).get("language") or "").lower()
-        if family in SUPPORTED_LANGUAGES:
-            return family
-        try:
-            info = await self.ha.call("family_hub/info")
-        except HAError:
-            info = {}
-        home = str(info.get("language") or "").split("-")[0].lower()
-        return home if home in SUPPORTED_LANGUAGES else "en"
+            return None
+        family = config.get("family") or {}
+        screen = config.get("screen") or {}
+        language = str(family.get("language") or "").lower()
+        if language not in SUPPORTED_LANGUAGES:
+            try:
+                info = await self.ha.call("family_hub/info")
+            except HAError:
+                return None
+            home = str(info.get("language") or "").split("-")[0].lower()
+            language = home if home in SUPPORTED_LANGUAGES else "en"
+        clock = str(family.get("time_format", "24h"))
+        first = str(family.get("first_weekday", "monday"))
+        week = screen.get("week_from_today", True)
+        return {
+            "type": "theme",
+            "theme": str(screen.get("theme", "auto")),
+            "language": language,
+            "time_format": clock if clock in ("24h", "12h") else "24h",
+            "first_weekday": first if first in ("monday", "sunday") else "monday",
+            "week_from_today": week if isinstance(week, bool) else True,
+        }
 
-    async def theme(self) -> str:
-        """The screen theme chosen in the setup guide ("auto" when unknown)."""
-        try:
-            config = await self.ha.call("family_hub/config/get")
-        except HAError:
-            return "auto"
-        return str(config.get("screen", {}).get("theme", "auto"))
-
-    async def first_weekday(self) -> str:
-        """The first day of the week in the family's settings: "monday" or "sunday"."""
-        try:
-            config = await self.ha.call("family_hub/config/get")
-        except HAError:
-            return "monday"
-        value = str(config.get("family", {}).get("first_weekday", "monday"))
-        return value if value in ("monday", "sunday") else "monday"
-
-    async def week_from_today(self) -> bool:
-        """Whether the week shown starts today (the tablet's default) or on the first day."""
-        try:
-            config = await self.ha.call("family_hub/config/get")
-        except HAError:
-            return True
-        value = config.get("screen", {}).get("week_from_today", True)
-        return value if isinstance(value, bool) else True
-
-    async def time_format(self) -> str:
-        """The family's clock: "24h" or "12h", chosen in the setup guide. Every time on the
-        screen follows it, not the browser's own setting."""
-        try:
-            config = await self.ha.call("family_hub/config/get")
-        except HAError:
-            return "24h"
-        value = str(config.get("family", {}).get("time_format", "24h"))
-        return value if value in ("24h", "12h") else "24h"
+    async def broadcast_settings(self) -> None:
+        """Send every browser its settings. While Home Assistant does not answer, nothing is sent;
+        the retry loop keeps asking, so a wall tablet is put right without a reload."""
+        message = await self.settings_message()
+        self.settings_pending = message is None
+        if message is not None:
+            await self.broadcast(message)
 
     async def admin_ids(self) -> set[str]:
         """Home Assistant users in the system-admin group."""
@@ -852,17 +839,7 @@ class Hub:
                     raise TypeError("config must be an object")
                 await self.ha.call("family_hub/config/save", config=config)
                 self.schedule_resync()
-                theme = str(config.get("screen", {}).get("theme", "auto"))
-                await self.broadcast(
-                    {
-                        "type": "theme",
-                        "theme": theme,
-                        "language": await self.language(),
-                        "time_format": await self.time_format(),
-                        "first_weekday": await self.first_weekday(),
-                        "week_from_today": await self.week_from_today(),
-                    }
-                )
+                await self.broadcast_settings()
                 return {"ok": True}
             if op == "service":
                 await self.service(identity, str(request["service"]), request.get("data", {}))
@@ -1154,16 +1131,11 @@ async def _ws_handler(request: web.Request) -> web.WebSocketResponse:
     hub.browsers[ws] = user_id
     await hub.send_identity(ws, user_id)
     await ws.send_json({"type": "connection", "connected": hub.ha.connected})
-    await ws.send_json(
-        {
-            "type": "theme",
-            "theme": await hub.theme(),
-            "language": await hub.language(),
-            "time_format": await hub.time_format(),
-            "first_weekday": await hub.first_weekday(),
-            "week_from_today": await hub.week_from_today(),
-        }
-    )
+    message = await hub.settings_message()
+    if message is None:
+        hub.settings_pending = True
+    else:
+        await ws.send_json(message)
     try:
         async for msg in ws:
             if msg.type != WSMsgType.TEXT:
@@ -1233,6 +1205,19 @@ async def _health(_request: web.Request) -> web.Response:
     return web.Response(text="ok")
 
 
+SETTINGS_RETRY_SECONDS = 2
+SETTINGS_TASK = web.AppKey("settings_task", asyncio.Task)
+
+
+async def _settings_loop(hub: Hub) -> None:
+    """Asks again for the settings until Home Assistant answers (after a restart, say)."""
+    while True:
+        await asyncio.sleep(SETTINGS_RETRY_SECONDS)
+        if hub.settings_pending and hub.ha.connected:
+            with contextlib.suppress(HAError):
+                await hub.broadcast_settings()
+
+
 async def _sync_loop(hub: Hub) -> None:
     while True:
         await asyncio.sleep(SYNC_SECONDS)
@@ -1252,9 +1237,10 @@ def create_app(
     async def start(app: web.Application) -> None:
         app[HA_TASK] = asyncio.create_task(ha.run())
         app[SYNC_TASK] = asyncio.create_task(_sync_loop(app[HUB]))
+        app[SETTINGS_TASK] = asyncio.create_task(_settings_loop(app[HUB]))
 
     async def stop(app: web.Application) -> None:
-        for key in (SYNC_TASK, HA_TASK):
+        for key in (SETTINGS_TASK, SYNC_TASK, HA_TASK):
             task = app.get(key)
             if task is not None:
                 task.cancel()

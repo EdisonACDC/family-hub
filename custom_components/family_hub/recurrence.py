@@ -140,3 +140,20 @@ def complete(rule: str, horizon: datetime, generated: int) -> bool:
     if "UNTIL" in parts:
         return horizon.strftime("%Y%m%d") >= parts["UNTIL"][:8]
     return False
+
+
+def ended_rule(rule: str, count: int, last: date) -> str:
+    """The rule of the occurrences left after a change, so that the rule says the same as the dates:
+    a count becomes the number left, an end date becomes the last one left."""
+    items = rule.split(";")
+    upper = [item.upper() for item in items]
+    if any(item.startswith("COUNT=") for item in upper):
+        return ";".join(
+            f"COUNT={count}" if item.upper().startswith("COUNT=") else item for item in items
+        )
+    if any(item.startswith("UNTIL=") for item in upper):
+        return ";".join(
+            f"UNTIL={last.strftime('%Y%m%d')}" if item.upper().startswith("UNTIL=") else item
+            for item in items
+        )
+    return rule

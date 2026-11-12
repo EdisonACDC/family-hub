@@ -8,6 +8,7 @@ family_hub actions. Calls are recorded so tests can check what the add-on asked 
 from __future__ import annotations
 
 import copy
+import time
 import uuid
 from typing import Any
 
@@ -187,10 +188,11 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.8.0b3"
+    integration_version = "0.8.0b4"
     ha_language = "it"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
+    config_refused_until: float = 0.0
     manual: dict = {"rules": [], "extra": [], "skip": [], "moves": []}
     saved_manual: list = []
     configured = True
@@ -369,7 +371,10 @@ class FakeHA:
                 },
             )
         elif kind == "family_hub/config/get":
-            await self._reply(ws, msg_id, True, copy.deepcopy(self.config))
+            if time.monotonic() < self.config_refused_until:
+                await self._reply(ws, msg_id, False, None, "not ready", "not_ready")
+            else:
+                await self._reply(ws, msg_id, True, copy.deepcopy(self.config))
         elif kind == "family_hub/config/save":
             await self._save_config(ws, msg)
         elif kind == "family_hub/notify/save":

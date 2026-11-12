@@ -1,5 +1,15 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.8.0b4
+
+- Lingua, tema, orario e primo giorno dopo un riavvio di Home Assistant: finché HA non risponde il
+  pannello non riceve una lingua di ripiego; appena risponde, riceve le impostazioni della famiglia
+  senza bisogno di ricaricare la pagina.
+- «Questo e i successivi» che accorcia una serie: la scheda, la finestra Modifica e le occorrenze
+  che restano dicono lo stesso numero di volte (o la stessa data di fine).
+- «Modifica» su «Ritiri a mano» in «Calendari esterni» lascia la lista aperta sotto: chiudendo i
+  ritiri si torna lì.
+
 ## 0.8.0b3
 
 - Ritiri a mano nel pannello: il calendario compare in «Calendari esterni» come «Ritiri a mano»

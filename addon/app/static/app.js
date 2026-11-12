@@ -2921,10 +2921,8 @@
     var actions = el("div", { class: "notify-tests" });
     if (cal.source === "manual") {
       // The pickups made by hand: no link, no file, nothing to refresh. "Modifica" reopens their window.
-      actions.appendChild(button(I.f("manualEdit"), "btn btn-primary", function () {
-        $("ics-overlay").hidden = true;
-        openManual();
-      }));
+      // The list stays open underneath: closing the pickups returns to it.
+      actions.appendChild(button(I.f("manualEdit"), "btn btn-primary", openManual));
       card.appendChild(actions);
       return card;
     }

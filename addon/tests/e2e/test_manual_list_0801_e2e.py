@@ -3,6 +3,8 @@ the week and "Prossimi ritiri", as a file's pickups do."""
 
 from __future__ import annotations
 
+import re
+
 from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e.conftest import Stack
@@ -52,6 +54,35 @@ def test_pickups_made_by_hand_show_in_the_month_week_and_next_pickups(
                 1, timeout=6000
             )
             page.locator("#pickups-close").click()
+    finally:
+        stack_full.fake.manual = {"rules": [], "extra": [], "skip": [], "moves": []}
+        stack_full.fake.events.pop("calendar.family_hub_ext_manualwaste", None)
+
+
+def test_modifica_on_the_pickups_opens_them_over_the_list_and_closing_returns_to_it(
+    stack_full: Stack, browser: Browser
+) -> None:
+    stack_full.fake.manual = {
+        "rules": [
+            {"type": "bio", "frequency": "biweekly", "weekday": "tue", "first": "2026-11-17"}
+        ],
+        "extra": [],
+        "skip": [],
+        "moves": [],
+    }
+    try:
+        with _device(browser, 390, 844) as page:
+            _open(page, stack_full)
+            page.locator("#menu-btn").click()
+            page.locator("#menu-ics").click()
+            card = page.locator("#ics-body .ics-card", has_text="Ritiri a mano")
+            expect(card).to_be_visible(timeout=5000)
+            card.get_by_role("button", name=re.compile("Modifica|Bearbeiten|Edit")).click()
+            expect(page.locator("#manual-overlay")).to_be_visible(timeout=3000)
+            # Closing the pickups returns to the list, still open.
+            page.locator("#manual-cancel").click()
+            expect(page.locator("#manual-overlay")).to_be_hidden()
+            expect(page.locator("#ics-overlay")).to_be_visible()
     finally:
         stack_full.fake.manual = {"rules": [], "extra": [], "skip": [], "moves": []}
         stack_full.fake.events.pop("calendar.family_hub_ext_manualwaste", None)

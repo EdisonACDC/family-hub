@@ -266,3 +266,32 @@ async def test_a_summer_series_extended_in_winter_keeps_the_local_hour(hass: Hom
     winter = [r["start"] for r in _series_records(hass) if r["start"][:7] == "2028-01"]
     assert winter, "the series was written on into January"
     assert all(s.endswith("T10:00:00+01:00") for s in winter), winter
+
+
+async def test_this_and_the_following_deleted_leaves_a_rule_that_says_how_many_are_left(
+    hass: HomeAssistant,
+) -> None:
+    from datetime import timedelta as _td
+
+    await _setup(hass)
+    await _create_weekly(hass, "FREQ=WEEKLY;BYDAY=TU;COUNT=4")
+    third = _series_records(hass)[2]
+    await _calendar(hass).async_delete_event(third["uid"], recurrence_range="THISANDFUTURE")
+    left = _series_records(hass)
+    assert len(left) == 2
+    assert {r["rrule"] for r in left} == {"FREQ=WEEKLY;BYDAY=TU;COUNT=2"}
+    # The rule still matches the dates: the night's extension adds nothing.
+    assert extend_series(_store(hass), dt_util.now() + _td(days=300)) is False
+    assert len(_series_records(hass)) == 2
+
+
+async def test_this_and_the_following_deleted_from_a_repeat_with_an_end_date(
+    hass: HomeAssistant,
+) -> None:
+    await _setup(hass)
+    await _create_weekly(hass, "FREQ=WEEKLY;BYDAY=TU;UNTIL=20261201")
+    third = _series_records(hass)[2]
+    await _calendar(hass).async_delete_event(third["uid"], recurrence_range="THISANDFUTURE")
+    left = _series_records(hass)
+    assert [r["start"][:10] for r in left] == ["2026-11-03", "2026-11-10"]
+    assert {r["rrule"] for r in left} == {"FREQ=WEEKLY;BYDAY=TU;UNTIL=20261110"}
