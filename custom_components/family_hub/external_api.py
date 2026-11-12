@@ -111,7 +111,7 @@ def _status_of(manager: Any, source: dict[str, Any]) -> dict[str, Any]:
         "remind_at": source.get("remind_at", ""),
         "morning_at": source.get("morning_at", ""),
         "return_notice": bool(source.get("return_notice", False)),
-        "source": "link" if source.get("url") else "file",
+        "source": ("manual" if source.get("manual") else ("link" if source.get("url") else "file")),
         "url": source.get("url", ""),
         "updated": status.get("updated"),
         "error": status.get("error"),
@@ -132,7 +132,8 @@ async def ws_ics_list(
     connection.send_result(
         msg["id"],
         {
-            "calendars": [_status_of(manager, s) for s in entry.options.get(OPT_EXTERNAL, [])],
+            # The files and links, and the pickups made by hand (sources() has both).
+            "calendars": [_status_of(manager, s) for s in manager.sources()],
             "waste_styles": manager.waste_styles(),
             "waste_types": manager.waste_types(),
             "waste_kinds": {

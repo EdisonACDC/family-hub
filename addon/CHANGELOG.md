@@ -1,5 +1,15 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.8.0b3
+
+- Ritiri a mano nel pannello: il calendario compare in «Calendari esterni» come «Ritiri a mano»
+  (con «Modifica»), e i suoi ritiri si vedono nel mese, nella settimana e in «Prossimi ritiri».
+- La scheda di un appuntamento che si ripete lo dice in una riga («Ogni giovedì · 4 volte»).
+- «Quali occorrenze eliminare?»: nessun pulsante evidenziato sul «Tutti»; «Solo questo» è quello
+  principale.
+- Procedura guidata: «Crea a mano» e «Calendari esterni» si aprono sopra la procedura, e chiudendole
+  si torna allo stesso passo, con l'elenco dei calendari aggiornato.
+
 ## 0.8.0b2
 
 - Occorrenze che si ripetono: una serie scrive le occorrenze solo dopo quella data già scritta.

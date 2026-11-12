@@ -1119,6 +1119,35 @@
     return ORDINALS_EN[n - 1] || String(n);
   }
 
+  // The repeat rule in one line for the card: "Ogni giovedì · 4 volte", "Ogni 2 settimane · fino al 31/12".
+  function repeatSummary(rule) {
+    var p = parseRule(rule);
+    var names = t("daysLong");
+    var codes = p.days.filter(function (c) { return REPEAT_CODES.indexOf(c) !== -1; });
+    var dayNames = codes.map(function (c) { return names[REPEAT_CODES.indexOf(c)]; }).join(", ");
+    var text;
+    if (p.kind === "daily") {
+      text = I.f("repeatSumDaily");
+    } else if (p.kind === "weekly") {
+      text = I.f("repeatSumWeekly").replace("{days}", dayNames);
+    } else if (p.kind === "biweekly") {
+      text = I.f("repeatSumBiweekly") + (dayNames ? " · " + dayNames : "");
+    } else if (p.kind === "monthly_nth") {
+      var nth = /^(\d)([A-Z]{2})$/.exec(p.days[0] || "");
+      text = nth
+        ? I.f("repeatSumMonthNth").replace("{ord}", repeatOrdinal(parseInt(nth[1], 10)))
+          .replace("{day}", names[REPEAT_CODES.indexOf(nth[2])])
+        : I.f("repeatSumMonthDay");
+    } else if (p.kind === "yearly") {
+      text = I.f("repeatSumYearly");
+    } else {
+      text = I.f("repeatSumMonthDay");
+    }
+    if (p.count) text += " · " + I.f("repeatSumCount").replace("{n}", p.count);
+    else if (p.until) text += " · " + I.f("repeatSumUntil").replace("{d}", showDate(p.until));
+    return text;
+  }
+
   function repeatKindLabel(value, startDay) {
     var label = I.f(REPEAT_KEYS[value]);
     if (value === "monthly_nth") {
@@ -1607,6 +1636,7 @@
       box.appendChild(el("p", { class: "hint" }, reminders));
     }
     if (ev.external) box.appendChild(el("p", { class: "hint" }, I.f("cardExternal")));
+    if (ev.rrule) box.appendChild(el("p", { class: "hint card-repeat" }, repeatSummary(ev.rrule)));
     else if (ev.shift_id) box.appendChild(el("p", { class: "hint" }, I.f("cardShift")));
     var foot = $("card-foot");
     foot.textContent = "";
@@ -2685,7 +2715,11 @@
     }).catch(showManualError);
   }
 
-  function closeManual() { $("manual-overlay").hidden = true; }
+  function closeManual() {
+    $("manual-overlay").hidden = true;
+    // The guide, if it is open underneath, is drawn again: its list of calendars is up to date.
+    if (!$("wizard-overlay").hidden) renderWizard();
+  }
 
   function showManualError(err) {
     var box = $("manual-error");
@@ -2821,7 +2855,10 @@
   }
 
 
-  function closeIcs() { $("ics-overlay").hidden = true; }
+  function closeIcs() {
+    $("ics-overlay").hidden = true;
+    if (!$("wizard-overlay").hidden) renderWizard();
+  }
 
   function showIcsError(err) {
     $("ics-error").textContent = errorText(err);
@@ -2881,10 +2918,19 @@
     head.appendChild(el("h3", {}, cal.name));
     card.appendChild(head);
     card.appendChild(el("p", { class: "hint" }, icsTypeName(cal.type)));
+    var actions = el("div", { class: "notify-tests" });
+    if (cal.source === "manual") {
+      // The pickups made by hand: no link, no file, nothing to refresh. "Modifica" reopens their window.
+      actions.appendChild(button(I.f("manualEdit"), "btn btn-primary", function () {
+        $("ics-overlay").hidden = true;
+        openManual();
+      }));
+      card.appendChild(actions);
+      return card;
+    }
     var status = cal.updated ? I.f("icsUpdated").replace("{d}", formatDay(cal.updated)) : I.f("icsNever");
     card.appendChild(el("p", { class: "hint" }, status));
     if (cal.error) card.appendChild(el("p", { class: "error", role: "alert" }, errorText({ code: cal.error })));
-    var actions = el("div", { class: "notify-tests" });
     if (cal.source === "link") {
       card.appendChild(el("p", { class: "hint ics-url" }, cal.url));
       actions.appendChild(button(I.f("icsRefresh"), "btn", function () {

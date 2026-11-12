@@ -153,3 +153,23 @@ async def test_a_pickup_is_in_the_day_summary_like_a_downloaded_one(hass: HomeAs
     entry = hass.config_entries.async_entries(DOMAIN)[0]
     lines = await entry.runtime_data.external.async_day_lines(date(2026, 11, 3))
     assert ("Rifiuti: Organico", []) in lines
+
+
+async def test_the_list_of_external_calendars_includes_the_pickups_made_by_hand(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
+    """The panel's list (family_hub/ics/list) carries the pickups' calendar with every field the
+    panel and the status use, so it is shown like a file or a link, with its own origin."""
+    await _setup(hass, _entry(BIWEEKLY))
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 4, "type": "family_hub/ics/list"})
+    reply = await client.receive_json()
+    assert reply["success"] is True, reply
+    found = [c for c in reply["result"]["calendars"] if c["id"] == "manualwaste"]
+    assert len(found) == 1, reply["result"]["calendars"]
+    calendar = found[0]
+    assert calendar["type"] == "rifiuti"
+    assert calendar["name"] == "Ritiri a mano"
+    assert calendar["source"] == "manual"
+    assert calendar["color"] and calendar["icon"]
+    assert calendar["error"] is None

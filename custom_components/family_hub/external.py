@@ -278,6 +278,13 @@ class ExternalManager:
                     "name": manual_waste.calendar_name(self.language()),
                     "type": "rifiuti",
                     "manual": True,
+                    # The same fields as a file's source, so the list and the panel treat it alike.
+                    "color": "#64748B",
+                    "icon": "trash",
+                    "persons": [],
+                    "remind_at": "",
+                    "morning_at": "",
+                    "return_notice": False,
                 }
             )
         return found

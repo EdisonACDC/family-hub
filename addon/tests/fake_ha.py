@@ -187,7 +187,7 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.8.0b2"
+    integration_version = "0.8.0b3"
     ha_language = "it"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
@@ -355,6 +355,7 @@ class FakeHA:
             else:
                 self.manual = msg.get("schedule")
                 self.saved_manual.append(self.manual)
+                self._write_manual_pickups()
                 await self._reply(ws, msg_id, True, {"schedule": self.manual})
         elif kind == "family_hub/info" and self.integration_installed:
             await self._reply(
@@ -502,11 +503,66 @@ class FakeHA:
                     persons[person_id].pop(key, None)
         await self._reply(ws, msg["id"], True, {"saved": True})
 
+    def _write_manual_pickups(self) -> None:
+        """The pickups made by hand become the calendar's events, as Home Assistant writes them: one
+        all-day event per pickup, for the next year, titled with the type's label."""
+        import datetime as _dt
+
+        labels = {t["id"]: t["label"] for t in self.waste_types}
+        step = {"weekly": 7, "biweekly": 14, "four_weeks": 28}
+        pickups: list[tuple[str, _dt.date]] = []
+        for rule in self.manual.get("rules", []):
+            first = _dt.date.fromisoformat(rule["first"])
+            days = step.get(rule["frequency"], 0)
+            day = first
+            while day <= first + _dt.timedelta(days=365):
+                pickups.append((rule["type"], day))
+                if days:
+                    day += _dt.timedelta(days=days)
+                else:
+                    month = day.month % 12 + 1
+                    year = day.year + (1 if day.month == 12 else 0)
+                    day = day.replace(year=year, month=month, day=min(first.day, 28))
+        entity = "calendar.family_hub_ext_manualwaste"
+        self.states = [s for s in self.states if s["entity_id"] != entity]
+        self.states.append(
+            {
+                "entity_id": entity,
+                "state": "off",
+                "attributes": {"friendly_name": "Ritiri a mano", "source_id": "manualwaste"},
+            }
+        )
+        self.events[entity] = [
+            stored_event(
+                labels.get(kind, kind), day.isoformat(), (day + _dt.timedelta(days=1)).isoformat()
+            )
+            for kind, day in sorted(pickups, key=lambda item: item[1])
+        ]
+
     async def _ics(self, ws: web.WebSocketResponse, msg: dict[str, Any]) -> None:
         """Like the integration's external calendar commands, for the add-on's tests."""
         kind, msg_id = msg["type"], msg["id"]
         if kind == "family_hub/ics/list":
             calendars = [dict(v, id=k) for k, v in self.ics.items()]
+            if self.manual.get("rules") or self.manual.get("extra"):
+                # The pickups made by hand, listed as the integration lists them.
+                calendars.append(
+                    {
+                        "id": "manualwaste",
+                        "name": "Ritiri a mano",
+                        "type": "rifiuti",
+                        "color": "#64748B",
+                        "icon": "trash",
+                        "persons": [],
+                        "remind_at": "",
+                        "morning_at": "",
+                        "return_notice": False,
+                        "source": "manual",
+                        "url": "",
+                        "updated": None,
+                        "error": None,
+                    }
+                )
             await self._reply(
                 ws,
                 msg_id,

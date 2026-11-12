@@ -1686,3 +1686,9 @@ html, body { overflow-x: hidden; max-width: 100%; }
 #event-form .scope-option input[type='radio'] {
   flex: 0 0 22px; width: 22px; height: 22px; margin: 0;
 }
+
+/* 0.8.0b3: the windows opened from the guide (pickups, external calendars, the delete choice) stay on top of it; the card's repeat line is a hint. */
+#ics-overlay, #manual-overlay { z-index: 70; }
+#scope-overlay { z-index: 80; }
+#confirm-overlay { z-index: 90; }
+.card-repeat { margin-top: 2px; }
