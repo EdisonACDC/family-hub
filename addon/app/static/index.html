@@ -117,6 +117,11 @@
         <fieldset class="card persons-fieldset">
           <legend>Persone</legend>
           <div id="event-persons" class="switch-list"></div>
+          <label class="switch switch-row event-private" id="event-private-row" hidden>
+            <span id="event-private-label">Privato</span>
+            <input type="checkbox" id="event-private" role="switch" aria-checked="false">
+          </label>
+          <p class="hint" id="event-private-hint" hidden></p>
           <div id="event-notify" class="event-notify" hidden></div>
         </fieldset>
         <fieldset class="card repeat-fieldset" id="event-repeat">
@@ -135,6 +140,13 @@
         <label>Promemoria (minuti prima, separati da virgola) <input name="reminders" inputmode="numeric" placeholder="30, 10"></label>
         <p class="hint" id="event-reminders-hint">Vuoto: quelli di famiglia.</p>
         <p class="error" id="event-error" role="alert" hidden></p>
+        <div class="no-person-warning" id="no-person-warning" role="status" hidden>
+          <p id="no-person-text"></p>
+          <div class="actions">
+            <button type="button" class="btn" id="no-person-choose"></button>
+            <button type="button" class="btn btn-primary" id="no-person-save"></button>
+          </div>
+        </div>
       </div>
       <div class="dialog-foot actions">
         <button type="button" class="btn" id="event-cancel">Annulla</button>

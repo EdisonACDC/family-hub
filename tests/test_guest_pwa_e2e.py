@@ -216,6 +216,17 @@ async def test_grandmothers_phone_from_invite_to_approved_appointment(
             await page.wait_for_selector("#days >> text=Recita di Sofia")
             await page.click("#tab-list")
 
+            # A tapped "new appointment" notification opens that appointment (#e=<id>.<day>).
+            recita = next(
+                u
+                for u, r in entry.runtime_data.store.events.items()
+                if r["summary"] == "Recita di Sofia"
+            )
+            await page.evaluate(f"location.hash = 'e={recita}.{_day(1)}'")
+            await page.wait_for_selector("#sheet:not([hidden]) >> text=Recita di Sofia")
+            assert "#e=" not in page.url
+            await page.click("#sheet-actions >> text=Chiudi")
+
             # A new appointment, waiting for approval.
             await page.click("#add-button")
             await page.fill("#f-title", "Merenda dalla nonna")

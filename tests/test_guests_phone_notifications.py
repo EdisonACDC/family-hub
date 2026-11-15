@@ -209,5 +209,7 @@ async def test_a_phone_with_its_own_minutes_gets_them(
         # Its own reminder, 90 minutes before.
         async_fire_time_changed(hass, dt_util.as_utc(start - timedelta(minutes=90)))
         await hass.async_block_till_done()
-    (call,) = no_real_push.call_args_list
-    assert call.args[2]["body"].endswith("· Recita lunga") and call.args[2]["tag"] == uid
+    # (The "new appointment" message is a different one, with its own tag.)
+    reminders = [c for c in no_real_push.call_args_list if c.args[2].get("tag") == uid]
+    (call,) = reminders
+    assert call.args[2]["body"].endswith("· Recita lunga")

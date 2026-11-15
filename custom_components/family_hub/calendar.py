@@ -68,6 +68,8 @@ class FamilyHubEvent(CalendarEvent):
     notify: str = ""
     # Who added it from the guest web app ("Nonna"); "" for the family's own appointments.
     added_by: str = ""
+    # Never shown to guests (see guests.py).
+    private: bool = False
 
 
 SUPPORTED_FEATURES = (
@@ -247,6 +249,7 @@ class FamilyHubCalendar(CalendarEntity):
             reminder_offsets=_offsets_text(record.get("reminder_offsets")),
             notify=notify_text(record.get("notify")),
             added_by=_added_by(record),
+            private=bool(record.get("private", False)),
             uid=record["uid"],
             summary=record["summary"],
             start=deserialize_time(record["start"], all_day),
@@ -504,6 +507,7 @@ class FamilyHubCalendar(CalendarEntity):
         notify: dict[str, Any] | None = None,
         rrule: str | None = None,
         added_by: dict[str, Any] | None = None,
+        private: bool = False,
     ) -> str:
         """Store a new event (or every occurrence of a repeat rule) and return the first uid.
         ``added_by`` is set for an appointment from the guest web app (see guests.py)."""
@@ -511,7 +515,7 @@ class FamilyHubCalendar(CalendarEntity):
         end = localize(end)
         validate_range(start, end)
         rule = recurrence.validate(rrule) if rrule else None
-        values = {
+        values: dict[str, Any] = {
             "summary": summary,
             "description": description or "",
             "location": location or "",
@@ -521,6 +525,8 @@ class FamilyHubCalendar(CalendarEntity):
             "shift_id": shift_id or "",
             "notify": notify,
         }
+        if private:
+            values["private"] = True
         if added_by:
             values["added_by"] = {
                 "device": str(added_by.get("device") or ""),
@@ -548,6 +554,8 @@ def _values(record: dict[str, Any]) -> dict[str, Any]:
     values = {key: record.get(key) for key in _FIELDS}
     if record.get("added_by"):
         values["added_by"] = record["added_by"]
+    if record.get("private"):
+        values["private"] = True
     return values
 
 
@@ -569,6 +577,8 @@ def _apply_fields(item: dict[str, Any], event: dict[str, Any]) -> None:
         item["all_day_reminder"] = event["all_day_reminder"]
     if "notify" in event:
         item["notify"] = event["notify"]
+    if "private" in event:
+        item["private"] = bool(event["private"])
 
 
 def _when(record: dict[str, Any]) -> date | datetime:

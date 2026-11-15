@@ -69,19 +69,27 @@ self.addEventListener("push", function (event) {
       // Web notifications cannot ring like an alarm: they vibrate, and stay on screen until
       // touched where the system allows it.
       vibrate: [300, 150, 300, 150, 600],
-      requireInteraction: data.tag !== "test"
+      requireInteraction: data.tag !== "test",
+      // What a tap opens: one appointment (new appointments).
+      data: { open: data.open ? String(data.open) : "", day: data.day ? String(data.day) : "" }
     })
   );
 });
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
+  var info = event.notification.data || {};
+  var open = /^[0-9a-f]{32}$/.test(info.open || "") && /^\d{4}-\d{2}-\d{2}$/.test(info.day || "")
+    ? { type: "open", id: info.open, day: info.day } : null;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
       for (var i = 0; i < list.length; i++) {
-        if (list[i].url.indexOf(BASE) !== -1 && "focus" in list[i]) return list[i].focus();
+        if (list[i].url.indexOf(BASE) !== -1 && "focus" in list[i]) {
+          if (open) list[i].postMessage(open);
+          return list[i].focus();
+        }
       }
-      return self.clients.openWindow(BASE);
+      return self.clients.openWindow(open ? BASE + "#e=" + open.id + "." + open.day : BASE);
     })
   );
 });

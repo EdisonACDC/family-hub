@@ -855,6 +855,8 @@ class Hub:
                     "calendar": calendar.get("name", ""),
                     # The guest who added it from the web app ("Nonna"), or "".
                     "added_by": raw.get("added_by") or "",
+                    # Never shown to guests.
+                    "private": bool(raw.get("private")),
                 }
             )
         return visible

@@ -1317,6 +1317,15 @@
     form.reset();
     state.editing = item || null;
     $("event-error").hidden = true;
+    $("no-person-warning").hidden = true;
+    state.noPersonOk = false;
+    // "Privato" only where it matters: the family shares its calendar with guests.
+    var sharing = !!(state.share && ((state.share.devices || []).length || (state.share.invites || []).length));
+    $("event-private-row").hidden = !sharing;
+    $("event-private-hint").hidden = !sharing;
+    $("event-private-label").textContent = I.f("privateLabel");
+    $("event-private-hint").textContent = I.f("privateHint");
+    $("event-private").checked = !!(item && item.ev && item.ev.private);
     var editing = !!item;
     $("event-title").textContent = I.f(editing ? "editEvent" : "newEvent");
     form.elements.category.disabled = editing;
@@ -1498,6 +1507,20 @@
     return pad(Math.floor(total / 60)) + ":" + pad(total % 60);
   }
 
+  // Guests (the grandparents' phones) see only appointments with their persons: an appointment
+  // with no person is the whole family's, and they would not see it.
+  function guestsActive() {
+    return !!(state.share && (state.share.devices || []).some(function (d) { return d.status === "active"; }));
+  }
+
+  function showNoPersonWarning() {
+    $("no-person-text").textContent = I.f("noPersonWarning");
+    $("no-person-choose").textContent = I.f("noPersonChoose");
+    $("no-person-save").textContent = I.f("noPersonSave");
+    $("no-person-warning").hidden = false;
+    $("no-person-warning").scrollIntoView({ block: "nearest" });
+  }
+
   function submitForm(event) {
     event.preventDefault();
     var form = event.target;
@@ -1552,6 +1575,12 @@
     var rule = buildRepeatRule();
     if (rule === null) {
       showFormError(I.f("repeatBadUntil"));
+      return;
+    }
+    if ($("event-private").checked) data.private = true;
+    else if (state.editing && state.editing.ev.private) data.private = false;
+    if (!state.editing && !data.persons.length && guestsActive() && !state.noPersonOk) {
+      showNoPersonWarning();
       return;
     }
     if (state.editing) {
@@ -1632,6 +1661,7 @@
     if (ev.location) box.appendChild(el("p", {}, ev.location));
     if (ev.description) box.appendChild(el("p", { class: "card-text" }, ev.description));
     if (ev.added_by) box.appendChild(el("p", { class: "hint added-by" }, I.f("addedBy").replace("{name}", ev.added_by)));
+    if (ev.private) box.appendChild(el("p", { class: "hint card-private" }, "🔒 " + I.f("privateLabel")));
     var names = (ev.person_ids || []).map(personName);
     if (names.length) box.appendChild(el("p", {}, I.f("evPersons") + ": " + names.join(", ")));
     if (ev.notify) box.appendChild(el("p", { class: "card-notify" }, I.f("notifyOn") + ": " + notifySummary(ev.notify)));
@@ -2184,6 +2214,10 @@
     box.appendChild(fieldRow(I.f("shareApproval"), selectInput([
       ["approve", I.f("shareApprovalQueue")], ["direct", I.f("shareApprovalDirect")]
     ], draft.approval, function (v) { draft.approval = v; }, { "data-field": "approval" })));
+    box.appendChild(switchRow(I.f("shareFamilyEvents"), !!draft.family_events, function (on) {
+      draft.family_events = on;
+    }));
+    box.appendChild(el("p", { class: "hint share-warning-text" }, I.f("shareFamilyEventsHint")));
     box.appendChild(switchRow(I.f("shareNotify"), draft.notify, function (on) { draft.notify = on; }));
     return box;
   }
@@ -2212,6 +2246,7 @@
     if (state.newLink) body.appendChild(linkBox(state.newLink));
     var draft = state.inviteDraft = state.inviteDraft || {
       name: "", persons: [], categories: [], permission: "add", approval: "approve", notify: true,
+      family_events: false,
       expires_days: 7
     };
     var form = el("div", { class: "share-card share-new", id: "share-new" });
@@ -2231,7 +2266,7 @@
       request({ op: "share_invite_create", invite: {
         name: draft.name.trim(), persons: draft.persons, categories: draft.categories,
         permission: draft.permission, approval: draft.approval, notify: draft.notify,
-        expires_days: draft.expires_days
+        family_events: draft.family_events, expires_days: draft.expires_days
       } }).then(function (answer) {
         state.newLink = answer.link;
         state.inviteDraft = null;
@@ -2459,6 +2494,7 @@
     var draft = {
       name: device.name, persons: device.persons.slice(), categories: device.categories.slice(),
       permission: device.permission, approval: device.approval, notify: device.notify,
+      family_events: !!device.family_events, notify_new: device.notify_new !== false,
       own: device.reminder_offsets ? device.reminder_offsets.join(", ") : "",
       ownOn: !!device.reminder_offsets,
       quiet_start: device.quiet_start || "", quiet_end: device.quiet_end || ""
@@ -2475,6 +2511,7 @@
       var changes = what === "name" ? { name: draft.name.trim() } : {
         persons: draft.persons, categories: draft.categories, permission: draft.permission,
         approval: draft.approval, notify: draft.notify,
+        family_events: draft.family_events, notify_new: draft.notify_new,
         reminder_offsets: draft.ownOn ? minutesFrom(draft.own) : null,
         quiet_start: draft.quiet_start, quiet_end: draft.quiet_end
       };
@@ -2526,6 +2563,7 @@
       box.appendChild(fieldRow(label, input));
     });
     box.appendChild(el("p", { class: "hint" }, I.f("shareQuietHint")));
+    box.appendChild(switchRow(I.f("shareNotifyNew"), draft.notify_new, function (on) { draft.notify_new = on; }));
     return box;
   }
 
@@ -5112,6 +5150,18 @@
     });
     $("event-cancel").addEventListener("click", closeForm);
     $("event-form").addEventListener("submit", submitForm);
+    $("no-person-choose").addEventListener("click", function () {
+      $("no-person-warning").hidden = true;
+      var persons = $("event-persons");
+      persons.scrollIntoView({ block: "center" });
+      var first = persons.querySelector("input, button");
+      if (first) first.focus();
+    });
+    $("no-person-save").addEventListener("click", function () {
+      state.noPersonOk = true;
+      $("no-person-warning").hidden = true;
+      $("event-form").requestSubmit();
+    });
     $("event-form").elements.all_day.addEventListener("change", function (e) {
       $("event-form").elements.start_time.disabled = e.target.checked;
       $("event-form").elements.end_time.disabled = e.target.checked;

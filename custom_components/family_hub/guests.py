@@ -104,6 +104,8 @@ CLEANUP_EVERY = timedelta(hours=6)
 OWN_REMINDERS_AHEAD = timedelta(hours=49)
 OWN_REMINDERS_EVERY = timedelta(hours=1)
 MAX_OWN_OFFSETS = 5
+# New appointments for a guest: collected for this long, then one message (or one summary).
+NEW_BATCH = timedelta(minutes=2)
 TEST_PUSH_EVERY = 60.0
 # The notification status of a phone, as the adults see it.
 PUSH_ACTIVE = "active"
@@ -139,6 +141,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "changed": "Modificato: {title} ({when})",
         "cancelled": "Annullato: {title} ({when})",
         "many_changes": "Alcuni appuntamenti sono cambiati. Apri Family Hub per vederli.",
+        "new_one": "Nuovo impegno per {who}: {title}, {when}",
+        "new_one_family": "Nuovo impegno: {title}, {when}",
+        "new_many": "{n} nuovi impegni per {who}",
+        "new_many_family": "{n} nuovi impegni",
+        "and": " e ",
+        "at": "ore",
+        "days": "lun mar mer gio ven sab dom",
         "reminder": "Promemoria",
         "test_push": "Prova: le notifiche di Family Hub arrivano su questo telefono.",
         "all_day": "tutto il giorno",
@@ -177,6 +186,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "changed": "Geändert: {title} ({when})",
         "cancelled": "Abgesagt: {title} ({when})",
         "many_changes": "Einige Termine haben sich geändert. Family Hub öffnen, um sie zu sehen.",
+        "new_one": "Neuer Termin für {who}: {title}, {when}",
+        "new_one_family": "Neuer Termin: {title}, {when}",
+        "new_many": "{n} neue Termine für {who}",
+        "new_many_family": "{n} neue Termine",
+        "and": " und ",
+        "at": "um",
+        "days": "Mo Di Mi Do Fr Sa So",
         "reminder": "Erinnerung",
         "test_push": "Test: Mitteilungen von Family Hub kommen auf diesem Telefon an.",
         "all_day": "ganztägig",
@@ -214,6 +230,13 @@ TEXTS: dict[str, dict[str, str]] = {
         "changed": "Changed: {title} ({when})",
         "cancelled": "Cancelled: {title} ({when})",
         "many_changes": "Some appointments changed. Open Family Hub to see them.",
+        "new_one": "New appointment for {who}: {title}, {when}",
+        "new_one_family": "New appointment: {title}, {when}",
+        "new_many": "{n} new appointments for {who}",
+        "new_many_family": "{n} new appointments",
+        "and": " and ",
+        "at": "at",
+        "days": "Mon Tue Wed Thu Fri Sat Sun",
         "reminder": "Reminder",
         "test_push": "Test: Family Hub notifications reach this phone.",
         "all_day": "all day",
@@ -538,6 +561,9 @@ class GuestManager:
         self._own_timers: dict[tuple[str, str, str], Callable[[], None]] = {}
         self._own_sent: set[tuple[str, str, str]] = set()
         self._test_sent: dict[str, float] = {}
+        # New appointments waiting to be told, per device, and the timer that tells them.
+        self._new_queue: dict[str, list[str]] = {}
+        self._new_timers: dict[str, Callable[[], None]] = {}
         self._tasks: set[asyncio.Task[Any]] = set()
 
     # ----- storage --------------------------------------------------------
@@ -568,6 +594,7 @@ class GuestManager:
         self._plan_own_reminders()
         if self.in_use():
             guest_hub(self.hass).ensure_views()
+        self._ensure_snapshot()
 
     def _data(self) -> dict[str, Any]:
         return {
@@ -645,9 +672,10 @@ class GuestManager:
         permission = raw.get("permission", VIEW)
         approval = raw.get("approval", APPROVE)
         notify = raw.get("notify", True)
+        family_events = raw.get("family_events", False)
         if permission not in PERMISSIONS or approval not in APPROVALS:
             raise GuestError("invalid", 422)
-        if not isinstance(notify, bool):
+        if not isinstance(notify, bool) or not isinstance(family_events, bool):
             raise GuestError("invalid", 422)
         return {
             "persons": list(dict.fromkeys(persons)),
@@ -655,6 +683,8 @@ class GuestManager:
             "permission": permission,
             "approval": approval,
             "notify": notify,
+            # Also the appointments of the whole family (no person) in the chosen calendars.
+            "family_events": family_events,
         }
 
     async def async_create_invite(self, raw: dict[str, Any]) -> tuple[dict[str, Any], str]:
@@ -795,6 +825,7 @@ class GuestManager:
             "permission": invite["permission"],
             "approval": invite["approval"],
             "notify": invite["notify"],
+            "family_events": bool(invite.get("family_events", False)),
             "push": None,
             "replaces": invite.get("replaces"),
         }
@@ -885,6 +916,7 @@ class GuestManager:
         if accept and old_id and old_id in self.devices:
             await self._take_place(self.devices[old_id], device)
         await self.async_save()
+        self._ensure_snapshot()
         return device
 
     async def _take_place(self, old: dict[str, Any], new: dict[str, Any]) -> None:
@@ -922,7 +954,15 @@ class GuestManager:
         if old["status"] == ACTIVE:
             await self.async_disable(device_id)
         scope = {
-            key: old[key] for key in ("persons", "categories", "permission", "approval", "notify")
+            key: old.get(key, False if key == "family_events" else None)
+            for key in (
+                "persons",
+                "categories",
+                "permission",
+                "approval",
+                "notify",
+                "family_events",
+            )
         }
         invite, token = await self._new_invite(
             old["name"], scope, DEFAULT_EXPIRY_DAYS, replaces=device_id
@@ -945,13 +985,28 @@ class GuestManager:
             device.update(self._clean_own_notify(raw, device))
             self._record("permissions", device["name"])
             self._plan_own_reminders()
-        if any(key in raw for key in ("persons", "categories", "permission", "approval", "notify")):
+        if "notify_new" in raw:
+            if not isinstance(raw["notify_new"], bool):
+                raise GuestError("invalid", 422)
+            device["notify_new"] = raw["notify_new"]
+        if any(
+            key in raw
+            for key in (
+                "persons",
+                "categories",
+                "permission",
+                "approval",
+                "notify",
+                "family_events",
+            )
+        ):
             scope = self.clean_scope({**device, **raw})
             device.update(scope)
             if not scope["notify"]:
                 device["push"] = None
             self._record("permissions", device["name"])
         await self.async_save()
+        self._ensure_snapshot()
         return device
 
     @staticmethod
@@ -1006,10 +1061,14 @@ class GuestManager:
 
     @staticmethod
     def visible(record: dict[str, Any], device: dict[str, Any]) -> bool:
-        """An appointment of an allowed calendar with at least one allowed person."""
-        if record.get("category") not in device["categories"]:
+        """An appointment of an allowed calendar with at least one allowed person, or with no
+        person at all when the device may see those too. Never a private one."""
+        if record.get("private") or record.get("category") not in device["categories"]:
             return False
-        return bool(set(record.get("persons") or []) & set(device["persons"]))
+        persons = record.get("persons") or []
+        if not persons:
+            return bool(device.get("family_events", False))
+        return bool(set(persons) & set(device["persons"]))
 
     @staticmethod
     def _mine(record: dict[str, Any], device: dict[str, Any]) -> bool:
@@ -1520,7 +1579,16 @@ class GuestManager:
             device["push_blocked"] = False
         await self.async_save()
         self._plan_own_reminders()
+        self._ensure_snapshot()
         return device["push"] is not None
+
+    def _ensure_snapshot(self) -> None:
+        """Remember the appointments as they are, once a guest listens: the next save tells
+        what is new or changed against this."""
+        if self._snapshot is None and self._listeners():
+            records = self.events.events
+            self._snapshot = {uid: self._shape(r) for uid, r in records.items()}
+            self._snapshot_records = {uid: dict(r) for uid, r in records.items()}
 
     def _listeners(self) -> list[dict[str, Any]]:
         return [
@@ -1627,6 +1695,7 @@ class GuestManager:
             record.get("category"),
             tuple(record.get("persons") or []),
             record.get("location"),
+            bool(record.get("private")),
         )
 
     async def async_store_changed(self) -> None:
@@ -1646,17 +1715,37 @@ class GuestManager:
         now = _now()
         changed = [uid for uid in old if uid in current and current[uid] != old[uid]]
         gone = [uid for uid in old if uid not in current]
+        added = [uid for uid in current if uid not in old]
         text = texts_for(self.language)
         for device in self._listeners():
             if device["id"] == self._changing:
                 continue
+            # New for this guest: a new appointment it can see, or one it can see from now on
+            # (a person or a calendar added). Not its own ones, not past ones.
+            news = [
+                uid
+                for uid in added
+                if self.visible(records[uid], device)
+                and not self._mine(records[uid], device)
+                and _start_of(records[uid]) > now
+            ] + [
+                uid
+                for uid in changed
+                if not self.visible(old_records[uid], device)
+                and self.visible(records[uid], device)
+                and not self._mine(records[uid], device)
+                and _start_of(records[uid]) > now
+            ]
+            if news and device.get("notify_new", True) is not False:
+                self._queue_new(device["id"], news)
+            changed_here = [uid for uid in changed if uid not in news]
             messages: list[str] = []
             for uid in gone:
                 before = old_records[uid]
                 if self.visible(before, device) and _start_of(before) > now:
                     title = before["summary"]
                     messages.append(text["cancelled"].format(title=title, when=self._when(before)))
-            for uid in changed:
+            for uid in changed_here:
                 before, after = old_records[uid], records[uid]
                 if not self.visible(before, device) and not self.visible(after, device):
                     continue
@@ -1672,6 +1761,97 @@ class GuestManager:
                 messages = [text["many_changes"]]
             for message in messages:
                 self._spawn(self._push(device, {"title": text["title"], "body": message}))
+
+    def _queue_new(self, device_id: str, uids: list[str]) -> None:
+        """Collect new appointments for a while; one message tells them (or sums them up)."""
+        queue = self._new_queue.setdefault(device_id, [])
+        queue.extend(uid for uid in uids if uid not in queue)
+        if device_id not in self._new_timers:
+            self._new_timers[device_id] = async_track_point_in_time(
+                self.hass, self._new_flush(device_id), _now() + NEW_BATCH
+            )
+
+    def _quiet_end(self, device: dict[str, Any]) -> datetime:
+        """When the quiet hours that apply to the device end next (local time)."""
+        settings = {**DEFAULT_REMINDERS, **self.entry.options.get(OPT_REMINDERS, {})}
+        end_text = (
+            device["quiet_end"]
+            if device.get("quiet_start") and device.get("quiet_end")
+            else settings["quiet_end"]
+        )
+        end = _clock(end_text)
+        now = dt_util.as_local(dt_util.now())
+        moment = now.replace(hour=end.hour, minute=end.minute, second=0, microsecond=0)
+        if moment <= now:
+            moment += timedelta(days=1)
+        return dt_util.as_utc(moment)
+
+    def _new_flush(self, device_id: str) -> Callable[[datetime], Any]:
+        async def _flush(_moment: datetime) -> None:
+            self._new_timers.pop(device_id, None)
+            device = self.devices.get(device_id)
+            if device is None or device not in self._listeners():
+                self._new_queue.pop(device_id, None)
+                return
+            if self._quiet_for(device):
+                # Told when the quiet hours end.
+                self._new_timers[device_id] = async_track_point_in_time(
+                    self.hass, self._new_flush(device_id), self._quiet_end(device)
+                )
+                return
+            now = _now()
+            records = [
+                self.events.events[uid]
+                for uid in self._new_queue.pop(device_id, [])
+                if uid in self.events.events
+                and self.visible(self.events.events[uid], device)
+                and _start_of(self.events.events[uid]) > now
+            ]
+            if records:
+                await self._push(device, self._new_payload(device, records))
+
+        return _flush
+
+    def _when_long(self, record: dict[str, Any]) -> str:
+        """ "lun 16/11 ore 07:00", "Mon 16/11 at 07:00"; for a whole day only the day."""
+        text = texts_for(self.language)
+        days = text["days"].split()
+        start = dt_util.as_local(_start_of(record))
+        day = f"{days[start.weekday()]} {start.strftime('%d/%m')}"
+        if record.get("all_day"):
+            return day
+        clock = "%I:%M %p" if self.entry.options.get(CONF_TIME_FORMAT) == "12h" else "%H:%M"
+        return f"{day} {text['at']} {start.strftime(clock)}"
+
+    def _new_payload(self, device: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, Any]:
+        text = texts_for(self.language)
+        persons = self._persons()
+        names = list(
+            dict.fromkeys(
+                str(persons[p].get("name", ""))
+                for record in records
+                for p in record.get("persons") or []
+                if p in device["persons"] and p in persons
+            )
+        )
+        who = text["and"].join(names)
+        records = sorted(records, key=_start_of)
+        first = records[0]
+        if len(records) == 1:
+            key = "new_one" if who else "new_one_family"
+            body = text[key].format(who=who, title=first["summary"], when=self._when_long(first))
+        else:
+            key = "new_many" if who else "new_many_family"
+            body = text[key].format(n=len(records), who=who)
+        day = dt_util.as_local(_start_of(first)).date().isoformat()
+        return {
+            "title": text["title"],
+            "body": body,
+            "tag": f"new-{first['uid']}",
+            # A tap opens the web app on this appointment (the first one of a summary).
+            "open": first["uid"],
+            "day": day,
+        }
 
     # ----- adults' view --------------------------------------------------
 
@@ -1700,6 +1880,7 @@ class GuestManager:
                         "replaces",
                     )
                 }
+                | {"family_events": bool(invite.get("family_events", False))}
                 | {"status": status, "in_use": self._in_use(invite)}
             )
         devices = [
@@ -1723,6 +1904,8 @@ class GuestManager:
                 "push": device.get("push") is not None,
                 "push_status": self.push_status(device),
                 "reminder_offsets": device.get("reminder_offsets"),
+                "family_events": bool(device.get("family_events", False)),
+                "notify_new": device.get("notify_new", True) is not False,
                 "quiet_start": device.get("quiet_start"),
                 "quiet_end": device.get("quiet_end"),
             }
@@ -1788,6 +1971,9 @@ class GuestManager:
         if self._unsub_own is not None:
             self._unsub_own()
             self._unsub_own = None
+        for cancel in list(self._new_timers.values()):
+            cancel()
+        self._new_timers.clear()
         for cancel in self._own_timers.values():
             cancel()
         self._own_timers.clear()

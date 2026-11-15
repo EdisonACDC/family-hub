@@ -28,6 +28,7 @@ from .const import (
     ATTR_MINUTES,
     ATTR_PERSONS,
     ATTR_PHONE_SOUND,
+    ATTR_PRIVATE,
     ATTR_RECURRENCE_RANGE,
     ATTR_REMINDER_OFFSETS,
     ATTR_RRULE,
@@ -117,6 +118,7 @@ ADD_EVENT_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ALL_DAY_REMINDER): HH_MM,
         vol.Optional(ATTR_SHIFT_ID): cv.string,
         vol.Optional(ATTR_RRULE): cv.string,
+        vol.Optional(ATTR_PRIVATE): cv.boolean,
         **NOTIFY_FIELDS,
     }
 )
@@ -127,6 +129,7 @@ UPDATE_EVENT_SCHEMA = vol.Schema(
         vol.Required(ATTR_UID): cv.string,
         vol.Optional(ATTR_RRULE): cv.string,
         vol.Optional(ATTR_RECURRENCE_RANGE): vol.In(["THISANDFUTURE", "ALL"]),
+        vol.Optional(ATTR_PRIVATE): cv.boolean,
         vol.Optional(ATTR_SUMMARY): SUMMARY,
         vol.Optional(ATTR_START): TIME,
         vol.Optional(ATTR_END): TIME,
@@ -240,6 +243,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             shift_id=call.data.get(ATTR_SHIFT_ID),
             notify=_notify_of(dict(call.data)),
             rrule=call.data.get(ATTR_RRULE),
+            private=bool(call.data.get(ATTR_PRIVATE, False)),
         )
 
     async def update_event(call: ServiceCall) -> None:
@@ -262,6 +266,8 @@ def async_register_services(hass: HomeAssistant) -> None:
             changes["notify"] = _notify_of(dict(call.data))
         if ATTR_RRULE in call.data:
             changes["rrule"] = call.data[ATTR_RRULE] or ""
+        if ATTR_PRIVATE in call.data:
+            changes[ATTR_PRIVATE] = bool(call.data[ATTR_PRIVATE])
         await calendar.async_update_event(
             call.data[ATTR_UID],
             changes,

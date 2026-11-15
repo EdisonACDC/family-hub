@@ -1717,6 +1717,8 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .share-edit { margin-top: 10px; border-top: 1px dashed var(--line, rgba(127, 127, 127, .35)); padding-top: 10px; }
 .share-pending .actions, .share-device .actions { flex-wrap: wrap; }
 .added-by { font-style: italic; }
+.no-person-warning { background: #FEF3C7; color: #78350F; border-radius: 14px; padding: 10px 14px; margin: 10px 0; }
+.no-person-warning p { margin: 0 0 8px; font-weight: 600; }
 .share-highlight { outline: 3px solid #F59E0B; outline-offset: 2px; }
 .share-push-blocked { color: #B91C1C; font-weight: 700; }
 .share-push-off { font-weight: 700; }

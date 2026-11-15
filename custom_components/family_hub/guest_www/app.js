@@ -620,6 +620,45 @@
     return match ? match[1] : null;
   }
 
+  function readOpenEvent() {
+    var match = /[#&]e=([0-9a-f]{32})\.(\d{4}-\d{2}-\d{2})/.exec(window.location.hash || "");
+    return match ? { id: match[1], day: match[2] } : null;
+  }
+
+  // Show one appointment: its day in the list or in its week, then its card.
+  function showEvent(open) {
+    state.pendingOpen = open;
+    if (!state.me || $("screen-main").hidden) return;  // done once the list is there
+    var day = fromKey(open.day);
+    var ahead = Math.round((day - today()) / 86400000);
+    if (ahead >= 0 && ahead < 14) {
+      state.view = "list";
+    } else {
+      state.view = "week";
+      state.weekStart = weekStartOf(day);
+    }
+    loadEvents();
+  }
+
+  function openPendingEvent() {
+    var open = state.pendingOpen;
+    if (!open || $("screen-main").hidden) return;
+    var item = state.events.filter(function (e) { return e.id === open.id; })[0];
+    if (!item) {
+      if (!state.pendingOpenTried) {
+        state.pendingOpenTried = true;
+        showEvent(open);
+      }
+      return;
+    }
+    state.pendingOpen = null;
+    state.pendingOpenTried = false;
+    if (/[#&]e=/.test(window.location.hash || "") && window.history && window.history.replaceState) {
+      window.history.replaceState(null, "", BASE);
+    }
+    openDetail(item);
+  }
+
   function forgetInviteInUrl() {
     if ((window.location.hash || window.location.search) && window.history && window.history.replaceState) {
       window.history.replaceState(null, "", BASE);
@@ -649,6 +688,7 @@
     applyStaticTexts();
     registerWorker();
     state.invite = readInvite();
+    state.pendingOpen = readOpenEvent();
     loadStored().then(begin);
   }
 
@@ -825,11 +865,11 @@
     api("GET", "events?from=" + dayKey(r.from) + "&days=" + r.days).then(function (data) {
       var events = data.events || [];
       if (!state.token) return;  // access ended meanwhile: nothing is kept
-      var cache = state.cache;
+      // Only this view is kept: what Family Hub no longer shows this phone (an appointment made
+      // private, a person taken away) leaves the phone with the next answer.
+      var cache = {};
       cache[key] = { at: Date.now(), events: events };
-      // Only the last few views are kept.
-      Object.keys(cache).sort(function (a, b) { return cache[b].at - cache[a].at; })
-        .slice(6).forEach(function (old) { delete cache[old]; });
+      state.cache = cache;
       save("cache", cache);
       if (!current()) return;
       state.events = events;
@@ -898,6 +938,7 @@
       box.appendChild(section);
     }
     if (state.view === "list" && !shown) box.appendChild(el("p", { class: "big-note", text: t("nothingDays") }));
+    openPendingEvent();
   }
 
   function whenText(item) {
@@ -1248,7 +1289,18 @@
   $("paste-use").addEventListener("click", function () { usePasted($("paste-input").value); });
   // A new link opened in the tab that is already open changes only the part after #: the page
   // does not load again, so the new invite is taken from here.
+  // From a notification: the app is open (the service worker sends a message) or opened with
+  // #e=<appointment>.<day>.
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", function (event) {
+      var data = event.data || {};
+      if (data.type === "open") showEvent({ id: String(data.id), day: String(data.day) });
+    });
+  }
+
   window.addEventListener("hashchange", function () {
+    var open = readOpenEvent();
+    if (open) { showEvent(open); return; }
     var invite = readInvite();
     if (!invite || invite === state.invite) return;
     stopTimers();

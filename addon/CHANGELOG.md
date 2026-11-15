@@ -1,11 +1,32 @@
 # Changelog: Family Hub UI (add-on)
 
-## 0.9.0b7 (in lavorazione, non pubblicata)
+## 0.9.0b7
+
+Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
 
 - «L'invito non usato scade dopo»: «1 giorno» (1 day, 1 Tag), non più «1 giorni».
 - Un invito usato da un telefono attivo (o in attesa di conferma) non si elimina: la scheda dice
   «In uso da un telefono attivo», «Elimina tutti quelli non attivi» e la pulizia dopo 30 giorni lo
   saltano. Così il telefono tiene i permessi con cui è entrato.
+- Regola zero, privacy degli adulti: un ospite vede solo gli appuntamenti delle persone scelte
+  nel suo invito (web app, notifiche, promemoria, copia offline, risposte API), con test espliciti
+  per «solo Mamma», «solo Papà», «senza persona» e «Mamma + Sofia Privato».
+- Interruttore «Privato» nel modulo Nuovo/Modifica evento (quando la famiglia condivide): un
+  appuntamento Privato non va mai agli ospiti, anche con una persona che vedono. Se un
+  appuntamento non è più visibile (Privato, persona tolta, altro calendario) sparisce subito
+  dalle risposte, la copia offline tiene solo l'ultima vista caricata, e i promemoria già
+  programmati per quell'ospite vengono annullati.
+- Invito e «Modifica permessi»: «Mostra anche gli appuntamenti senza persona, solo nei calendari
+  scelti», spento di default, con l'avviso «Attenzione: potrebbero esserci impegni degli adulti»;
+  i Privati non passano mai; il filtro resta lato server.
+- «Nuovo evento» senza persone, quando la famiglia ha ospiti: avviso leggero «Nessuna persona
+  scelta: gli ospiti non vedranno questo appuntamento» con «Scegli persone» e «Salva comunque».
+  Senza ospiti il modulo resta come prima.
+- Ospiti: notifica per gli appuntamenti nuovi che possono vedere (anche quando uno esistente
+  diventa visibile): «Nuovo impegno per Sofia: PEDIATRA, lun 16/11 ore 07:00»; più nuovi in pochi
+  minuti, una sola notifica («3 nuovi impegni per Sofia»); niente per quelli aggiunti dallo stesso
+  ospite; negli orari di silenzio arriva alla fine del silenzio; toccandola la web app apre
+  quell'appuntamento. Interruttore «Avvisa per i nuovi impegni» per telefono (acceso di default).
 
 ## 0.9.0b6
 

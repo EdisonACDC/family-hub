@@ -41,6 +41,10 @@ add_event:
       example: [30, 10]
       selector:
         object:
+    private:
+      description: A private appointment is never shown to guests (invites), whoever it is for.
+      selector:
+        boolean:
 
 update_event:
   name: Update event
