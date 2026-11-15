@@ -5,6 +5,18 @@
 - Integrazione: `CONFIG_SCHEMA` solo da interfaccia (`cv.config_entry_only_config_schema`), così
   hassfest non avvisa più; una configurazione YAML `family_hub:` viene segnalata da Home Assistant.
 - Validazione GitHub: `actions/checkout@v7` (Node 24 invece di Node 20).
+- Web app: dopo «Accesso disattivato» o «Invito non valido» il telefono cancella token,
+  appuntamenti salvati e sottoscrizione push (resta solo il motivo, per ridirlo alla riapertura).
+- Web app: token e copia offline in IndexedDB («family-hub-guest»), non più in localStorage
+  accanto al login di Home Assistant; i dati delle b1/b2 vengono spostati una volta. Se il link
+  si apre in un browser già collegato a HA: «Questo link è per il telefono dell'invitato».
+- Registro attività: anche i tentativi con un invito già usato, scaduto o annullato, con una
+  notifica agli adulti (al massimo una ogni 10 minuti per invito).
+- Web app, vista Settimana: parte da oggi, come «La settimana parte da oggi» della famiglia.
+- Ramo beta: repository «Family Hub (beta)» e app «Family Hub UI (beta)»; un test impedisce che
+  questi nomi arrivino in una versione stabile.
+- «Prossimi 12 mesi» scritto così (non più «Mesi»); dopo aver salvato i «Ritiri a mano»,
+  «Calendari esterni» li mostra subito in elenco con Modifica.
 
 ## 0.9.0b2
 

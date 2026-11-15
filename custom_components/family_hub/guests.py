@@ -38,6 +38,7 @@ from .const import (
     CONF_FIRST_WEEKDAY,
     CONF_LANGUAGE,
     CONF_TIME_FORMAT,
+    CONF_WEEK_FROM_TODAY,
     DEFAULT_REMINDERS,
     DOMAIN,
     OPT_CATEGORIES,
@@ -92,6 +93,7 @@ FUTURE_DAYS = 731
 # More changes than this at once (a series rewritten) give one message instead of many.
 MAX_CHANGE_PUSHES = 3
 ACTION_PREFIX = "FH_GUEST_"
+ATTEMPT_NOTICE_SECONDS = 600
 
 _HHMM = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -121,6 +123,18 @@ TEXTS: dict[str, dict[str, str]] = {
         "reminder": "Promemoria",
         "all_day": "tutto il giorno",
         "tomorrow": "domani",
+        "attempt_used": (
+            "Qualcuno ha provato ad aprire di nuovo l'invito «{name}», già usato ({label}). "
+            "L'accesso è stato negato."
+        ),
+        "attempt_expired": (
+            "Qualcuno ha provato ad aprire l'invito «{name}», scaduto ({label}). "
+            "L'accesso è stato negato."
+        ),
+        "attempt_revoked": (
+            "Qualcuno ha provato ad aprire l'invito «{name}», annullato ({label}). "
+            "L'accesso è stato negato."
+        ),
     },
     "de": {
         "title": "Family Hub",
@@ -146,6 +160,18 @@ TEXTS: dict[str, dict[str, str]] = {
         "reminder": "Erinnerung",
         "all_day": "ganztägig",
         "tomorrow": "morgen",
+        "attempt_used": (
+            "Jemand hat versucht, die schon benutzte Einladung «{name}» erneut zu öffnen "
+            "({label}). Der Zugang wurde verweigert."
+        ),
+        "attempt_expired": (
+            "Jemand hat versucht, die abgelaufene Einladung «{name}» zu öffnen ({label}). "
+            "Der Zugang wurde verweigert."
+        ),
+        "attempt_revoked": (
+            "Jemand hat versucht, die zurückgezogene Einladung «{name}» zu öffnen ({label}). "
+            "Der Zugang wurde verweigert."
+        ),
     },
     "en": {
         "title": "Family Hub",
@@ -170,6 +196,18 @@ TEXTS: dict[str, dict[str, str]] = {
         "reminder": "Reminder",
         "all_day": "all day",
         "tomorrow": "tomorrow",
+        "attempt_used": (
+            "Someone tried to open the invite “{name}” again, but it was already used ({label}). "
+            "Access was refused."
+        ),
+        "attempt_expired": (
+            "Someone tried to open the invite “{name}”, which has expired ({label}). "
+            "Access was refused."
+        ),
+        "attempt_revoked": (
+            "Someone tried to open the invite “{name}”, which was cancelled ({label}). "
+            "Access was refused."
+        ),
     },
 }
 
@@ -465,6 +503,8 @@ class GuestManager:
         # The device making a change right now: it is not told about its own change.
         self._changing: str | None = None
         self._reminded: dict[str, float] = {}
+        # When the adults were last told about a refused try, per invite.
+        self._attempt_told: dict[str, float] = {}
         self._tasks: set[asyncio.Task[Any]] = set()
 
     # ----- storage --------------------------------------------------------
@@ -614,6 +654,7 @@ class GuestManager:
         """The phone opened a valid invite: it becomes a device waiting for an adult. The invite
         is used up at once. Returns the device token (shown to that phone only)."""
         if not self._invite_open(invite, _now()):
+            await self._refused(invite, user_agent)
             raise GuestError("invite_invalid", 403)
         token = new_token()
         now = _now()
@@ -638,12 +679,33 @@ class GuestManager:
         }
         invite["status"] = USED
         invite["device_id"] = device["id"]
-        invite["token_hash"] = None
         self.devices[device["id"]] = device
         self._record("activated", device["name"], device["label"])
         await self.async_save()
         self._spawn(self._tell_adults_device(device))
         return token
+
+    async def _refused(self, invite: dict[str, Any], user_agent: str) -> None:
+        """Someone opened an invite that is used, expired or cancelled: written in the activity
+        log every time, and told to the adults (at most once in ten minutes per invite)."""
+        if invite.get("status") == USED:
+            kind = "attempt_used"
+        elif invite.get("status") == REVOKED:
+            kind = "attempt_revoked"
+        else:
+            kind = "attempt_expired"
+        label = describe_device(user_agent)[:60]
+        self._record(kind, invite["name"], label)
+        await self.async_save()
+        now = monotime.monotonic()
+        last = self._attempt_told.get(invite["id"])
+        if last is not None and now - last < ATTEMPT_NOTICE_SECONDS:
+            return
+        self._attempt_told[invite["id"]] = now
+        message = texts_for(self.language)[kind].format(name=invite["name"], label=label)
+        self._spawn(
+            self._notify_adults(f"{DOMAIN}_guest_attempt_{invite['id']}", message, message, [])
+        )
 
     def device_by_hash(self, digest: str) -> dict[str, Any] | None:
         now = _now()
@@ -791,6 +853,9 @@ class GuestManager:
                 "language": self.language,
                 "first_weekday": str(options.get(CONF_FIRST_WEEKDAY) or "monday"),
                 "time_format": str(options.get(CONF_TIME_FORMAT) or "24h"),
+                # As on the wall tablet: the week shown starts today, unless the family chose
+                # to start it on the first day of the week.
+                "week_from_today": options.get(CONF_WEEK_FROM_TODAY, True) is not False,
                 "persons": [
                     {
                         "id": pid,
@@ -1046,7 +1111,11 @@ class GuestManager:
                     {
                         "title": text["title"],
                         "message": phone_message,
-                        "data": {"tag": notification_id, "actions": actions},
+                        "data": (
+                            {"tag": notification_id, "actions": actions}
+                            if actions
+                            else {"tag": notification_id}
+                        ),
                     },
                     blocking=True,
                 )

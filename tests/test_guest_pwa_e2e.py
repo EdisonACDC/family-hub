@@ -40,6 +40,20 @@ ANDROID = (
 TIMEOUT = 20_000
 
 
+# What the web app keeps in its own IndexedDB: the keys, or None when there is no such database.
+IDB_KEYS = """() => new Promise(resolve => {
+  const request = indexedDB.open('family-hub-guest');
+  request.onsuccess = () => {
+    const db = request.result;
+    if (!db.objectStoreNames.contains('kv')) { resolve([]); return; }
+    const keys = db.transaction('kv', 'readonly').objectStore('kv').getAllKeys();
+    keys.onsuccess = () => resolve(keys.result.sort());
+  };
+  request.onerror = () => resolve(null);
+})"""
+LEGACY = "Object.keys(localStorage).filter(k => k.startsWith('fh_guest_'))"
+
+
 def _day(offset: int) -> str:
     return (dt_util.now().date() + timedelta(days=offset)).isoformat()
 
@@ -134,6 +148,20 @@ async def test_grandmothers_phone_from_invite_to_approved_appointment(
             # Headless Chromium refuses notifications by default; a phone asks. The app itself
             # never asks on its own: only the button does.
             await context.grant_permissions(["notifications"])
+
+            # The link opened in a browser that is signed in to Home Assistant (an adult looking
+            # at it): a warning, and the invite is not spent.
+            adult = await browser.new_context(viewport=PHONE, user_agent=ANDROID, locale="it-IT")
+            await adult.add_init_script("localStorage.setItem('hassTokens', '{}')")
+            adult_page = await adult.new_page()
+            adult_page.set_default_timeout(TIMEOUT)
+            await adult_page.goto(f"{base}/api/family_hub/guest/#i={token}")
+            await adult_page.wait_for_selector("text=Questo link è per il telefono dell'invitato")
+            assert await adult_page.is_visible("text=Usalo comunque su questo telefono")
+            assert (await admin("list"))["devices"] == []
+            assert (await admin("list"))["invites"][0]["status"] == "open"
+            await adult.close()
+
             page = await context.new_page()
             page.set_default_timeout(TIMEOUT)
             await page.goto(f"{base}/api/family_hub/guest/#i={token}")
@@ -155,6 +183,19 @@ async def test_grandmothers_phone_from_invite_to_approved_appointment(
             body = await page.inner_text("body")
             assert "Cena di lavoro" not in body and "Mamma" not in body
             assert "Ciao, Nonna Èlia" in body
+            # The phone keeps its token in its own IndexedDB, not in localStorage beside
+            # Home Assistant's login.
+            assert "token" in await page.evaluate(IDB_KEYS)
+            assert await page.evaluate(LEGACY) == []
+
+            # The week starts today, as the family's tablet (the default "week from today").
+            await page.click("#tab-week")
+            await page.wait_for_function(
+                "() => (document.querySelector('#days .day h3') || {}).innerText"
+                " && document.querySelector('#days .day h3').innerText.startsWith('Oggi')"
+            )
+            await page.wait_for_selector("#days >> text=Recita di Sofia")
+            await page.click("#tab-list")
 
             # A new appointment, waiting for approval.
             await page.click("#add-button")
@@ -223,7 +264,34 @@ async def test_grandmothers_phone_from_invite_to_approved_appointment(
             await page.evaluate("window.dispatchEvent(new Event('online'))")
             await page.wait_for_selector("text=Accesso disattivato")
             assert "Recita di Sofia" not in await page.inner_text("body")
-            assert await page.evaluate("localStorage.getItem('fh_guest_cache')") is None
+            # Nothing of the family stays: no token, no saved appointments, no subscription;
+            # only the note that access ended, so it says so again when reopened.
+            await page.wait_for_function(
+                IDB_KEYS.replace(
+                    "resolve(keys.result.sort())", "resolve(keys.result.sort().join() === 'ended')"
+                )
+            )
+            assert await page.evaluate(IDB_KEYS) == ["ended"]
+            assert await page.evaluate(LEGACY) == []
+            assert (
+                await page.evaluate(
+                    "navigator.serviceWorker.ready.then(r => r.pushManager.getSubscription())"
+                )
+                is None
+            )
+            await page.reload()
+            await page.wait_for_selector("text=Accesso disattivato")
+
+            # The used link opened again on another phone: "not valid", and nothing kept.
+            other = await browser.new_context(viewport=PHONE, user_agent=ANDROID, locale="it-IT")
+            other_page = await other.new_page()
+            other_page.set_default_timeout(TIMEOUT)
+            await other_page.goto(f"{base}/api/family_hub/guest/#i={token}")
+            await other_page.wait_for_selector("text=Invito non valido")
+            assert await other_page.evaluate(IDB_KEYS) == ["ended"]
+            await other.close()
+            log = (await admin("list"))["log"]
+            assert any(e["kind"] == "attempt_used" for e in log)
         finally:
             await browser.close()
 

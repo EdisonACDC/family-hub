@@ -771,6 +771,7 @@
         : fmtDay(a, { day: "numeric", month: "short" }) + " – " + fmtDay(b, { day: "numeric", month: "short", year: "numeric" });
     }
     title.textContent = text;
+    title.classList.toggle("as-written", state.view === "list");
   }
 
   function renderWeek() {
@@ -2229,7 +2230,9 @@
     permissions: "shareLog_permissions", disabled: "shareLog_disabled",
     event_pending: "shareLog_event_pending", event_added: "shareLog_event_added",
     event_changed: "shareLog_event_changed", event_deleted: "shareLog_event_deleted",
-    approved: "shareLog_approved", declined: "shareLog_declined"
+    approved: "shareLog_approved", declined: "shareLog_declined",
+    attempt_used: "shareLog_attempt_used", attempt_expired: "shareLog_attempt_expired",
+    attempt_revoked: "shareLog_attempt_revoked"
   };
 
   function deviceStatus(device) {
@@ -3268,8 +3271,13 @@
     request({ op: "manual_save", schedule: collectManual() }).then(function () {
       closeManual();
       showStatusNote(I.f("manualSaved"));
+      // The external calendars list, if open underneath, shows "Ritiri a mano" at once.
+      if (!$("ics-overlay").hidden) loadIcs();
       // Home Assistant rebuilds the calendar of the pickups; the page reads it again after that.
-      window.setTimeout(refreshCalendars, 2500);
+      window.setTimeout(function () {
+        refreshCalendars();
+        if (!$("ics-overlay").hidden) loadIcs();
+      }, 2500);
     }).catch(showManualError);
   }
 

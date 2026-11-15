@@ -352,6 +352,65 @@ async def test_an_expired_invite_is_refused(
     assert {i["id"]: i["status"] for i in listed["result"]["invites"]}[invite_id] == "expired"
 
 
+async def test_a_second_try_with_a_used_invite_is_logged_and_told_to_adults(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, family: MockConfigEntry
+) -> None:
+    calls: list[Any] = []
+    hass.services.async_register("notify", "mobile_app_telefono_mamma", calls.append)
+    _, token = await _invite(hass, hass_ws_client)
+    assert (await _activate(client, token)).status == 200
+    await hass.async_block_till_done()
+    calls.clear()  # the "phone waiting" notice
+    for _ in range(3):
+        answer = await _activate(client, token, IPHONE)
+        assert answer.status == 403 and await answer.json() == {"error": "invite_invalid"}
+    await hass.async_block_till_done()
+    log = (await _ws(hass, hass_ws_client, "list"))["result"]["log"]
+    tries = [e for e in log if e["kind"] == "attempt_used"]
+    assert len(tries) == 3
+    assert tries[0]["name"] == GRANDMA and tries[0]["detail"] == "iPhone · Safari"
+    # The adults are told once, not three times.
+    (call,) = calls
+    assert "già usato" in call.data["message"] and "iPhone · Safari" in call.data["message"]
+    assert "actions" not in call.data["data"]
+    # Still only one device: the second phone got nothing.
+    assert len(_manager(family).devices) == 1
+
+
+async def test_a_try_with_an_expired_or_cancelled_invite_is_logged(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, family: MockConfigEntry
+) -> None:
+    expired_id, expired = await _invite(hass, hass_ws_client)
+    cancelled_id, cancelled = await _invite(hass, hass_ws_client, name="Nonno")
+    await _invite(hass, hass_ws_client, name="Zia")  # keeps the web app on
+    _manager(family).invites[expired_id]["expires_at"] = (
+        dt_util.utcnow() - timedelta(minutes=1)
+    ).isoformat()
+    await _ws(hass, hass_ws_client, "invite_revoke", invite_id=cancelled_id)
+    assert (await _activate(client, expired)).status == 403
+    assert (await _activate(client, cancelled)).status == 403
+    log = (await _ws(hass, hass_ws_client, "list"))["result"]["log"]
+    kinds = {(e["kind"], e["name"]) for e in log}
+    assert ("attempt_expired", GRANDMA) in kinds and ("attempt_revoked", "Nonno") in kinds
+    # An unknown token is refused without a log entry (there is no invite to name).
+    assert (await _activate(client, "x" * 43)).status == 403
+    assert len((await _ws(hass, hass_ws_client, "list"))["result"]["log"]) == len(log)
+
+
+async def test_the_week_starts_as_the_family_chose(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, family: MockConfigEntry
+) -> None:
+    _, token = await _device(hass, client, hass_ws_client)
+    me = await (await client.get(f"{API}me", headers=_auth(token))).json()
+    assert me["week_from_today"] is True  # the family's default
+    hass.config_entries.async_update_entry(
+        family, options={**family.options, "week_from_today": False}
+    )
+    await hass.async_block_till_done()
+    me = await (await client.get(f"{API}me", headers=_auth(token))).json()
+    assert me["week_from_today"] is False
+
+
 async def test_a_revoked_invite_turns_the_web_app_off(
     hass: HomeAssistant, client: TestClient, hass_ws_client: Any
 ) -> None:

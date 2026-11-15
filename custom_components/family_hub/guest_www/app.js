@@ -9,9 +9,12 @@
 
   var BASE = "/api/family_hub/guest/";
   var API = BASE + "api/";
-  var KEY_TOKEN = "fh_guest_token";
-  var KEY_ME = "fh_guest_me";
-  var KEY_CACHE = "fh_guest_cache";
+  // What the phone keeps (its token, what it may see, the last copy of the appointments) is in
+  // IndexedDB under a name of its own: not in localStorage, next to Home Assistant's own login on
+  // the same address. 0.9.0b1/b2 kept it in localStorage: it is moved here once, then removed.
+  var DB_NAME = "family-hub-guest";
+  var DB_STORE = "kv";
+  var LEGACY_KEYS = ["fh_guest_token", "fh_guest_me", "fh_guest_cache"];
   var REFRESH_MS = 30000;
   var PENDING_POLL_MS = 10000;
 
@@ -85,7 +88,11 @@
       pushIos: "Su iPhone le notifiche funzionano solo con iOS 16.4 o più recente e con Family Hub aggiunto alla schermata Home da Safari.",
       pushNone: "Questo browser non può ricevere notifiche.",
       pushError: "Non è stato possibile attivare le notifiche.",
-      installAgain: "Come installare l'app"
+      installAgain: "Come installare l'app",
+      haTitle: "Questo link è per il telefono dell'invitato",
+      haText: "Questo browser è già collegato a Home Assistant. Se apri l'invito qui, lo usi tu e sul telefono dell'invitato non funzionerà più. Manda il link alla persona invitata.",
+      haAnyway: "Usalo comunque su questo telefono",
+      haConfirm: "L'invito vale per un solo telefono. Usarlo su questo?"
     },
     en: {
       loading: "One moment…",
@@ -156,7 +163,11 @@
       pushIos: "On iPhone, notifications work only with iOS 16.4 or later, with Family Hub added to the Home Screen from Safari.",
       pushNone: "This browser cannot receive notifications.",
       pushError: "Notifications could not be turned on.",
-      installAgain: "How to install the app"
+      installAgain: "How to install the app",
+      haTitle: "This link is for the invited person's phone",
+      haText: "This browser is already signed in to Home Assistant. If you open the invite here, you use it up and it will no longer work on the invited person's phone. Send the link to the person invited.",
+      haAnyway: "Use it on this phone anyway",
+      haConfirm: "The invite works for one phone only. Use it on this one?"
     },
     de: {
       loading: "Einen Moment…",
@@ -227,15 +238,22 @@
       pushIos: "Auf dem iPhone gehen Mitteilungen nur ab iOS 16.4 und wenn Family Hub über Safari zum Home-Bildschirm hinzugefügt wurde.",
       pushNone: "Dieser Browser kann keine Mitteilungen empfangen.",
       pushError: "Mitteilungen konnten nicht eingeschaltet werden.",
-      installAgain: "So wird die App installiert"
+      installAgain: "So wird die App installiert",
+      haTitle: "Dieser Link ist für das Telefon der eingeladenen Person",
+      haText: "Dieser Browser ist schon bei Home Assistant angemeldet. Wird die Einladung hier geöffnet, ist sie verbraucht und funktioniert auf dem Telefon der eingeladenen Person nicht mehr. Den Link bitte der eingeladenen Person schicken.",
+      haAnyway: "Trotzdem auf diesem Telefon verwenden",
+      haConfirm: "Die Einladung gilt für ein einziges Telefon. Hier verwenden?"
     }
   };
 
   var state = {
     lang: pickLanguage(),
-    token: read(KEY_TOKEN),
+    token: null,
     invite: null,
-    me: readJSON(KEY_ME),
+    me: null,
+    cache: {},
+    ended: null,
+    forceHere: false,
     view: "list",
     weekStart: null,
     events: [],
@@ -249,17 +267,93 @@
 
   function $(id) { return document.getElementById(id); }
 
-  function read(key) {
+  // ----- what the phone keeps (IndexedDB) ------------------------------------
+  // Without IndexedDB (some private modes) the app still works, for this visit only.
+
+  var db = null;
+
+  function openDb() {
+    return new Promise(function (resolve) {
+      try {
+        var request = window.indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = function () { request.result.createObjectStore(DB_STORE); };
+        request.onsuccess = function () { db = request.result; resolve(); };
+        request.onerror = function () { resolve(); };
+        request.onblocked = function () { resolve(); };
+      } catch (e) { resolve(); }
+    });
+  }
+
+  function dbGet(key) {
+    return new Promise(function (resolve) {
+      if (!db) { resolve(null); return; }
+      try {
+        var request = db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get(key);
+        request.onsuccess = function () { resolve(request.result === undefined ? null : request.result); };
+        request.onerror = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  function save(key, value) {
+    if (!db) return;
+    try {
+      var store = db.transaction(DB_STORE, "readwrite").objectStore(DB_STORE);
+      if (value === null || value === undefined) store.delete(key);
+      else store.put(value, key);
+    } catch (e) { /* kept for this visit only */ }
+  }
+
+  function legacy(key) {
     try { return window.localStorage.getItem(key); } catch (e) { return null; }
   }
-  function write(key, value) {
-    try {
-      if (value === null) window.localStorage.removeItem(key);
-      else window.localStorage.setItem(key, value);
-    } catch (e) { /* private mode: the app still works for this visit */ }
+
+  function forgetLegacy() {
+    LEGACY_KEYS.forEach(function (key) {
+      try { window.localStorage.removeItem(key); } catch (e) { /* nothing to remove */ }
+    });
   }
-  function readJSON(key) {
-    try { return JSON.parse(read(key) || "null"); } catch (e) { return null; }
+
+  function loadStored() {
+    return openDb().then(function () {
+      return Promise.all([dbGet("token"), dbGet("me"), dbGet("cache"), dbGet("ended")]);
+    }).then(function (values) {
+      state.token = values[0];
+      state.me = values[1];
+      state.cache = values[2] || {};
+      state.ended = values[3];
+      var oldToken = legacy("fh_guest_token");
+      if (oldToken && !state.token && db) {
+        state.token = oldToken;
+        save("token", oldToken);
+        try { state.me = JSON.parse(legacy("fh_guest_me") || "null"); } catch (e) { state.me = null; }
+        try { state.cache = JSON.parse(legacy("fh_guest_cache") || "null") || {}; } catch (e) { state.cache = {}; }
+        save("me", state.me);
+        save("cache", state.cache);
+      }
+      if (db) forgetLegacy();
+    });
+  }
+
+  // The phone forgets everything of the family: token, what it could see, the saved
+  // appointments and the push subscription. Only a note of why stays, to say so on reopening.
+  function wipe(reason) {
+    state.token = null;
+    state.me = null;
+    state.cache = {};
+    state.events = [];
+    if (db) {
+      try { db.transaction(DB_STORE, "readwrite").objectStore(DB_STORE).clear(); } catch (e) { /* gone */ }
+    }
+    forgetLegacy();
+    state.ended = reason;
+    save("ended", reason);
+    unsubscribeQuietly();
+  }
+
+  // Home Assistant's own page keeps its login here (hassTokens): only its presence is looked at.
+  function hasHomeAssistantLogin() {
+    try { return window.localStorage.getItem("hassTokens") !== null; } catch (e) { return false; }
   }
 
   function pickLanguage(code) {
@@ -398,6 +492,7 @@
     $("message-text").textContent = text;
     var button = $("message-retry");
     button.hidden = !retry;
+    button.className = "btn btn-primary";
     button.textContent = t("retry");
     button.onclick = retry || null;
     $("hello").hidden = true;
@@ -405,13 +500,26 @@
   }
 
   function accessOff() {
-    // Nothing of the family stays on a phone that may no longer see it.
-    write(KEY_CACHE, null);
-    write(KEY_ME, null);
-    state.me = null;
-    state.events = [];
+    wipe("off");
     message("🔒", t("offTitle"), t("offText"));
-    unsubscribeQuietly();
+  }
+
+  function inviteInvalid() {
+    wipe("invalid");
+    message("✉️", t("invalidTitle"), t("invalidText"));
+  }
+
+  function homeAssistantWarning() {
+    message("⚠️", t("haTitle"), t("haText"));
+    var button = $("message-retry");
+    button.hidden = false;
+    button.textContent = t("haAnyway");
+    button.className = "btn";
+    button.onclick = function () {
+      if (!window.confirm(t("haConfirm"))) return;
+      state.forceHere = true;
+      begin();
+    };
   }
 
   function waiting() {
@@ -457,13 +565,24 @@
     applyStaticTexts();
     registerWorker();
     state.invite = readInvite();
+    loadStored().then(begin);
+  }
+
+  function begin() {
     if (state.token) {
       forgetInviteInUrl();
       loadMe();
       return;
     }
     if (!state.invite) {
-      message("✉️", t("noInviteTitle"), t("noInviteText"));
+      if (state.ended === "off") message("🔒", t("offTitle"), t("offText"));
+      else if (state.ended === "invalid") message("✉️", t("invalidTitle"), t("invalidText"));
+      else message("✉️", t("noInviteTitle"), t("noInviteText"));
+      return;
+    }
+    if (hasHomeAssistantLogin() && !state.forceHere) {
+      // Probably an adult who opened the link to look at it: using it here would spend it.
+      homeAssistantWarning();
       return;
     }
     if (isIOS() && !standalone()) {
@@ -482,7 +601,9 @@
     show("screen-loading");
     api("POST", "activate", { token: state.invite }).then(function (data) {
       state.token = data.token;
-      write(KEY_TOKEN, data.token);
+      save("token", data.token);
+      state.ended = null;
+      save("ended", null);
       state.invite = null;
       forgetInviteInUrl();
       if (!standalone() && !isIOS()) {
@@ -497,7 +618,7 @@
         message("⏱️", t("netTitle"), t("errSlow"), activate);
       } else {
         forgetInviteInUrl();
-        message("✉️", t("invalidTitle"), t("invalidText"));
+        inviteInvalid();
       }
     });
   }
@@ -507,7 +628,7 @@
     api("GET", "me").then(function (me) {
       if (me.token) {
         state.token = me.token;
-        write(KEY_TOKEN, me.token);
+        save("token", me.token);
       }
       if (me.status === "pending") {
         waiting();
@@ -518,7 +639,7 @@
         return;
       }
       state.me = me;
-      write(KEY_ME, JSON.stringify(me));
+      save("me", me);
       state.lang = pickLanguage(me.language);
       applyStaticTexts();
       state.offline = false;
@@ -547,6 +668,8 @@
   // ----- main screen --------------------------------------------------------
 
   function weekStartOf(d) {
+    // As the family's wall tablet: from today, unless the family starts the week on its first day.
+    if (!state.me || state.me.week_from_today !== false) return new Date(d.getTime());
     var first = state.me && state.me.first_weekday === "sunday" ? 0 : 1;
     var day = d.getDay();
     var back = (day - first + 7) % 7;
@@ -577,17 +700,18 @@
     var seq = state.loadSeq = (state.loadSeq || 0) + 1;
     function current() { return seq === state.loadSeq; }
     // Until it answers, the screen shows this view's last copy, never another view's.
-    var saved = (readJSON(KEY_CACHE) || {})[key];
+    var saved = state.cache[key];
     state.events = saved ? saved.events : [];
     render();
     api("GET", "events?from=" + dayKey(r.from) + "&days=" + r.days).then(function (data) {
       var events = data.events || [];
-      var cache = readJSON(KEY_CACHE) || {};
+      if (!state.token) return;  // access ended meanwhile: nothing is kept
+      var cache = state.cache;
       cache[key] = { at: Date.now(), events: events };
       // Only the last few views are kept.
       Object.keys(cache).sort(function (a, b) { return cache[b].at - cache[a].at; })
         .slice(6).forEach(function (old) { delete cache[old]; });
-      write(KEY_CACHE, JSON.stringify(cache));
+      save("cache", cache);
       if (!current()) return;
       state.events = events;
       state.offline = false;
@@ -595,8 +719,7 @@
     }).catch(function (err) {
       if (!current()) return;
       if (isNetwork(err)) {
-        var cache = readJSON(KEY_CACHE) || {};
-        state.events = cache[key] ? cache[key].events : [];
+        state.events = state.cache[key] ? state.cache[key].events : [];
         state.offline = true;
         render();
       } else if (err.status !== 429) {
@@ -889,7 +1012,7 @@
       return api("POST", "push", { subscription: subscription.toJSON() });
     }).then(function (answer) {
       state.me.push = !!answer.push;
-      write(KEY_ME, JSON.stringify(state.me));
+      save("me", state.me);
       renderPush();
     }).catch(function (err) {
       if (err && err.message !== "denied") toast(t("pushError"));
@@ -911,7 +1034,7 @@
     api("DELETE", "push").then(function () {
       unsubscribeQuietly();
       state.me.push = false;
-      write(KEY_ME, JSON.stringify(state.me));
+      save("me", state.me);
       renderPush();
     }).catch(function () { toast(t("pushError")); });
   }
