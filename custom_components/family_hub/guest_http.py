@@ -412,6 +412,80 @@ class GuestShiftActionView(_GuestView):
         return _json({"written": written})
 
 
+class GuestListView(_GuestView):
+    """One of the to-do lists an adult gave this phone: GET the items; POST {"add": text} or
+    {"item": id, "done": bool} when it may change them. Anything else is 403."""
+
+    url = BASE + "/api/lists/{list_id}"
+    name = "api:family_hub:guest:list"
+
+    async def get(self, request: web.Request, list_id: str) -> web.Response:
+        hub = self._hub(request)
+        if hub is None:
+            return _not_found()
+        try:
+            manager, device = self._device(hub, request)
+            items = await manager.async_list_items(device, list_id)
+        except GuestError as err:
+            return _fail(err)
+        return _json({"items": items})
+
+    async def post(self, request: web.Request, list_id: str) -> web.Response:
+        hub = self._hub(request)
+        if hub is None:
+            return _not_found()
+        try:
+            manager, device = self._device(hub, request, write=True)
+            await manager.async_list_change(device, list_id, await _body(request))
+            items = await manager.async_list_items(device, list_id)
+        except GuestError as err:
+            return _fail(err)
+        return _json({"items": items})
+
+
+class GuestWasteView(_GuestView):
+    """GET ?from=YYYY-MM-DD&days=N: the rubbish pickups, when the adult turned them on."""
+
+    url = f"{BASE}/api/waste"
+    name = "api:family_hub:guest:waste"
+
+    async def get(self, request: web.Request) -> web.Response:
+        hub = self._hub(request)
+        if hub is None:
+            return _not_found()
+        try:
+            manager, device = self._device(hub, request)
+            if set(request.query) - {"from", "days"}:
+                raise GuestError("invalid", 422)
+            try:
+                start = date.fromisoformat(request.query.get("from", ""))
+                days = int(request.query.get("days", "14"))
+            except ValueError as err:
+                raise GuestError("invalid", 422) from err
+            result = await manager.async_waste_days(device, start, days)
+        except GuestError as err:
+            return _fail(err)
+        return _json({"days": result})
+
+
+class GuestWeatherView(_GuestView):
+    """GET: today's weather line, when the adult turned it on."""
+
+    url = f"{BASE}/api/weather"
+    name = "api:family_hub:guest:weather"
+
+    async def get(self, request: web.Request) -> web.Response:
+        hub = self._hub(request)
+        if hub is None:
+            return _not_found()
+        try:
+            manager, device = self._device(hub, request)
+            result = await manager.async_weather(device)
+        except GuestError as err:
+            return _fail(err)
+        return _json(result)
+
+
 def register_views(hass: HomeAssistant) -> None:
     """Called once, when the first invite or device exists (see GuestHub.ensure_views)."""
     access = logging.getLogger("aiohttp.access")
@@ -426,6 +500,9 @@ def register_views(hass: HomeAssistant) -> None:
         GuestPushView(),
         GuestShiftsView(),
         GuestShiftActionView(),
+        GuestListView(),
+        GuestWasteView(),
+        GuestWeatherView(),
         GuestPageView(),
         GuestFileView(),
     ):

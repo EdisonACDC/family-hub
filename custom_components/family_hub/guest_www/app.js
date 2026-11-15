@@ -107,6 +107,12 @@
       chooseShift: "Scegli il turno", clearShift: "Cancella", saveShifts: "Salva",
       saveShiftsN: "Salva ({n} giorni)", saveShiftsOne: "Salva (1 giorno)",
       boardHint: "Scegli un turno e tocca i giorni. Un secondo tocco lo toglie. Riposo e Cancella lasciano il giorno libero.",
+month: "Mese", lists: "🛒 Liste", waste: "🗑️ Rifiuti", everyone: "Tutti",
+      noCalendar: "Il calendario non è attivo per questo telefono.",
+      listEmpty: "La lista è vuota.", listNew: "Cosa aggiungere?", listAdd: "Aggiungi",
+      listReadOnly: "Puoi guardare la lista, non cambiarla.", listNone: "Nessuna lista.",
+      wasteNone: "Nessun ritiro nei prossimi 14 giorni.", wasteTitle: "Rifiuti dei prossimi giorni",
+      errLoad: "Non è stato possibile caricare. Riprova.",
       haTitle: "Questo link è per il telefono dell'invitato",
       haText: "Questo browser è già collegato a Home Assistant. Se apri l'invito qui, lo usi tu e sul telefono dell'invitato non funzionerà più. Manda il link alla persona invitata.",
       haAnyway: "Usalo comunque su questo telefono",
@@ -200,6 +206,12 @@
       chooseShift: "Choose the shift", clearShift: "Clear", saveShifts: "Save",
       saveShiftsN: "Save ({n} days)", saveShiftsOne: "Save (1 day)",
       boardHint: "Choose a shift and tap the days. A second tap takes it away. Day off and Clear leave the day free.",
+month: "Month", lists: "🛒 Lists", waste: "🗑️ Rubbish", everyone: "Everyone",
+      noCalendar: "The calendar is not on for this phone.",
+      listEmpty: "The list is empty.", listNew: "What to add?", listAdd: "Add",
+      listReadOnly: "You can look at the list, not change it.", listNone: "No lists.",
+      wasteNone: "No pickup in the next 14 days.", wasteTitle: "Rubbish in the next days",
+      errLoad: "It could not be loaded. Please try again.",
       haTitle: "This link is for the invited person's phone",
       haText: "This browser is already signed in to Home Assistant. If you open the invite here, you use it up and it will no longer work on the invited person's phone. Send the link to the person invited.",
       haAnyway: "Use it on this phone anyway",
@@ -293,6 +305,12 @@
       chooseShift: "Schicht wählen", clearShift: "Löschen", saveShifts: "Speichern",
       saveShiftsN: "Speichern ({n} Tage)", saveShiftsOne: "Speichern (1 Tag)",
       boardHint: "Schicht wählen und die Tage antippen. Ein zweites Antippen nimmt sie weg. Frei und Löschen lassen den Tag frei.",
+month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
+      noCalendar: "Der Kalender ist für dieses Telefon nicht eingeschaltet.",
+      listEmpty: "Die Liste ist leer.", listNew: "Was hinzufügen?", listAdd: "Hinzufügen",
+      listReadOnly: "Du kannst die Liste ansehen, nicht ändern.", listNone: "Keine Listen.",
+      wasteNone: "Keine Abholung in den nächsten 14 Tagen.", wasteTitle: "Müll der nächsten Tage",
+      errLoad: "Laden war nicht möglich. Bitte noch einmal versuchen.",
       haTitle: "Dieser Link ist für das Telefon der eingeladenen Person",
       haText: "Dieser Browser ist schon bei Home Assistant angemeldet. Wird die Einladung hier geöffnet, ist sie verbraucht und funktioniert auf dem Telefon der eingeladenen Person nicht mehr. Den Link bitte der eingeladenen Person schicken.",
       haAnyway: "Trotzdem auf diesem Telefon verwenden",
@@ -310,6 +328,8 @@
     forceHere: false,
     view: "list",
     weekStart: null,
+    monthStart: null,
+    filter: null,
     events: [],
     offline: false,
     installPrompt: null,
@@ -502,8 +522,17 @@
     toast.timer = window.setTimeout(function () { box.hidden = true; }, 3500);
   }
 
+  // What an adult turned on for this phone. A copy saved by 0.9 has no list: only the calendar.
+  function feature(name) {
+    if (!state.me) return false;
+    if (!state.me.features) return name === "calendar";
+    return !!state.me.features[name];
+  }
+  function fullMode() { return !!(state.me && state.me.mode === "full"); }
+
   function canAdd() {
-    return !!(state.me && (state.me.permission === "add" || state.me.permission === "edit_own"));
+    return !!(state.me && feature("calendar")
+      && (state.me.permission === "add" || state.me.permission === "edit_own"));
   }
   function canEdit(item) {
     return !!(state.me && state.me.permission === "edit_own" && item.mine);
@@ -882,15 +911,41 @@
     $("hello").textContent = t("hello", { name: state.me.name || "" });
     $("hello").hidden = false;
     if (!state.weekStart) state.weekStart = weekStartOf(today());
+    if (!state.monthStart) state.monthStart = new Date(today().getFullYear(), today().getMonth(), 1);
+    // Completa: smaller letters, the month and the person filter, as on the panel.
+    document.documentElement.classList.toggle("mode-full", fullMode());
+    if (!fullMode() && state.view === "month") state.view = "list";
     show("screen-main");
     renderPush();
     $("install-again").hidden = standalone();
     $("shifts-button").hidden = !state.me.has_shifts;
+    $("tool-lists").hidden = !feature("lists") || !(state.me.lists || []).length;
+    $("tool-waste").hidden = !feature("waste");
+    $("tab-month").hidden = !fullMode();
+    renderFilter();
+    loadWeather();
+    var calendar = feature("calendar");
+    $("tabs").hidden = !calendar;
+    $("days").hidden = !calendar;
+    $("no-calendar").hidden = calendar;
+    $("no-calendar").textContent = t("noCalendar");
+    if (!calendar) {
+      $("week-nav").hidden = true;
+      $("add-button").hidden = true;
+      return;
+    }
     loadEvents();
+  }
+
+  function monthGridStart() {
+    var first = state.me && state.me.first_weekday === "sunday" ? 0 : 1;
+    var back = (state.monthStart.getDay() - first + 7) % 7;
+    return addDays(state.monthStart, -back);
   }
 
   function range() {
     if (state.view === "week") return { from: state.weekStart, days: 7 };
+    if (state.view === "month") return { from: monthGridStart(), days: 42 };
     return { from: today(), days: 14 };
   }
 
@@ -898,6 +953,7 @@
     window.clearTimeout(state.refreshTimer);
     var r = range();
     var key = state.view + ":" + dayKey(r.from);
+    if (!feature("calendar")) return;
     // Only the latest request may draw: an older answer (another view or week, still on its
     // way) must not replace what is on screen now.
     var seq = state.loadSeq = (state.loadSeq || 0) + 1;
@@ -957,18 +1013,27 @@
     $("offline").hidden = !state.offline;
     $("tab-list").setAttribute("aria-selected", state.view === "list" ? "true" : "false");
     $("tab-week").setAttribute("aria-selected", state.view === "week" ? "true" : "false");
-    $("week-nav").hidden = state.view !== "week";
+    $("tab-month").setAttribute("aria-selected", state.view === "month" ? "true" : "false");
+    $("week-nav").hidden = state.view !== "week" && state.view !== "month";
     var r = range();
     if (state.view === "week") {
       var fmt = new Intl.DateTimeFormat(state.lang, { day: "numeric", month: "short" });
       $("week-range").textContent = fmt.format(r.from) + " – " + fmt.format(addDays(r.from, 6));
+    } else if (state.view === "month") {
+      $("week-range").textContent = new Intl.DateTimeFormat(state.lang, { month: "long", year: "numeric" })
+        .format(state.monthStart);
     }
     var byDay = {};
-    state.events.forEach(function (item) {
+    state.events.filter(passesFilter).forEach(function (item) {
       daysOf(item).forEach(function (key) { (byDay[key] = byDay[key] || []).push(item); });
     });
     var box = $("days");
     box.textContent = "";
+    if (state.view === "month") {
+      box.appendChild(monthGrid(r, byDay));
+      openPendingEvent();
+      return;
+    }
     var todayKey = dayKey(today());
     var shown = 0;
     for (var i = 0; i < r.days; i++) {
@@ -986,6 +1051,177 @@
     }
     if (state.view === "list" && !shown) box.appendChild(el("p", { class: "big-note", text: t("nothingDays") }));
     openPendingEvent();
+  }
+
+  // ----- Completa: the month and the person filter ------------------------------------
+
+  function passesFilter(item) {
+    if (!state.filter) return true;
+    return (item.persons || []).some(function (id) { return state.filter.indexOf(id) !== -1; });
+  }
+
+  function renderFilter() {
+    var box = $("person-filter");
+    box.textContent = "";
+    var persons = state.me.persons || [];
+    box.hidden = !fullMode() || !feature("calendar") || persons.length < 2;
+    if (box.hidden) { state.filter = null; return; }
+    function chip(text, pressed, onTap, color) {
+      var dot = el("span", { class: "dot" });
+      if (color) dot.style.background = color;
+      return el("button", { type: "button", class: "filter-chip", "aria-pressed": pressed ? "true" : "false",
+        onclick: onTap }, [color ? dot : null, text]);
+    }
+    box.appendChild(chip(t("everyone"), !state.filter, function () {
+      state.filter = null; renderFilter(); render();
+    }));
+    persons.forEach(function (p) {
+      var on = !!state.filter && state.filter.indexOf(p.id) !== -1;
+      var button = chip(p.name, on, function () {
+        var chosen = (state.filter || []).filter(function (id) { return id !== p.id; });
+        if (!on) chosen.push(p.id);
+        state.filter = chosen.length ? chosen : null;
+        renderFilter();
+        render();
+      }, p.color);
+      button.setAttribute("data-person", p.id);
+      box.appendChild(button);
+    });
+  }
+
+  function monthGrid(r, byDay) {
+    var grid = el("div", { class: "month-grid", role: "grid" });
+    var names = new Intl.DateTimeFormat(state.lang, { weekday: "narrow" });
+    for (var w = 0; w < 7; w++) grid.appendChild(el("div", { class: "month-wd", text: names.format(addDays(r.from, w)) }));
+    var todayKey = dayKey(today());
+    for (var i = 0; i < r.days; i++) {
+      var d = addDays(r.from, i);
+      var key = dayKey(d);
+      var items = byDay[key] || [];
+      var cell = el("button", { type: "button", class: "month-day"
+        + (d.getMonth() !== state.monthStart.getMonth() ? " other" : "")
+        + (key === todayKey ? " today" : "") + (items.length ? " busy" : ""), "data-month-day": key,
+        onclick: (function (day, list) { return function () { openDay(day, list); }; })(d, items) },
+        [el("span", { class: "month-num", text: String(d.getDate()) })]);
+      var bars = el("span", { class: "month-bars" });
+      items.slice(0, 3).forEach(function (item) {
+        var bar = el("span", { class: "month-bar", text: item.title });
+        var color = colorOf(item);
+        if (color) bar.style.borderLeftColor = color;
+        bars.appendChild(bar);
+      });
+      if (items.length > 3) bars.appendChild(el("span", { class: "month-more", text: "+" + (items.length - 3) }));
+      cell.appendChild(bars);
+      grid.appendChild(cell);
+    }
+    return grid;
+  }
+
+  function openDay(d, items) {
+    var body = el("div", { class: "day-sheet" });
+    if (!items.length) body.appendChild(el("p", { class: "empty", text: t("nothingDay") }));
+    // A tap on one opens its details in place of this list.
+    items.forEach(function (item) { body.appendChild(eventCard(item)); });
+    openSheet(dayTitle(d), body, [closeButton()]);
+  }
+
+  function closeButton() {
+    return el("button", { type: "button", class: "btn", text: t("close"), onclick: closeSheet });
+  }
+
+  // A function the adult has just turned off answers 403: the phone asks again what it may do.
+  function featureError(err) {
+    if (err && (err.status === 403 || err.status === 401)) { closeSheet(); loadMe(); return; }
+    toast(t("errLoad"));
+  }
+
+  // ----- lists ---------------------------------------------------------------------------
+
+  function openLists() {
+    var lists = state.me.lists || [];
+    if (lists.length === 1) { openList(lists[0]); return; }
+    var body = el("div", { class: "list-choice" });
+    if (!lists.length) body.appendChild(el("p", { class: "empty", text: t("listNone") }));
+    lists.forEach(function (list) {
+      body.appendChild(el("button", { type: "button", class: "btn list-open", "data-list": list.id, text: list.name,
+        onclick: function () { openList(list); } }));
+    });
+    openSheet(t("lists").replace(/^\S+\s/, ""), body, [closeButton()]);
+  }
+
+  function openList(list) {
+    api("GET", "lists/" + list.id).then(function (data) {
+      renderList(list, data.items || []);
+    }).catch(featureError);
+  }
+
+  function changeList(list, payload) {
+    api("POST", "lists/" + list.id, payload).then(function (data) {
+      renderList(list, data.items || []);
+    }).catch(function (err) {
+      if (err && err.status === 403) { featureError(err); return; }
+      sheetError(t("errSave"));
+    });
+  }
+
+  function renderList(list, items) {
+    var body = el("div", { class: "todo" });
+    if (!items.length) body.appendChild(el("p", { class: "empty", text: t("listEmpty") }));
+    items.forEach(function (item) {
+      var box = el("input", { type: "checkbox" });
+      box.checked = !!item.done;
+      box.disabled = !list.edit || state.offline;
+      box.addEventListener("change", function () { changeList(list, { item: item.id, done: box.checked }); });
+      body.appendChild(el("label", { class: "todo-item" + (item.done ? " done" : ""), "data-item": item.id },
+        [box, el("span", { text: item.summary })]));
+    });
+    var actions = [];
+    if (list.edit) {
+      var input = el("input", { type: "text", id: "list-new", maxlength: "100", placeholder: t("listNew") });
+      body.appendChild(input);
+      actions.push(el("button", { type: "button", class: "btn btn-primary", id: "list-add", text: t("listAdd"),
+        onclick: function () {
+          var text = input.value.trim();
+          if (text) changeList(list, { add: text });
+        } }));
+    } else {
+      body.appendChild(el("p", { class: "note-box", text: t("listReadOnly") }));
+    }
+    actions.push(closeButton());
+    openSheet(list.name, body, actions);
+  }
+
+  // ----- rubbish days and weather -----------------------------------------------------
+
+  function openWaste() {
+    api("GET", "waste?from=" + dayKey(today()) + "&days=14").then(function (data) {
+      var body = el("div", { class: "waste" });
+      var days = data.days || [];
+      if (!days.length) body.appendChild(el("p", { class: "empty", text: t("wasteNone") }));
+      days.forEach(function (day) {
+        var section = el("section", { class: "day", "data-waste-day": day.date }, [el("h3", { text: dayTitle(fromKey(day.date)) })]);
+        day.items.forEach(function (item) {
+          var dot = el("span", { class: "dot" });
+          if (item.color) dot.style.background = item.color;
+          section.appendChild(el("p", { class: "waste-item" }, [dot, item.label]));
+        });
+        body.appendChild(section);
+      });
+      openSheet(t("wasteTitle"), body, [closeButton()]);
+    }).catch(featureError);
+  }
+
+  var WEATHER_ICONS = { "clear-night": "🌙", sunny: "☀️", cloudy: "☁️", partlycloudy: "⛅", rainy: "🌧️",
+    pouring: "🌧️", snowy: "❄️", "snowy-rainy": "🌨️", fog: "🌫️", hail: "🌨️", lightning: "⛈️",
+    "lightning-rainy": "⛈️", windy: "💨", "windy-variant": "💨" };
+
+  function loadWeather() {
+    var line = $("weather-line");
+    if (!feature("weather") || state.offline) { line.hidden = true; return; }
+    api("GET", "weather").then(function (data) {
+      line.textContent = data.line ? (WEATHER_ICONS[data.condition] || "🌡️") + " " + data.line : "";
+      line.hidden = !data.line;
+    }).catch(function () { line.hidden = true; });
   }
 
   function whenText(item) {
@@ -1480,7 +1716,8 @@
     var box = $("push-box");
     box.textContent = "";
     pushBanner("");
-    if (!state.me || !state.me.notify || !state.me.vapid) return;
+    // Notifications or reminders: Family Hub gives the key only when one of them is on.
+    if (!state.me || !state.me.vapid) return;
     if (!pushSupported()) {
       box.appendChild(el("p", { class: "note-box", text: isIOS() ? t("pushIos") : t("pushNone") }));
       pushBanner(isIOS() ? t("pushIos") : "");
@@ -1574,6 +1811,9 @@
     $("loading-text").textContent = t("loading");
     $("tab-list").textContent = t("upcoming");
     $("tab-week").textContent = t("week");
+    $("tab-month").textContent = t("month");
+    $("tool-lists").textContent = t("lists");
+    $("tool-waste").textContent = t("waste");
     $("add-button").textContent = t("add");
     $("install-again").textContent = t("installAgain");
     $("shifts-button").textContent = t("myShifts");
@@ -1581,8 +1821,20 @@
 
   $("tab-list").addEventListener("click", function () { state.view = "list"; render(); loadEvents(); });
   $("tab-week").addEventListener("click", function () { state.view = "week"; render(); loadEvents(); });
-  $("week-prev").addEventListener("click", function () { state.weekStart = addDays(state.weekStart, -7); render(); loadEvents(); });
-  $("week-next").addEventListener("click", function () { state.weekStart = addDays(state.weekStart, 7); render(); loadEvents(); });
+  $("tab-month").addEventListener("click", function () { state.view = "month"; render(); loadEvents(); });
+  function step(n) {
+    if (state.view === "month") {
+      state.monthStart = new Date(state.monthStart.getFullYear(), state.monthStart.getMonth() + n, 1);
+    } else {
+      state.weekStart = addDays(state.weekStart, 7 * n);
+    }
+    render();
+    loadEvents();
+  }
+  $("week-prev").addEventListener("click", function () { step(-1); });
+  $("week-next").addEventListener("click", function () { step(1); });
+  $("tool-lists").addEventListener("click", openLists);
+  $("tool-waste").addEventListener("click", openWaste);
   $("add-button").addEventListener("click", function () { openForm(null); });
   $("install-button").addEventListener("click", install);
   $("install-again").addEventListener("click", function () { installScreen(openMain); });

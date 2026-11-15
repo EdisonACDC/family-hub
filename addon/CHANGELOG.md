@@ -1,5 +1,34 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.10.0b1
+
+Beta («web app completa»). Chi resta sulla 0.9.0 stabile non riceve questo aggiornamento; chi usa
+solo il pannello in Home Assistant non vede differenze.
+
+- **Cosa può usare ogni invitato**, scelto da un adulto solo da Home Assistant (Condivisione, nel
+  nuovo invito e in «Modifica permessi»): Calendario, aggiungere/modificare appuntamenti (i
+  permessi di prima), turni con la plancia, Liste (spesa, cose da fare: quali liste e se può
+  aggiungere e spuntare), Promemoria degli appuntamenti, Notifiche (nuovi impegni, modifiche,
+  risposte), Giorni dei rifiuti, Meteo. Di default tutto spento tranne il calendario in lettura.
+- **Due modalità** per invitato: «Semplice» (caratteri grandi, poche voci, per i nonni) e
+  «Completa» (come il pannello: vista Mese, filtro per persona, caratteri più piccoli).
+- **Modelli** quando si crea un invito: «Nonni» (Semplice, calendario dei bambini scelti,
+  aggiungere appuntamenti, turni propri), «Babysitter» (Semplice, solo lettura, niente liste),
+  «Familiare» (Completa, funzioni scelte), «Personalizzato». Dopo restano modificabili a mano.
+- **Controlli sul server**: ogni funzione spenta risponde 403 dall'API
+  `/api/family_hub/guest/...` (calendario, liste, rifiuti, meteo, turni, notifiche); nasconderla
+  nell'app non è l'unica protezione. Una lista si apre solo se l'adulto l'ha scelta per quel
+  telefono; nell'app ha un codice proprio, mai l'entità di Home Assistant. Le voci delle liste non
+  si cancellano dalla web app.
+- **Mai agli invitati**: Condivisione e inviti, procedura guidata, impostazioni di Family Hub o di
+  Home Assistant, gestione dei dispositivi (nessun indirizzo nella web app).
+- **Regola zero invariata** per ogni funzione nuova: solo le persone scelte, mai i «Privato»,
+  appuntamenti senza persona solo con l'opzione accesa; i rifiuti di una fonte assegnata ad altre
+  persone non arrivano; promemoria e notifiche come prima.
+- **Aggiornamento**: inviti, telefoni e token esistenti continuano a funzionare; passano da soli
+  al modello «Nonni» con i permessi che hanno oggi (i promemoria restano se avevano le notifiche).
+- Web app: «Liste», «Rifiuti» e la riga del meteo quando sono accesi; senza calendario lo dice.
+
 ## 0.9.0
 
 Stabile. Raccoglie le beta 0.9.0b1–b9. Nessuna modifica incompatibile: chi non crea inviti ha

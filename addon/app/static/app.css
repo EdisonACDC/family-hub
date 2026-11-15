@@ -1725,3 +1725,9 @@ html, body { overflow-x: hidden; max-width: 100%; }
 
 /* "Prossimi 12 mesi" as written: only dates and months take a capital letter (0.9.0b3). */
 .period-title.as-written { text-transform: none; }
+
+/* 0.10: templates and functions of a guest */
+.share-templates { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+.share-template[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.share-features { margin-top: 8px; }
+.share-lists { margin-left: 12px; }

@@ -2150,8 +2150,11 @@
     $("share-error").hidden = true;
     $("share-overlay").hidden = false;
     $("share-body").textContent = "";
-    request({ op: "share_get" }).then(function (data) {
-      state.share = data;
+    // The family's lists, which an adult may give a guest (asked each time: the guide may change).
+    var lists = request({ op: "todo_lists" }).then(function (found) { state.shareLists = found || []; })
+      .catch(function () { state.shareLists = []; });
+    Promise.all([request({ op: "share_get" }), lists]).then(function (answers) {
+      state.share = answers[0];
       renderShare();
       renderApprovalBanner();
     }).catch(showShareError);
@@ -2189,9 +2192,60 @@
     else renderDevices(body, data);
   }
 
-  // Persons, calendars and what the guest may do: for a new invite and for "Modifica permessi".
+  // 0.10: ready-made choices. Only a starting point: every field below stays editable. The
+  // integration checks everything again (and answers 403 to whatever is off).
+  var GUEST_FEATURES = ["calendar", "reminders", "lists", "waste", "weather"];
+  var GUEST_TEMPLATES = {
+    grandparents: { mode: "simple", permission: "add", approval: "approve", notify: false,
+      has_shifts: true, family_events: false, features: { calendar: true } },
+    babysitter: { mode: "simple", permission: "view", approval: "approve", notify: false,
+      has_shifts: false, family_events: false, features: { calendar: true } },
+    relative: { mode: "full", permission: "edit_own", approval: "direct", notify: true,
+      has_shifts: false, family_events: false,
+      features: { calendar: true, reminders: true, waste: true, weather: true } },
+    custom: { mode: "simple", permission: "view", approval: "approve", notify: false,
+      has_shifts: false, family_events: false, features: { calendar: true } }
+  };
+  var TEMPLATE_KEYS = { grandparents: "shareTplGrandparents", babysitter: "shareTplBabysitter",
+    relative: "shareTplRelative", custom: "shareTplCustom" };
+
+  function guestFeatures(on) {
+    var result = {};
+    GUEST_FEATURES.forEach(function (name) { result[name] = !!(on && on[name]); });
+    return result;
+  }
+
+  function applyTemplate(draft, id) {
+    var preset = GUEST_TEMPLATES[id];
+    draft.template = id;
+    ["mode", "permission", "approval", "notify", "has_shifts", "family_events"].forEach(function (key) {
+      draft[key] = preset[key];
+    });
+    draft.features = guestFeatures(preset.features);
+    draft.lists = [];
+    draft.lists_edit = false;
+  }
+
   function scopeFields(draft) {
     var box = el("div", { class: "share-scope" });
+    if (!draft.features) draft.features = guestFeatures({ calendar: true });
+    if (!draft.lists) draft.lists = [];
+    if (!draft.template) draft.template = "custom";
+    if (!draft.mode) draft.mode = "simple";
+    function redraw() { box.replaceWith(scopeFields(draft)); }
+    box.appendChild(el("p", { class: "share-label" }, I.f("shareTemplate")));
+    var templates = el("div", { class: "share-templates", role: "group", "data-field": "template" });
+    Object.keys(GUEST_TEMPLATES).forEach(function (id) {
+      var chip = el("button", { type: "button", class: "btn share-template", "data-template": id,
+        "aria-pressed": draft.template === id ? "true" : "false" }, I.f(TEMPLATE_KEYS[id]));
+      chip.addEventListener("click", function () { applyTemplate(draft, id); redraw(); });
+      templates.appendChild(chip);
+    });
+    box.appendChild(templates);
+    box.appendChild(el("p", { class: "hint" }, I.f("shareTplHint")));
+    box.appendChild(fieldRow(I.f("shareMode"), selectInput([
+      ["simple", I.f("shareModeSimple")], ["full", I.f("shareModeFull")]
+    ], draft.mode, function (v) { draft.mode = v; }, { "data-field": "mode" })));
     box.appendChild(el("p", { class: "share-label" }, I.f("sharePersons")));
     var persons = el("div", { class: "share-checks", "data-field": "persons" });
     personList().forEach(function (p) {
@@ -2238,8 +2292,51 @@
       shiftsBox.hidden = !on;
     }));
     box.appendChild(shiftsBox);
+    box.appendChild(featureFields(draft));
     box.appendChild(switchRow(I.f("shareNotify"), draft.notify, function (on) { draft.notify = on; }));
+    box.appendChild(el("p", { class: "hint" }, I.f("shareNever")));
     return box;
+  }
+
+  // What the guest may use besides seeing: each one on or off for this guest only.
+  function featureFields(draft) {
+    var box = el("div", { class: "share-features", "data-field": "features" });
+    box.appendChild(el("p", { class: "share-label" }, I.f("shareFeatures")));
+    function feature(name, key) {
+      var row = switchRow(I.f(key), !!draft.features[name], function (on) {
+        draft.features[name] = on;
+        if (name === "lists") listsBox.hidden = !on;
+      });
+      row.setAttribute("data-feature", name);
+      box.appendChild(row);
+    }
+    feature("calendar", "shareFeatCalendar");
+    feature("reminders", "shareReminders");
+    feature("lists", "shareFeatLists");
+    var listsBox = el("div", { class: "share-checks share-lists", "data-field": "lists" });
+    var lists = state.shareLists || [];
+    if (!lists.length) listsBox.appendChild(el("p", { class: "hint" }, I.f("shareNoLists")));
+    lists.forEach(function (list) {
+      listsBox.appendChild(checkRow(list.name, draft.lists.indexOf(list.entity_id) !== -1, function (on) {
+        draft.lists = on ? draft.lists.concat([list.entity_id])
+          : draft.lists.filter(function (x) { return x !== list.entity_id; });
+      }));
+    });
+    listsBox.appendChild(switchRow(I.f("shareListsEdit"), !!draft.lists_edit, function (on) {
+      draft.lists_edit = on;
+    }));
+    listsBox.hidden = !draft.features.lists;
+    box.appendChild(listsBox);
+    feature("waste", "shareFeatWaste");
+    feature("weather", "shareFeatWeather");
+    return box;
+  }
+
+  // The fields of mode, template and functions, as the integration takes them.
+  function featurePayload(draft) {
+    return { template: draft.template || "custom", mode: draft.mode || "simple",
+      features: guestFeatures(draft.features), lists: (draft.lists || []).slice(),
+      lists_edit: !!draft.lists_edit };
   }
 
   function checkRow(text, checked, onChange) {
@@ -2265,9 +2362,10 @@
     }
     if (state.newLink) body.appendChild(linkBox(state.newLink));
     var draft = state.inviteDraft = state.inviteDraft || {
-      name: "", persons: [], categories: [], permission: "add", approval: "approve", notify: true,
+      name: "", persons: [], categories: [], permission: "view", approval: "approve", notify: false,
       family_events: false, has_shifts: false, shift_color: "#8B5CF6", shifts_category: "",
-      expires_days: 7
+      expires_days: 7, template: "custom", mode: "simple",
+      features: guestFeatures({ calendar: true }), lists: [], lists_edit: false
     };
     var form = el("div", { class: "share-card share-new", id: "share-new" });
     form.appendChild(el("h3", {}, I.f("shareNewInvite")));
@@ -2283,13 +2381,13 @@
         showShareError({ code: "share_incomplete" });
         return;
       }
-      request({ op: "share_invite_create", invite: {
+      request({ op: "share_invite_create", invite: Object.assign({
         name: draft.name.trim(), persons: draft.persons, categories: draft.categories,
         permission: draft.permission, approval: draft.approval, notify: draft.notify,
         family_events: draft.family_events, expires_days: draft.expires_days,
         has_shifts: draft.has_shifts, shift_color: draft.shift_color,
         shifts_category: draft.shifts_category || undefined
-      } }).then(function (answer) {
+      }, featurePayload(draft)) }).then(function (answer) {
         state.newLink = answer.link;
         state.inviteDraft = null;
         return request({ op: "share_get" });
@@ -2373,7 +2471,12 @@
     var persons = (item.persons || []).map(personName).join(", ");
     var cats = (item.categories || []).map(categoryName).join(", ");
     var perm = I.f({ view: "sharePermView", add: "sharePermAdd", edit_own: "sharePermEdit" }[item.permission] || "sharePermView");
-    return persons + " · " + cats + " · " + perm;
+    var text = persons + " · " + cats + " · " + perm;
+    if (item.template) {
+      var modeKey = item.mode === "full" ? "shareModeFullShort" : "shareModeSimpleShort";
+      text += " · " + I.f(TEMPLATE_KEYS[item.template] || "shareTplCustom") + " (" + I.f(modeKey) + ")";
+    }
+    return text;
   }
 
   function linkBox(link) {
@@ -2430,7 +2533,7 @@
     event_changed: "shareLog_event_changed", event_deleted: "shareLog_event_deleted",
     approved: "shareLog_approved", declined: "shareLog_declined", replaced: "shareLog_replaced",
     attempt_used: "shareLog_attempt_used", attempt_expired: "shareLog_attempt_expired",
-    attempt_revoked: "shareLog_attempt_revoked"
+    attempt_revoked: "shareLog_attempt_revoked", list_added: "shareLog_list_added"
   };
 
   function deviceStatus(device) {
@@ -2447,7 +2550,8 @@
       card.appendChild(el("p", { class: "hint" }, I.f("shareActivated") + ": " + shortDateTime(device.activated_at)
         + " · " + I.f("shareLastSeen") + ": " + shortDateTime(device.last_seen)));
       card.appendChild(el("p", { class: "hint" }, scopeText(device)));
-      if (device.status === "active" && device.notify) {
+      var pushes = device.notify || !!(device.features && device.features.reminders);
+      if (device.status === "active" && pushes) {
         card.appendChild(el("p", { class: "hint share-push share-push-" + (device.push_status || "off") },
           I.f("sharePushLabel") + ": " + I.f(PUSH_STATUS_KEYS[device.push_status] || "sharePush_off")
           + " · " + ownNotifyText(device)));
@@ -2477,7 +2581,7 @@
           });
         }));
       }
-      if (device.status === "active" && device.notify) {
+      if (device.status === "active" && pushes) {
         actions.appendChild(button(I.f("shareTestPush"), "btn", function () {
           request({ op: "share_device_test_push", device_id: device.id }).then(function () {
             showStatusNote(I.f("shareTestSent"));
@@ -2537,7 +2641,10 @@
       shifts_category: device.shifts_category || "",
       own: device.reminder_offsets ? device.reminder_offsets.join(", ") : "",
       ownOn: !!device.reminder_offsets,
-      quiet_start: device.quiet_start || "", quiet_end: device.quiet_end || ""
+      quiet_start: device.quiet_start || "", quiet_end: device.quiet_end || "",
+      template: device.template || "custom", mode: device.mode || "simple",
+      features: guestFeatures(device.features || { calendar: true }),
+      lists: (device.lists || []).slice(), lists_edit: !!device.lists_edit
     };
     if (what === "name") {
       form.appendChild(fieldRow(I.f("shareName"), textInput(draft.name, function (v) { draft.name = v; },
@@ -2548,7 +2655,7 @@
     }
     var actions = el("div", { class: "actions" });
     actions.appendChild(button(I.f("save"), "btn btn-primary", function () {
-      var changes = what === "name" ? { name: draft.name.trim() } : {
+      var changes = what === "name" ? { name: draft.name.trim() } : Object.assign({
         persons: draft.persons, categories: draft.categories, permission: draft.permission,
         approval: draft.approval, notify: draft.notify,
         family_events: draft.family_events, notify_new: draft.notify_new,
@@ -2556,7 +2663,7 @@
         shifts_category: draft.shifts_category || undefined,
         reminder_offsets: draft.ownOn ? minutesFrom(draft.own) : null,
         quiet_start: draft.quiet_start, quiet_end: draft.quiet_end
-      };
+      }, featurePayload(draft));
       if (draft.ownOn && !changes.reminder_offsets) { showShareError({ code: "invalid_offsets" }); return; }
       shareCall({ op: "share_device_update", device_id: device.id, changes: changes }).catch(function () {});
     }));

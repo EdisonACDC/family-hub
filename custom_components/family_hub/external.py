@@ -392,6 +392,37 @@ class ExternalManager:
                 lines.extend((name, persons) for name in names)
         return lines
 
+    async def async_waste_days(
+        self, start: date, days: int, persons: list[str] | None = None
+    ) -> list[dict[str, Any]]:
+        """Rubbish pickups from ``start`` for ``days`` days, for the guests' web app: the date
+        and each type's label and colour. A source meant for some persons only counts when one
+        of them is in ``persons`` (None: every source)."""
+        found: list[dict[str, Any]] = []
+        sources = [
+            s
+            for s in [*self.sources(), *self._ha_sources()]
+            if s.get("type") == "rifiuti"
+            and (
+                persons is None
+                or not s.get("persons")
+                or bool(set(s.get("persons") or []) & set(persons))
+            )
+        ]
+        types = self.waste_types()
+        for offset in range(days):
+            day = start + timedelta(days=offset)
+            items: dict[str, dict[str, str]] = {}
+            for source in sources:
+                for name in await self._names_on(source, day):
+                    kind = type_of(name, types)
+                    label = kind["label"] if kind else name
+                    color = kind["color"] if kind else str(source.get("color") or "#64748B")
+                    items.setdefault(label, {"label": label[:60], "color": color})
+            if items:
+                found.append({"date": day.isoformat(), "items": list(items.values())})
+        return found
+
     async def _names_on(self, source: dict[str, Any], day: date) -> list[str]:
         """The titles of one source's events on a day: from the external file, or from the
         Home Assistant calendar the guide chose."""

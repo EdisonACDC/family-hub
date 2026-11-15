@@ -96,11 +96,19 @@
   </main>
 
   <main id="screen-main" class="screen" hidden>
-    <button type="button" class="btn shifts-button" id="shifts-button" hidden></button>
-    <div class="tabs" role="tablist">
+    <p class="weather-line" id="weather-line" hidden></p>
+    <div class="tools" id="tools">
+      <button type="button" class="btn shifts-button" id="shifts-button" hidden></button>
+      <button type="button" class="btn tool-button" id="tool-lists" hidden></button>
+      <button type="button" class="btn tool-button" id="tool-waste" hidden></button>
+    </div>
+    <p class="big-note" id="no-calendar" hidden></p>
+    <div class="tabs" role="tablist" id="tabs">
       <button type="button" class="tab" role="tab" id="tab-list" aria-selected="true"></button>
       <button type="button" class="tab" role="tab" id="tab-week" aria-selected="false"></button>
+      <button type="button" class="tab" role="tab" id="tab-month" aria-selected="false" hidden></button>
     </div>
+    <div class="person-filter" id="person-filter" role="group" hidden></div>
     <div class="week-nav" id="week-nav" hidden>
       <button type="button" class="btn btn-icon" id="week-prev" aria-label="‹">‹</button>
       <p id="week-range"></p>

@@ -36,6 +36,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
+from . import guest_features as gf
 from . import webpush
 from .const import (
     CONF_FIRST_WEEKDAY,
@@ -597,7 +598,9 @@ class GuestManager:
             self.vapid = dict(data.get("vapid", {}))
             self.recipients = dict(data.get("recipients") or self.recipients)
             self.panel = str(data.get("panel") or "")
-        if self._cleanup_invites():
+        # Invites and phones of 0.9: the "Nonni" template with the permissions they have.
+        upgraded = [gf.upgrade(i) for i in [*self.invites.values(), *self.devices.values()]]
+        if self._cleanup_invites() or any(upgraded):
             await self._store.async_save(self._data())
 
         async def _cleanup(_now: datetime) -> None:
@@ -688,22 +691,29 @@ class GuestManager:
             or not all(isinstance(c, str) and c in known_categories for c in categories)
         ):
             raise GuestError("invalid_categories", 422)
-        permission = raw.get("permission", VIEW)
-        approval = raw.get("approval", APPROVE)
-        notify = raw.get("notify", True)
-        family_events = raw.get("family_events", False)
+        # A template fills what the adult left out; a 0.9 request keeps the old defaults.
+        defaults, _legacy = gf.defaults_for(raw)
+        permission = raw.get("permission", defaults["permission"])
+        approval = raw.get("approval", defaults["approval"])
+        notify = raw.get("notify", defaults["notify"])
+        family_events = raw.get("family_events", defaults["family_events"])
         if permission not in PERMISSIONS or approval not in APPROVALS:
             raise GuestError("invalid", 422)
         if not isinstance(notify, bool) or not isinstance(family_events, bool):
             raise GuestError("invalid", 422)
-        has_shifts = raw.get("has_shifts", False)
+        has_shifts = raw.get("has_shifts", defaults["has_shifts"])
         shift_color = raw.get("shift_color") or DEFAULT_SHIFT_COLOR
         shifts_category = raw.get("shifts_category") or next(iter(known_categories), "")
         if not isinstance(has_shifts, bool) or not isinstance(shift_color, str):
             raise GuestError("invalid", 422)
         if not _COLOR.match(shift_color) or shifts_category not in known_categories:
             raise GuestError("invalid", 422)
+        # Mode, template, the functions it may use and the lists it may open.
+        extra = gf.clean(raw, gf.family_lists(self.entry.options))
+        if extra is None:
+            raise GuestError("invalid", 422)
         return {
+            **extra,
             "persons": list(dict.fromkeys(persons)),
             "categories": list(dict.fromkeys(categories)),
             "permission": permission,
@@ -860,6 +870,7 @@ class GuestManager:
             "has_shifts": bool(invite.get("has_shifts", False)),
             "shift_color": invite.get("shift_color") or DEFAULT_SHIFT_COLOR,
             "shifts_category": invite.get("shifts_category") or "",
+            **{key: invite[key] for key in gf.KEYS if key in invite},
             # "Nuovo telefono": the guest person (and its shifts) of the old phone.
             "person_id": invite.get("person_id"),
             "push": None,
@@ -1260,6 +1271,7 @@ class GuestManager:
                 "shifts_category",
             )
         }
+        scope.update(gf.describe(old))
         invite, token = await self._new_invite(
             old["name"], scope, DEFAULT_EXPIRY_DAYS, replaces=device_id
         )
@@ -1301,11 +1313,12 @@ class GuestManager:
                 "has_shifts",
                 "shift_color",
                 "shifts_category",
+                *gf.KEYS,
             )
         ):
             scope = self.clean_scope({**device, **raw})
             device.update(scope)
-            if not scope["notify"]:
+            if not self.push_allowed(device):
                 device["push"] = None
             self._record("permissions", device["name"])
             if device["status"] == ACTIVE:
@@ -1437,7 +1450,10 @@ class GuestManager:
                 "approval": device["approval"],
                 "notify": device["notify"],
                 "push": device.get("push") is not None,
-                "vapid": self.vapid.get("public", "") if device["notify"] else "",
+                "vapid": self.vapid.get("public", "") if self.push_allowed(device) else "",
+                **gf.describe(device),
+                # The lists it may open: their names, never Home Assistant's entity ids.
+                "lists": self.guest_lists(device) if gf.has(device, gf.LISTS) else [],
                 "language": self.language,
                 "first_weekday": str(options.get(CONF_FIRST_WEEKDAY) or "monday"),
                 "time_format": str(options.get(CONF_TIME_FORMAT) or "24h"),
@@ -1468,9 +1484,15 @@ class GuestManager:
         )
         return result
 
+    def check_feature(self, device: dict[str, Any], feature: str) -> None:
+        """403 for a function the adult did not turn on for this phone."""
+        self.check_active(device)
+        if not gf.has(device, feature):
+            raise GuestError("forbidden", 403)
+
     def list_events(self, device: dict[str, Any], start: date, days: int) -> list[dict[str, Any]]:
         """The device's appointments that overlap ``days`` days from ``start``, filtered here."""
-        self.check_active(device)
+        self.check_feature(device, gf.CALENDAR)
         if not 1 <= days <= MAX_RANGE_DAYS:
             raise GuestError("invalid", 422)
         zone = dt_util.get_default_time_zone()
@@ -1489,13 +1511,91 @@ class GuestManager:
         ]
         return sorted(items, key=lambda item: (_start_of(item), item["title"]))
 
+    # ----- lists, rubbish days and weather (0.10) ------------------------------
+
+    def _allowed_lists(self, device: dict[str, Any]) -> list[str]:
+        """The lists an adult chose for this phone that are still lists of Family Hub."""
+        family = gf.family_lists(self.entry.options)
+        return [e for e in device.get("lists") or [] if e in family]
+
+    def guest_lists(self, device: dict[str, Any]) -> list[dict[str, Any]]:
+        edit = bool(device.get("lists_edit"))
+        entry_id = self.entry.entry_id
+        return [
+            {"id": gf.list_id(entry_id, e), "name": gf.list_name(self.hass, e), "edit": edit}
+            for e in self._allowed_lists(device)
+        ]
+
+    def _list_entity(self, device: dict[str, Any], list_id: str, write: bool = False) -> str:
+        """The list behind an id of the web app; 403 when it is not one of the phone's lists or
+        (for a change) the phone may only read."""
+        self.check_feature(device, gf.LISTS)
+        if write and not device.get("lists_edit"):
+            raise GuestError("forbidden", 403)
+        for entity_id in self._allowed_lists(device):
+            if hmac.compare_digest(gf.list_id(self.entry.entry_id, entity_id), str(list_id)):
+                return entity_id
+        raise GuestError("forbidden", 403)
+
+    async def async_list_items(self, device: dict[str, Any], list_id: str) -> list[dict[str, Any]]:
+        return await gf.list_items(self.hass, self._list_entity(device, list_id))
+
+    async def async_list_change(self, device: dict[str, Any], list_id: str, raw: Any) -> None:
+        """{"add": text} adds an item; {"item": id, "done": bool} ticks or unticks one. Items are
+        never deleted from the web app."""
+        entity_id = self._list_entity(device, list_id, write=True)
+        if not isinstance(raw, dict):
+            raise GuestError("invalid", 422)
+        try:
+            if "add" in raw and set(raw) == {"add"}:
+                summary = _text(raw.get("add"), gf.MAX_ITEM, required=True)
+                await gf.add_item(self.hass, entity_id, summary)
+                self._record("list_added", device["name"], summary)
+            elif set(raw) == {"item", "done"} and isinstance(raw.get("done"), bool):
+                uid = raw.get("item")
+                known = {i["id"] for i in await gf.list_items(self.hass, entity_id)}
+                if not isinstance(uid, str) or uid not in known:
+                    raise GuestError("not_found", 404)
+                await gf.set_done(self.hass, entity_id, uid, raw["done"])
+            else:
+                raise GuestError("invalid", 422)
+        except HomeAssistantError as err:
+            raise GuestError("unavailable", 503) from err
+        await self.async_save()
+
+    async def async_waste_days(
+        self, device: dict[str, Any], start: date, days: int
+    ) -> list[dict[str, Any]]:
+        """Rubbish pickups: the day and the type (label and colour), nothing else."""
+        self.check_feature(device, gf.WASTE)
+        if not 1 <= days <= MAX_RANGE_DAYS:
+            raise GuestError("invalid", 422)
+        external = self.entry.runtime_data.external
+        if external is None:
+            return []
+        visible = [*device["persons"], *([device["person_id"]] if device.get("person_id") else [])]
+        return await external.async_waste_days(start, days, visible)
+
+    async def async_weather(self, device: dict[str, Any]) -> dict[str, Any]:
+        """Today's weather line of the family's weather entity, or nothing."""
+        self.check_feature(device, gf.WEATHER)
+        from .weather import summary_line  # noqa: PLC0415
+
+        sources = self.entry.options.get("sources") or {}
+        chosen = [e for e in sources.get("weather") or [] if isinstance(e, str)]
+        if not chosen:
+            return {"line": "", "condition": ""}
+        state = self.hass.states.get(chosen[0])
+        line = await summary_line(self.hass, chosen[0], self.language)
+        return {"line": line or "", "condition": state.state if state is not None else ""}
+
     # ----- appointments from a guest ---------------------------------------
 
     def _today(self) -> date:
         return dt_util.as_local(dt_util.now()).date()
 
     async def async_guest_add(self, device: dict[str, Any], raw: Any) -> dict[str, Any]:
-        self.check_active(device)
+        self.check_feature(device, gf.CALENDAR)
         if device["permission"] not in (ADD, EDIT_OWN):
             raise GuestError("forbidden", 403)
         event = clean_event(raw, device["persons"], device["categories"], self._today())
@@ -1560,7 +1660,7 @@ class GuestManager:
     async def async_guest_update(
         self, device: dict[str, Any], item_id: str, raw: Any
     ) -> dict[str, Any]:
-        self.check_active(device)
+        self.check_feature(device, gf.CALENDAR)
         if device["permission"] != EDIT_OWN:
             raise GuestError("forbidden", 403)
         kind, current = self._own(device, item_id)
@@ -1610,7 +1710,7 @@ class GuestManager:
             self._changing = None
 
     async def async_guest_delete(self, device: dict[str, Any], item_id: str) -> None:
-        self.check_active(device)
+        self.check_feature(device, gf.CALENDAR)
         if device["permission"] != EDIT_OWN:
             raise GuestError("forbidden", 403)
         kind, current = self._own(device, item_id)
@@ -1654,7 +1754,7 @@ class GuestManager:
         self._record("approved" if accept else "declined", name, str(event["summary"]))
         self._spawn(self._clear_on_phones(f"{DOMAIN}_guest_{item_id}", from_phone))
         await self.async_save()
-        if device is not None and device["status"] == ACTIVE:
+        if device is not None and device["status"] == ACTIVE and device.get("notify"):
             text = texts_for(self.language)
             key = "approved" if accept else "declined"
             message = text[key].format(title=event["summary"], when=self._when(event))
@@ -1860,7 +1960,7 @@ class GuestManager:
 
     async def _push(self, device: dict[str, Any], payload: dict[str, Any]) -> None:
         subscription = device.get("push")
-        if not subscription or not device["notify"] or not self.vapid:
+        if not subscription or not self.push_allowed(device) or not self.vapid:
             return
         result = await webpush.async_send(
             self.hass, subscription, payload, self.vapid["private"], self._subject()
@@ -1888,7 +1988,7 @@ class GuestManager:
         """ "Invia notifica di prova": at most one a minute per phone."""
         device = self._device(device_id)
         self.check_active(device)
-        if not device.get("push") or not device["notify"]:
+        if not device.get("push") or not self.push_allowed(device):
             raise GuestError("no_push", 409)
         now = monotime.monotonic()
         last = self._test_sent.get(device_id)
@@ -1903,7 +2003,7 @@ class GuestManager:
         if raw is None:
             device["push"] = None
         else:
-            if not device["notify"]:
+            if not self.push_allowed(device):
                 raise GuestError("forbidden", 403)
             subscription = webpush.clean_subscription(raw)
             if subscription is None:
@@ -1923,11 +2023,22 @@ class GuestManager:
             self._snapshot = {uid: self._shape(r) for uid, r in records.items()}
             self._snapshot_records = {uid: dict(r) for uid, r in records.items()}
 
-    def _listeners(self) -> list[dict[str, Any]]:
+    @staticmethod
+    def push_allowed(device: dict[str, Any]) -> bool:
+        """Notifications (changes, new appointments, answers) or reminders: either needs push."""
+        return bool(device.get("notify")) or gf.has(device, gf.REMINDERS)
+
+    def _listeners(self, kind: str = "") -> list[dict[str, Any]]:
+        """Phones that receive pushes; with ``kind`` "notify" or "reminders", only those that
+        have that function on."""
         return [
             d
             for d in self.devices.values()
-            if d["status"] == ACTIVE and d["notify"] and d.get("push")
+            if d["status"] == ACTIVE
+            and d.get("push")
+            and self.push_allowed(d)
+            and (kind != "notify" or bool(d.get("notify")))
+            and (kind != "reminders" or gf.has(d, gf.REMINDERS))
         ]
 
     def _quiet_for(self, device: dict[str, Any]) -> bool:
@@ -1947,7 +2058,7 @@ class GuestManager:
         self._own_timers.clear()
         now = _now()
         until = now + OWN_REMINDERS_AHEAD
-        devices = [d for d in self._listeners() if d.get("reminder_offsets") is not None]
+        devices = [d for d in self._listeners("reminders") if d.get("reminder_offsets") is not None]
         for device in devices:
             for record in self.events.events.values():
                 if record.get("all_day") or record.get("reminders_off"):
@@ -1971,7 +2082,7 @@ class GuestManager:
             record = self.events.events.get(key[1])
             if device is None or record is None or key in self._own_sent:
                 return
-            if device not in self._listeners() or not self.visible(record, device):
+            if device not in self._listeners("reminders") or not self.visible(record, device):
                 return
             self._own_sent.add(key)
             if self._quiet_for(device):
@@ -2000,7 +2111,7 @@ class GuestManager:
         moment, outside the family's quiet hours."""
         listeners = [
             d
-            for d in self._listeners()
+            for d in self._listeners("reminders")
             if self.visible(record, d)
             and not self._quiet_for(d)
             # Timed appointments of a phone with its own minutes are planned for it apart.
@@ -2050,7 +2161,7 @@ class GuestManager:
         gone = [uid for uid in old if uid not in current]
         added = [uid for uid in current if uid not in old]
         text = texts_for(self.language)
-        for device in self._listeners():
+        for device in self._listeners("notify"):
             if device["id"] == self._changing:
                 continue
             # New for this guest: a new appointment it can see, or one it can see from now on
@@ -2123,7 +2234,7 @@ class GuestManager:
         async def _flush(_moment: datetime) -> None:
             self._new_timers.pop(device_id, None)
             device = self.devices.get(device_id)
-            if device is None or device not in self._listeners():
+            if device is None or device not in self._listeners("notify"):
                 self._new_queue.pop(device_id, None)
                 return
             if self._quiet_for(device):
@@ -2219,6 +2330,7 @@ class GuestManager:
                     "shift_color": invite.get("shift_color") or DEFAULT_SHIFT_COLOR,
                     "shifts_category": invite.get("shifts_category") or "",
                 }
+                | gf.describe(invite)
                 | {"status": status, "in_use": self._in_use(invite)}
             )
         devices = [
@@ -2251,6 +2363,7 @@ class GuestManager:
                 "quiet_start": device.get("quiet_start"),
                 "quiet_end": device.get("quiet_end"),
             }
+            | gf.describe(device)
             for device in self.devices.values()
         ]
         pending = []

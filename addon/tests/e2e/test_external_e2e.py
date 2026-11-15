@@ -257,8 +257,12 @@ def test_rubbish_types_are_edited_and_the_week_shows_the_new_label(
         tablet.locator("#ics-close").click()
         event = tablet.locator(".event.allday", has_text="Umido")
         expect(event).to_be_visible(timeout=5000)
-        assert (
-            event.evaluate("e => getComputedStyle(e).getPropertyValue('--ev').trim()") == "#112233"
+        # The new label can be drawn a moment before the new colour: wait for both.
+        tablet.wait_for_function(
+            "() => [...document.querySelectorAll('.event.allday')].some(e =>"
+            " e.textContent.includes('Umido')"
+            " && getComputedStyle(e).getPropertyValue('--ev').trim() === '#112233')",
+            timeout=5000,
         )
     finally:
         _remove_rubbish_calendar(stack_full, key, "farben")
