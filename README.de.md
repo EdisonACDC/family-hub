@@ -75,7 +75,7 @@ Ab Family Hub 0.9 (Beta) können Menschen **ohne Home-Assistant-Konto** (zum Bei
 
 1. Als Erwachsener **☰ → Teilen → Einladungen** öffnen und eine Einladung erstellen: Name („Oma“), sichtbare Personen und Kalender (zum Beispiel Sofia: Schule, Kita, Arzt), Rechte („Nur ansehen“, „Ansehen und eintragen“, „Ansehen, eintragen und eigene ändern“), wohin eingetragene Termine gehen („Erst bestätigen“, voreingestellt, oder „Sofort im Kalender“), Mitteilungen ja oder nein, Ablauf einer unbenutzten Einladung (7 Tage).
 2. Den Link mit **Kopieren**, **Teilen** oder per **QR-Code** weitergeben. Der Link ist nur in diesem Moment zu sehen und **persönlich und einmalig**: er gilt für ein einziges Telefon.
-3. Das Telefon öffnet den Link: Android/Chrome bietet **App installieren** an; auf dem iPhone in **Safari → Teilen → Zum Home-Bildschirm**, die Einladung wird dann in der App auf dem Home-Bildschirm benutzt.
+3. Das Telefon öffnet den Link: Android/Chrome bietet **App installieren** an; auf dem iPhone (iOS 16.4+) mit **Safari** oder **Chrome**: **Teilen** (in Safari unten, in Chrome in der Adressleiste) **→ Zum Home-Bildschirm**; die Einladung wird beim Öffnen des Symbols auf dem Home-Bildschirm benutzt.
 4. Das Telefon **wartet**, bis ein Erwachsener es bestätigt: Home Assistant und die Telefone der Erwachsenen bekommen eine Mitteilung mit **Bestätigen / Ablehnen**, und das Telefon erscheint unter **Teilen → Geräte**.
 5. Unter **Geräte** kann man ein Telefon umbenennen, seine Rechte ändern oder es **Ausschalten** – sofort. Für ein neues Telefon braucht es eine neue Einladung. Unter **Aktivitäten** stehen die letzten 200 Ereignisse.
 
@@ -85,7 +85,7 @@ Termine, die bestätigt werden müssen, zeigt Family Hub mit **„1 Termin warte
 
 **Sicherheit.** Die Tokens der Einladungen und Telefone sind zufällig (256 Bit), werden nur als Prüfsumme (SHA-256) gespeichert und nie protokolliert; das Einladungs-Token steht hinter dem `#` des Links und erreicht daher nie die Server-Logs. Der Filter nach Personen und Kalendern läuft immer in Home Assistant: ein Gast bekommt nie andere Termine, andere Personen, Entitäten oder Einstellungen. Anfragen sind pro Telefon und pro Adresse begrenzt, eine Adresse wird nach 10 falschen Aktivierungen gesperrt, und das Telefon-Token wird alle 30 Tage erneuert. Wer keine Einladung erstellt, hat keine neue erreichbare Adresse.
 
-**Mitteilungen auf dem Telefon der Großeltern.** Sie werden mit **🔔 Mitteilungen einschalten** in der App eingeschaltet (nie von selbst): Erinnerungen an die sichtbaren Termine (gleiche Minuten vorher und gleiche Ruhezeiten wie die Familie), Änderungen und Absagen, und das Ergebnis ihrer Anfragen. Das iPhone braucht **iOS 16.4 oder neuer**, mit der App über Safari auf dem Home-Bildschirm.
+**Mitteilungen auf dem Telefon der Großeltern.** Sie werden mit **🔔 Mitteilungen einschalten** in der App eingeschaltet (nie von selbst): Erinnerungen an die sichtbaren Termine (gleiche Minuten vorher und gleiche Ruhezeiten wie die Familie), Änderungen und Absagen, und das Ergebnis ihrer Anfragen. Das iPhone braucht **iOS 16.4 oder neuer**, mit der App über ihr Symbol auf dem Home-Bildschirm geöffnet (hinzugefügt aus Safari oder Chrome).
 
 ## Häufige Fragen
 

@@ -86,7 +86,7 @@ From Family Hub 0.9 (beta), people **without a Home Assistant account** (the gra
 
 1. As an adult, open **☰ → Sharing → Invites** and create an invite: a name (“Grandma”), the persons and calendars it shows (for example Sofia: School, Nursery, Doctor), permissions (“View only”, “View and add”, “View, add and change their own”), where added appointments go (“Need approval”, the default, or “Straight into the calendar”), notifications on or off, and when an unused invite expires (7 days).
 2. Send the link with **Copy**, **Share** or let them scan the **QR code**. The link is shown only then and is **personal and single-use**: it works for one phone.
-3. The phone opens the link: Android/Chrome offers **Install app**; on iPhone, open it in **Safari → Share → Add to Home Screen**, and the invite is used from the app on the Home Screen.
+3. The phone opens the link: Android/Chrome offers **Install app**; on iPhone (iOS 16.4+) with **Safari** or **Chrome**: **Share** (in Safari in the bottom bar, in Chrome in the address bar) **→ Add to Home Screen**; the invite is used by opening the icon on the Home Screen.
 4. The phone **waits** until an adult confirms it: Home Assistant and the adults' phones get a notification with **Confirm / Reject**, and the phone appears under **Sharing → Devices**.
 5. Under **Devices** you can rename a phone, change its permissions or **Turn off** its access, at once. A new phone needs a new invite. The **Activity log** keeps the last 200 events.
 
@@ -96,7 +96,7 @@ Appointments that need approval show in Family Hub as **“1 appointment to appr
 
 **Security.** Invite and phone tokens are random (256 bits), kept only as a hash (SHA-256) and never logged; the invite token sits after the `#` of the link, so it never reaches the server's logs. The filter on persons and calendars always runs in Home Assistant: a guest never receives other appointments, other persons, entities or configuration. Requests are limited per phone and per address, an address is blocked after 10 wrong activations, and the phone token is renewed every 30 days. A family that makes no invite has no new reachable address.
 
-**Notifications on the grandparents' phone.** They are turned on with the **🔔 Turn on notifications** button in the app (never by themselves): reminders of the appointments they see (same minutes before and same quiet hours as the family), changes and cancellations, and the outcome of their requests. iPhone needs **iOS 16.4 or later**, with the app added to the Home Screen from Safari.
+**Notifications on the grandparents' phone.** They are turned on with the **🔔 Turn on notifications** button in the app (never by themselves): reminders of the appointments they see (same minutes before and same quiet hours as the family), changes and cancellations, and the outcome of their requests. iPhone needs **iOS 16.4 or later**, with the app opened from its Home Screen icon (added from Safari or Chrome).
 
 ## FAQ
 

@@ -1,6 +1,8 @@
 # Changelog: Family Hub UI (add-on)
 
-## 0.9.0b3 (in lavorazione, non pubblicata)
+## 0.9.0b3
+
+Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
 
 - Integrazione: `CONFIG_SCHEMA` solo da interfaccia (`cv.config_entry_only_config_schema`), così
   hassfest non avvisa più; una configurazione YAML `family_hub:` viene segnalata da Home Assistant.
@@ -12,6 +14,9 @@
   si apre in un browser già collegato a HA: «Questo link è per il telefono dell'invitato».
 - Registro attività: anche i tentativi con un invito già usato, scaduto o annullato, con una
   notifica agli adulti (al massimo una ogni 10 minuti per invito).
+- Web app su iPhone: istruzioni per Safari e per Chrome (Condividi nella barra dell'indirizzo →
+  «Aggiungi alla schermata Home», iOS 16.4+); le notifiche arrivano solo aprendo Family Hub
+  dall'icona sulla schermata Home. Non più «Apri in Safari» come unica strada.
 - Web app, vista Settimana: parte da oggi, come «La settimana parte da oggi» della famiglia.
 - Ramo beta: repository «Family Hub (beta)» e app «Family Hub UI (beta)»; un test impedisce che
   questi nomi arrivino in una versione stabile.

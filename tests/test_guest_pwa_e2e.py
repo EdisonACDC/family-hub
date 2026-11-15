@@ -38,6 +38,10 @@ ANDROID = (
     "Chrome/131.0.0.0 Mobile Safari/537.36"
 )
 TIMEOUT = 20_000
+IPHONE = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) CriOS/131.0.6778.73 Mobile/15E148 Safari/604.1"
+)
 
 
 # What the web app keeps in its own IndexedDB: the keys, or None when there is no such database.
@@ -161,6 +165,20 @@ async def test_grandmothers_phone_from_invite_to_approved_appointment(
             assert (await admin("list"))["devices"] == []
             assert (await admin("list"))["invites"][0]["status"] == "open"
             await adult.close()
+
+            # An iPhone in the browser (Safari or Chrome): the welcome page explains both, says
+            # notifications need the Home Screen icon, and does not spend the invite here.
+            iphone = await browser.new_context(viewport=PHONE, user_agent=IPHONE, locale="it-IT")
+            iphone_page = await iphone.new_page()
+            iphone_page.set_default_timeout(TIMEOUT)
+            await iphone_page.goto(f"{base}/api/family_hub/guest/#i={token}")
+            await iphone_page.wait_for_selector("#install-ios:not([hidden])")
+            steps = await iphone_page.inner_text("#install-ios")
+            assert "Safari" in steps and "Chrome" in steps and "16.4" in steps
+            assert "barra dell'indirizzo" in steps and "solo così arrivano le notifiche" in steps
+            assert "Apri questo link in Safari" not in steps
+            assert (await admin("list"))["devices"] == []
+            await iphone.close()
 
             page = await context.new_page()
             page.set_default_timeout(TIMEOUT)

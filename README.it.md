@@ -75,7 +75,7 @@ Da Family Hub 0.9 (beta) chi **non ha un account Home Assistant** (per esempio i
 
 1. Da adulto apri **☰ → Condivisione → Inviti** e crea un invito: nome («Nonna»), persone e calendari visibili (per esempio Sofia: Scuola, Asilo, Dottore), permessi («Solo vedere», «Vedere e aggiungere», «Vedere, aggiungere e modificare i propri»), dove finiscono gli appuntamenti aggiunti («Da approvare», predefinito, oppure «Subito nel calendario»), notifiche sì o no, scadenza dell'invito non usato (7 giorni).
 2. Manda il link con **Copia**, **Condividi** o fai inquadrare il **codice QR**. Il link si vede solo in quel momento ed è **personale e monouso**: vale per un solo telefono.
-3. Il telefono apre il link: Android/Chrome propone **Installa app**; su iPhone si apre in **Safari → Condividi → Aggiungi alla schermata Home**, e l'invito si attiva dall'app sulla schermata Home.
+3. Il telefono apre il link: Android/Chrome propone **Installa app**; su iPhone (iOS 16.4+) con **Safari** o **Chrome**: **Condividi** (in Safari nella barra in basso, in Chrome nella barra dell'indirizzo) **→ Aggiungi alla schermata Home**; l'invito si attiva aprendo l'icona sulla schermata Home.
 4. Il telefono resta **in attesa** finché un adulto non lo conferma: arriva una notifica in Home Assistant e sul telefono degli adulti con **Conferma / Rifiuta**, e il telefono compare in **Condivisione → Dispositivi**.
 5. In **Dispositivi** puoi rinominare, cambiare i permessi o **Disattivare** un telefono: l'accesso finisce subito. Per un telefono nuovo si crea un nuovo invito. Il **Registro attività** mostra gli ultimi 200 eventi.
 
@@ -85,7 +85,7 @@ Gli appuntamenti aggiunti «da approvare» compaiono in Family Hub con l'avviso 
 
 **Sicurezza.** I token degli inviti e dei telefoni sono casuali (256 bit), salvati solo come impronta (SHA-256) e mai scritti nei log; il token dell'invito sta dopo il `#` del link, quindi non arriva nei log del server. Il filtro su persone e calendari è fatto sempre da Home Assistant: un ospite non riceve mai altri appuntamenti, altre persone, entità o configurazione. Limiti di richieste per telefono e per indirizzo, blocco dopo 10 attivazioni sbagliate, token del telefono rinnovato ogni 30 giorni. Chi non crea inviti non ha nessun indirizzo nuovo raggiungibile.
 
-**Notifiche sul telefono dei nonni.** Si attivano con il pulsante **🔔 Attiva le notifiche** nell'app (mai da sole). Arrivano i promemoria degli appuntamenti visibili (stessi minuti prima e stessi orari di silenzio della famiglia), le modifiche e gli annullamenti, e l'esito delle richieste. Su iPhone servono **iOS 16.4 o più recente** e l'app aggiunta alla schermata Home da Safari.
+**Notifiche sul telefono dei nonni.** Si attivano con il pulsante **🔔 Attiva le notifiche** nell'app (mai da sole). Arrivano i promemoria degli appuntamenti visibili (stessi minuti prima e stessi orari di silenzio della famiglia), le modifiche e gli annullamenti, e l'esito delle richieste. Su iPhone servono **iOS 16.4 o più recente** e l'app aperta dall'icona sulla schermata Home (aggiunta da Safari o da Chrome).
 
 ## Domande frequenti
 
