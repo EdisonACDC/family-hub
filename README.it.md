@@ -5,6 +5,11 @@
 <h1 align="center">Family Hub</h1>
 
 <p align="center">
+  <a href="https://github.com/EdisonACDC/family-hub/releases"><img alt="Download" src="https://img.shields.io/github/downloads/EdisonACDC/family-hub/total?label=Download"></a>
+  <a href="https://analytics.home-assistant.io/custom_integrations.json"><img alt="Installazioni attive" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.family_hub.total&label=Installazioni%20attive"></a>
+</p>
+
+<p align="center">
   <a href="README.md">English</a> · <b>Italiano</b> · <a href="README.de.md">Deutsch</a>
 </p>
 

@@ -1024,6 +1024,9 @@ class GuestManager:
             raise GuestError("forbidden", 403)
         return str(person_id)
 
+    def _person_name(self, person_id: str, device: dict[str, Any]) -> str:
+        return str(self._persons().get(person_id, {}).get("name") or device["name"])
+
     def shift_types(self, person_id: str) -> list[dict[str, str]]:
         return [dict(t) for t in self.entry.options.get(OPT_SHIFTS, {}).get(person_id, [])]
 
@@ -1034,11 +1037,12 @@ class GuestManager:
         zone = dt_util.get_default_time_zone()
         window_start = datetime.combine(start, time(0), tzinfo=zone)
         window_end = window_start + timedelta(days=days)
+        names = {t["id"]: t["name"] for t in self.shift_types(person_id)}
         rows = [
             {
                 "date": str(record["start"])[:10],
                 "shift_id": record.get("shift_id", ""),
-                "name": record["summary"],
+                "name": names.get(record.get("shift_id", ""), record["summary"]),
                 "start": record["start"],
                 "end": record["end"],
             }
@@ -1129,7 +1133,8 @@ class GuestManager:
                 end_day = day + timedelta(days=1) if shift["end"] < shift["start"] else day
                 end = datetime.combine(end_day, time.fromisoformat(shift["end"]), tzinfo=zone)
                 await self._calendar(shift["category"]).async_add_event(
-                    summary=shift["name"],
+                    # "Nonna · Mattina": in Family Hub's calendar, list and notifications.
+                    summary=f"{self._person_name(person_id, device)} · {shift['name']}",
                     start=start,
                     end=end,
                     persons=[person_id],

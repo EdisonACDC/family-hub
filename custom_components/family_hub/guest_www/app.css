@@ -54,7 +54,33 @@ h2 { font-size: 1.3rem; margin: 0.6rem 0; }
   border-radius: 12px; padding: 10px 14px; font-weight: 600;
 }
 .shifts-button { margin-top: 4px; }
+/* The last appointment never ends under "+ Aggiungi". */
+#screen-main { padding-bottom: 120px; }
 .shifts h3 { margin: 18px 0 8px; }
+.board-tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin: 8px 0 14px; }
+.board-tool {
+  appearance: none; font: inherit; font-size: 1.05rem; font-weight: 800; min-height: 64px; border-radius: 16px;
+  border: 3px solid var(--shift, var(--line)); background: var(--card); color: var(--text); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px;
+}
+.board-tool[aria-pressed="true"] { background: var(--shift, var(--text)); color: #FFFFFF; box-shadow: 0 0 0 3px var(--text); }
+.board-tool.board-clear { border-style: dashed; }
+.board-tool.board-clear[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.board-month { font-size: 1.15rem; text-transform: capitalize; }
+.board-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 10px 0 14px; }
+.board-wd { text-align: center; font-weight: 800; color: var(--muted); font-size: 0.85rem; text-transform: capitalize; }
+.board-day {
+  appearance: none; font: inherit; min-height: 58px; border-radius: 12px; border: 2px solid var(--line);
+  background: var(--card); color: var(--text); display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 2px; cursor: pointer;
+}
+.board-day.has-shift { background: var(--shift); border-color: var(--shift); color: #FFFFFF; }
+.board-day.today { box-shadow: inset 0 0 0 3px var(--accent); }
+.board-day.changed { outline: 3px dashed var(--text); outline-offset: -5px; }
+.board-num { font-size: 1.1rem; font-weight: 800; }
+.board-day .board-mark { font-size: 0.8rem; font-weight: 900; letter-spacing: 0.02em; }
+.board-section { margin-top: 18px; }
+.board-types summary { font-weight: 800; font-size: 1.1rem; cursor: pointer; min-height: 48px; display: flex; align-items: center; }
 .shift-type { border: 1px solid var(--line); border-radius: 14px; padding: 10px; margin: 8px 0; }
 .shift-type .row { margin-top: 8px; }
 .shift-day span { font-weight: 600; text-transform: capitalize; }

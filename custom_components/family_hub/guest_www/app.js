@@ -104,6 +104,9 @@
       weekOne: "1 settimana", applyRotation: "Applica la rotazione", clearPattern: "Ricomincia",
       shiftsSaved: "Turni salvati.", typesSaved: "Tipi salvati.", typesFirst: "Prima scrivi i tipi di turno e salvali.",
       defaultTypes: "Mattina|06:00|14:00;Pomeriggio|14:00|22:00;Notte|22:00|06:00",
+      chooseShift: "Scegli il turno", clearShift: "Cancella", saveShifts: "Salva",
+      saveShiftsN: "Salva ({n} giorni)",
+      boardHint: "Scegli un turno e tocca i giorni. Un secondo tocco lo toglie. Riposo e Cancella lasciano il giorno libero.",
       haTitle: "Questo link è per il telefono dell'invitato",
       haText: "Questo browser è già collegato a Home Assistant. Se apri l'invito qui, lo usi tu e sul telefono dell'invitato non funzionerà più. Manda il link alla persona invitata.",
       haAnyway: "Usalo comunque su questo telefono",
@@ -194,6 +197,9 @@
       weekOne: "1 week", applyRotation: "Apply the rotation", clearPattern: "Start again",
       shiftsSaved: "Shifts saved.", typesSaved: "Types saved.", typesFirst: "First write the shift types and save them.",
       defaultTypes: "Morning|06:00|14:00;Afternoon|14:00|22:00;Night|22:00|06:00",
+      chooseShift: "Choose the shift", clearShift: "Clear", saveShifts: "Save",
+      saveShiftsN: "Save ({n} days)",
+      boardHint: "Choose a shift and tap the days. A second tap takes it away. Day off and Clear leave the day free.",
       haTitle: "This link is for the invited person's phone",
       haText: "This browser is already signed in to Home Assistant. If you open the invite here, you use it up and it will no longer work on the invited person's phone. Send the link to the person invited.",
       haAnyway: "Use it on this phone anyway",
@@ -284,6 +290,9 @@
       weekOne: "1 Woche", applyRotation: "Wechsel übernehmen", clearPattern: "Neu beginnen",
       shiftsSaved: "Schichten gespeichert.", typesSaved: "Arten gespeichert.", typesFirst: "Zuerst die Schichtarten eintragen und speichern.",
       defaultTypes: "Früh|06:00|14:00;Spät|14:00|22:00;Nacht|22:00|06:00",
+      chooseShift: "Schicht wählen", clearShift: "Löschen", saveShifts: "Speichern",
+      saveShiftsN: "Speichern ({n} Tage)",
+      boardHint: "Schicht wählen und die Tage antippen. Ein zweites Antippen nimmt sie weg. Frei und Löschen lassen den Tag frei.",
       haTitle: "Dieser Link ist für das Telefon der eingeladenen Person",
       haText: "Dieser Browser ist schon bei Home Assistant angemeldet. Wird die Einladung hier geöffnet, ist sie verbraucht und funktioniert auf dem Telefon der eingeladenen Person nicht mehr. Den Link bitte der eingeladenen Person schicken.",
       haAnyway: "Trotzdem auf diesem Telefon verwenden",
@@ -824,6 +833,7 @@
         accessOff();
         return;
       }
+      state.offRetries = 0;
       state.me = me;
       save("me", me);
       state.lang = pickLanguage(me.language);
@@ -846,7 +856,13 @@
         state.refreshTimer = window.setTimeout(loadMe, REFRESH_MS);
         return;
       }
-      // 401, 403 (disabled, rejected) and 404 (sharing turned off): no more access.
+      // 403 (disabled, rejected): no more access, at once. 401 and 404 may be Family Hub
+      // reloading for a moment: asked again twice before the phone forgets everything.
+      if ((err.status === 401 || err.status === 404) && (state.offRetries || 0) < 2) {
+        state.offRetries = (state.offRetries || 0) + 1;
+        state.refreshTimer = window.setTimeout(loadMe, 3000 * state.offRetries);
+        return;
+      }
       accessOff();
     });
   }
@@ -909,6 +925,9 @@
         state.events = state.cache[key] ? state.cache[key].events : [];
         state.offline = true;
         render();
+      } else if (err.status === 401 || err.status === 404) {
+        loadMe();  // decides, with its own retries
+        return;
       } else if (err.status !== 429) {
         accessOff();
         return;
@@ -1153,17 +1172,225 @@
   }
 
 
-  // ----- my shifts (a guest who works: its own shift types, days and rotations) -------------
-  // Only its own: Family Hub decides who that is, never this page.
+  // ----- my shifts (a guest who works) -------------------------------------------------
+  // The same board as Family Hub's "Turni": choose a shift, tap the days of the month, Salva.
+  // Only its own shifts: Family Hub decides who that is, never this page.
+
+  var SHIFT_COLORS = ["#F59E0B", "#F97316", "#4F46E5", "#059669", "#DB2777", "#0284C7", "#7C3AED"];
+  var REST = "rest";
+  var CLEAR = "clear";
+
+  function shiftColor(index) { return SHIFT_COLORS[index % SHIFT_COLORS.length]; }
+  function shiftMark(name) { return String(name || "?").trim().slice(0, 2).toUpperCase(); }
 
   function openShifts() {
-    api("GET", "shifts?from=" + dayKey(today()) + "&days=28").then(function (data) {
-      state.shifts = data;
-      renderShifts();
+    state.board = state.board || {
+      month: new Date(today().getFullYear(), today().getMonth(), 1),
+      tool: "", plan: {}, saved: {}, types: []
+    };
+    loadBoard();
+  }
+
+  function loadBoard(retries) {
+    var b = state.board;
+    var days = new Date(b.month.getFullYear(), b.month.getMonth() + 1, 0).getDate();
+    api("GET", "shifts?from=" + dayKey(b.month) + "&days=" + days).then(function (data) {
+      b.types = data.types;
+      b.saved = {};
+      data.days.forEach(function (d) { b.saved[d.date] = d.shift_id; });
+      if (!b.tool && b.types.length) b.tool = b.types[0].id;
+      renderBoard();
+      if (retries && !b.types.length) window.setTimeout(function () { loadBoard(retries - 1); }, 800);
     }).catch(function (err) {
       if (err.status === 403) { accessOff(); return; }
+      if (retries) { window.setTimeout(function () { loadBoard(retries - 1); }, 800); return; }
       toast(t("errSave"));
     });
+  }
+
+  function typeIndex(id) {
+    var types = state.board.types;
+    for (var i = 0; i < types.length; i++) if (types[i].id === id) return i;
+    return -1;
+  }
+
+  // What a day shows: the change not saved yet, else what is saved.
+  function dayValue(key) {
+    var b = state.board;
+    return Object.prototype.hasOwnProperty.call(b.plan, key) ? b.plan[key] : (b.saved[key] || "");
+  }
+
+  function tapDay(key) {
+    var b = state.board;
+    var tool = b.tool;
+    if (!tool) return;
+    var current = dayValue(key);
+    var target = tool === CLEAR ? "" : tool;
+    // A second tap with the same shift takes it away again.
+    if (current === target || (tool === REST && current === REST)) target = "";
+    if (target === (b.saved[key] || "")) delete b.plan[key];
+    else b.plan[key] = target;
+    renderBoard();
+  }
+
+  function renderBoard() {
+    var b = state.board;
+    var body = el("div", { class: "board" });
+
+    // The shift buttons: big and coloured, plus Riposo and Cancella.
+    var tools = el("div", { class: "board-tools", role: "group", "aria-label": t("chooseShift") });
+    b.types.forEach(function (type, index) {
+      var button = el("button", { type: "button", class: "board-tool", "data-tool": type.id,
+        "aria-pressed": b.tool === type.id ? "true" : "false",
+        onclick: function () { b.tool = type.id; renderBoard(); } },
+        [el("span", { class: "board-mark", text: shiftMark(type.name) }), type.name]);
+      button.style.setProperty("--shift", shiftColor(index));
+      tools.appendChild(button);
+    });
+    [[REST, t("rest"), "#64748B"], [CLEAR, t("clearShift"), ""]].forEach(function (x) {
+      var button = el("button", { type: "button", class: "board-tool" + (x[0] === CLEAR ? " board-clear" : ""),
+        "data-tool": x[0], "aria-pressed": b.tool === x[0] ? "true" : "false",
+        onclick: function () { b.tool = x[0]; renderBoard(); } }, [x[1]]);
+      if (x[2]) button.style.setProperty("--shift", x[2]);
+      tools.appendChild(button);
+    });
+    if (b.types.length) {
+      body.appendChild(el("p", { class: "note-box", text: t("boardHint") }));
+      body.appendChild(tools);
+    } else {
+      body.appendChild(el("p", { class: "note-box", text: t("typesFirst") }));
+    }
+
+    // The month: Monday to Sunday, arrows, today marked.
+    var nav = el("div", { class: "week-nav board-nav" }, [
+      el("button", { type: "button", class: "btn btn-icon", "aria-label": "‹", text: "‹",
+        onclick: function () { moveBoard(-1); } }),
+      el("p", { class: "board-month", text: new Intl.DateTimeFormat(state.lang, { month: "long", year: "numeric" }).format(b.month) }),
+      el("button", { type: "button", class: "btn btn-icon", "aria-label": "›", text: "›",
+        onclick: function () { moveBoard(1); } })
+    ]);
+    body.appendChild(nav);
+    var grid = el("div", { class: "board-grid", role: "grid" });
+    var names = [];
+    for (var w = 0; w < 7; w++) {
+      names.push(new Intl.DateTimeFormat(state.lang, { weekday: "short" }).format(new Date(2024, 0, 1 + w)));
+    }
+    names.forEach(function (n) { grid.appendChild(el("div", { class: "board-wd", text: n })); });
+    var first = new Date(b.month.getFullYear(), b.month.getMonth(), 1);
+    var offset = (first.getDay() + 6) % 7;
+    for (var i = 0; i < offset; i++) grid.appendChild(el("div", { class: "board-blank" }));
+    var count = new Date(b.month.getFullYear(), b.month.getMonth() + 1, 0).getDate();
+    var todayKey = dayKey(today());
+    for (var d = 1; d <= count; d++) {
+      (function (day) {
+        var key = dayKey(day);
+        var value = dayValue(key);
+        var index = typeIndex(value);
+        var changed = Object.prototype.hasOwnProperty.call(b.plan, key);
+        var cell = el("button", { type: "button", class: "board-day" + (key === todayKey ? " today" : "") + (changed ? " changed" : ""),
+          "data-day": key, onclick: function () { tapDay(key); } },
+          [el("span", { class: "board-num", text: String(day.getDate()) })]);
+        if (index !== -1) {
+          cell.appendChild(el("span", { class: "board-mark", text: shiftMark(b.types[index].name) }));
+          cell.style.setProperty("--shift", shiftColor(index));
+          cell.classList.add("has-shift");
+          cell.setAttribute("aria-label", dayTitle(day) + ": " + b.types[index].name);
+        } else if (value === REST) {
+          cell.appendChild(el("span", { class: "board-mark", text: "R" }));
+          cell.style.setProperty("--shift", "#64748B");
+          cell.classList.add("has-shift");
+          cell.setAttribute("aria-label", dayTitle(day) + ": " + t("rest"));
+        } else {
+          cell.setAttribute("aria-label", dayTitle(day));
+        }
+        grid.appendChild(cell);
+      })(new Date(b.month.getFullYear(), b.month.getMonth(), d));
+    }
+    body.appendChild(grid);
+    var pending = Object.keys(b.plan).length;
+    body.appendChild(el("button", { type: "button", class: "btn btn-primary", id: "board-save",
+      text: pending ? t("saveShiftsN", { n: String(pending) }) : t("saveShifts"), onclick: saveBoard }));
+
+    // A rotation that repeats.
+    if (b.types.length) body.appendChild(rotationSection());
+    // The shift types, closed until needed.
+    body.appendChild(typesSection());
+    openSheet(t("myShifts").replace(/^\S+\s/, ""), body, [
+      el("button", { type: "button", class: "btn", text: t("close"), onclick: function () {
+        state.board.plan = {};
+        closeSheet();
+        loadEvents();
+      } })
+    ]);
+  }
+
+  function moveBoard(step) {
+    var b = state.board;
+    b.month = new Date(b.month.getFullYear(), b.month.getMonth() + step, 1);
+    loadBoard();
+  }
+
+  // One request per shift (or free day), for all its days; then "Turni salvati".
+  function saveBoard() {
+    var b = state.board;
+    var groups = {};
+    Object.keys(b.plan).forEach(function (key) {
+      var value = b.plan[key] === REST ? "" : b.plan[key];
+      (groups[value] = groups[value] || []).push(key);
+    });
+    var ids = Object.keys(groups);
+    if (!ids.length) { toast(t("shiftsSaved")); return; }
+    var chain = Promise.resolve();
+    ids.forEach(function (id) {
+      chain = chain.then(function () { return api("POST", "shifts/apply", { days: groups[id], shift_id: id }); });
+    });
+    chain.then(function () {
+      b.plan = {};
+      toast(t("shiftsSaved"));
+      loadBoard();
+    }).catch(function () { sheetError(t("errSave")); });
+  }
+
+  function rotationSection() {
+    var b = state.board;
+    var box = el("section", { class: "board-section" });
+    box.appendChild(el("h3", { text: t("rotation") }));
+    box.appendChild(el("p", { class: "note-box", text: t("rotationHint") }));
+    var pattern = [];
+    var shown = el("div", { class: "chips", id: "rotation-pattern" });
+    function drawPattern() {
+      shown.textContent = "";
+      pattern.forEach(function (id) {
+        var index = typeIndex(id);
+        shown.appendChild(el("span", { class: "chip", text: index === -1 ? t("rest") : b.types[index].name }));
+      });
+    }
+    var pick = el("div", { class: "chips" });
+    b.types.concat([{ id: "", name: t("rest") }]).forEach(function (x) {
+      pick.appendChild(el("button", { type: "button", class: "chip", "data-pattern": x.id, text: "+ " + x.name,
+        onclick: function () { if (pattern.length < 28) { pattern.push(x.id); drawPattern(); } } }));
+    });
+    var from = el("input", { type: "date", id: "rotation-start", value: dayKey(today()) });
+    var weeks = el("select", { id: "rotation-weeks" });
+    for (var w = 1; w <= 8; w++) {
+      weeks.appendChild(el("option", { value: String(w), text: w === 1 ? t("weekOne") : t("weeksN", { n: String(w) }) }));
+    }
+    weeks.value = "4";
+    box.appendChild(pick);
+    box.appendChild(shown);
+    box.appendChild(el("button", { type: "button", class: "btn", text: t("clearPattern"), onclick: function () {
+      pattern = []; drawPattern();
+    } }));
+    box.appendChild(el("label", { class: "field" }, [el("span", { text: t("rotationStart") }), from]));
+    box.appendChild(el("label", { class: "field" }, [el("span", { text: t("rotationWeeks") }), weeks]));
+    box.appendChild(el("button", { type: "button", class: "btn btn-primary", id: "apply-rotation", text: t("applyRotation"),
+      onclick: function () {
+        if (!pattern.length) return;
+        api("POST", "shifts/rotation", { start: from.value, pattern: pattern, days: Number(weeks.value) * 7 })
+          .then(function () { toast(t("shiftsSaved")); loadBoard(); })
+          .catch(function () { sheetError(t("errSave")); });
+      } }));
+    return box;
   }
 
   function defaultTypes() {
@@ -1173,13 +1400,12 @@
     });
   }
 
-  function renderShifts() {
-    var data = state.shifts;
-    var types = data.types.length ? data.types.map(function (x) { return Object.assign({}, x); }) : defaultTypes();
-    var body = el("div", { class: "shifts" });
-
-    // Types.
-    body.appendChild(el("h3", { text: t("shiftTypes") }));
+  function typesSection() {
+    var b = state.board;
+    var types = b.types.length ? b.types.map(function (x) { return Object.assign({}, x); }) : defaultTypes();
+    var box = el("details", { class: "board-section board-types", id: "board-types" });
+    if (!b.types.length) box.open = true;  // nothing to choose yet: open
+    box.appendChild(el("summary", { text: t("shiftTypes") }));
     var list = el("div", { class: "shift-types" });
     function drawTypes() {
       list.textContent = "";
@@ -1199,11 +1425,11 @@
       });
     }
     drawTypes();
-    body.appendChild(list);
-    body.appendChild(el("button", { type: "button", class: "btn", text: t("addType"), onclick: function () {
+    box.appendChild(list);
+    box.appendChild(el("button", { type: "button", class: "btn", text: t("addType"), onclick: function () {
       types.push({ name: "", start: "08:00", end: "16:00" }); drawTypes();
     } }));
-    body.appendChild(el("button", { type: "button", class: "btn btn-primary", id: "save-types", text: t("saveTypes"),
+    box.appendChild(el("button", { type: "button", class: "btn btn-primary", id: "save-types", text: t("saveTypes"),
       onclick: function () {
         var payload = types.filter(function (x) { return x.name.trim(); }).map(function (x) {
           var item = { name: x.name.trim(), start: x.start, end: x.end };
@@ -1212,77 +1438,12 @@
         });
         api("PUT", "shifts/types", { types: payload }).then(function () {
           toast(t("typesSaved"));
-          window.setTimeout(openShifts, 1500);  // Family Hub reloads its shift types
+          // Family Hub reloads its shift types: the board asks again until they are there.
+          b.tool = "";
+          window.setTimeout(function () { loadBoard(6); }, 400);
         }).catch(function () { sheetError(t("errSave")); });
       } }));
-
-    var saved = data.types;
-    var byDay = {};
-    data.days.forEach(function (d) { byDay[d.date] = d.shift_id; });
-
-    // The next four weeks, one day at a time.
-    body.appendChild(el("h3", { text: t("nextDays") }));
-    if (!saved.length) body.appendChild(el("p", { class: "note-box", text: t("typesFirst") }));
-    var days = el("div", { class: "shift-days" });
-    for (var i = 0; i < 28 && saved.length; i++) {
-      (function (d) {
-        var key = dayKey(d);
-        var select = el("select", { "data-day": key, "aria-label": dayTitle(d) });
-        select.appendChild(el("option", { value: "", text: t("rest") }));
-        saved.forEach(function (x) { select.appendChild(el("option", { value: x.id, text: x.name + " " + x.start + "–" + x.end })); });
-        select.value = byDay[key] || "";
-        select.addEventListener("change", function () {
-          api("POST", "shifts/apply", { days: [key], shift_id: select.value }).then(function () {
-            toast(t("shiftsSaved"));
-          }).catch(function () { sheetError(t("errSave")); });
-        });
-        days.appendChild(el("label", { class: "field shift-day" }, [el("span", { text: dayTitle(d) }), select]));
-      })(addDays(today(), i));
-    }
-    body.appendChild(days);
-
-    // A rotation that repeats.
-    if (saved.length) {
-      body.appendChild(el("h3", { text: t("rotation") }));
-      body.appendChild(el("p", { class: "note-box", text: t("rotationHint") }));
-      var pattern = [];
-      var shown = el("div", { class: "chips", id: "rotation-pattern" });
-      function drawPattern() {
-        shown.textContent = "";
-        pattern.forEach(function (id) {
-          var type = saved.filter(function (x) { return x.id === id; })[0];
-          shown.appendChild(el("span", { class: "chip", text: type ? type.name : t("rest") }));
-        });
-      }
-      var pick = el("div", { class: "chips" });
-      saved.concat([{ id: "", name: t("rest") }]).forEach(function (x) {
-        pick.appendChild(el("button", { type: "button", class: "chip", "data-pattern": x.id, text: "+ " + x.name,
-          onclick: function () { if (pattern.length < 28) { pattern.push(x.id); drawPattern(); } } }));
-      });
-      var from = el("input", { type: "date", id: "rotation-start", value: dayKey(today()) });
-      var weeks = el("select", { id: "rotation-weeks" });
-      for (var w = 1; w <= 8; w++) {
-        weeks.appendChild(el("option", { value: String(w), text: w === 1 ? t("weekOne") : t("weeksN", { n: String(w) }) }));
-      }
-      weeks.value = "4";
-      body.appendChild(pick);
-      body.appendChild(shown);
-      body.appendChild(el("button", { type: "button", class: "btn", text: t("clearPattern"), onclick: function () {
-        pattern = []; drawPattern();
-      } }));
-      body.appendChild(el("label", { class: "field" }, [el("span", { text: t("rotationStart") }), from]));
-      body.appendChild(el("label", { class: "field" }, [el("span", { text: t("rotationWeeks") }), weeks]));
-      body.appendChild(el("button", { type: "button", class: "btn btn-primary", id: "apply-rotation", text: t("applyRotation"),
-        onclick: function () {
-          if (!pattern.length) return;
-          api("POST", "shifts/rotation", { start: from.value, pattern: pattern, days: Number(weeks.value) * 7 })
-            .then(function () { toast(t("shiftsSaved")); openShifts(); })
-            .catch(function () { sheetError(t("errSave")); });
-        } }));
-    }
-    openSheet(t("myShifts").replace(/^\S+\s/, ""), body, [
-      el("button", { type: "button", class: "btn", text: t("close"), onclick: function () { closeSheet(); loadEvents(); } })
-    ]);
+    return box;
   }
 
   // ----- notifications --------------------------------------------------------
@@ -1331,14 +1492,15 @@
       reportBlocked(true);
       return;
     }
-    if (!state.me.push) pushBanner(t("pushBanner"), pushOn);
+    if (!state.me.push) {
+      pushBanner(t("pushBanner"), pushOn);
+      return;  // the strip at the top is the one button
+    }
     if (state.me.push) {
       box.appendChild(el("p", { class: "note-box", text: t("pushActive") }));
       box.appendChild(el("button", { type: "button", class: "btn", id: "push-off", text: t("pushOff"), onclick: pushOff }));
       return;
     }
-    box.appendChild(el("button", { type: "button", class: "btn btn-primary", id: "push-on", text: t("pushOn"), onclick: pushOn }));
-    if (isIOS()) box.appendChild(el("p", { class: "note-box", text: t("pushIos") }));
   }
 
   function pushOn() {

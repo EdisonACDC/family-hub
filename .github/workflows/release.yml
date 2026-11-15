@@ -1,0 +1,36 @@
+name: Release asset
+
+# Every release (pre-releases too) gets family_hub.zip: the content of custom_components/family_hub,
+# which HACS / the Marketplace downloads (hacs.json: zip_release, filename). GitHub counts the
+# downloads of this asset.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the zip to
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    name: Attach family_hub.zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - name: Build family_hub.zip
+        run: |
+          cd custom_components/family_hub
+          zip -r -X "$GITHUB_WORKSPACE/family_hub.zip" . -x "__pycache__/*" "*/__pycache__/*" "*.pyc"
+          unzip -l "$GITHUB_WORKSPACE/family_hub.zip" | grep -q " manifest.json$"
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: gh release upload "$TAG" family_hub.zip --clobber --repo "$GITHUB_REPOSITORY"

@@ -282,8 +282,15 @@ async def test_grandmothers_phone_from_invite_to_approved_appointment(
                     await asyncio.sleep(0.1)
                 assert (await admin("list"))["devices"][0]["push_status"] == "blocked"
             else:
-                assert await page.is_visible("#push-on")
                 assert "Attiva le notifiche per ricevere i promemoria" in await banner.inner_text()
+            # One button only: the strip at the top (none at the foot, under "+ Aggiungi").
+            assert await page.locator("#push-on").count() == 0
+            # Space at the end: the last appointment is not under "+ Aggiungi".
+            last = await page.locator(".event").last.bounding_box()
+            add = await page.locator("#add-button").bounding_box()
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            last = await page.locator(".event").last.bounding_box()
+            assert last and add and last["y"] + last["height"] <= add["y"]
 
             # Offline: the last copy, with the notice.
             await context.set_offline(True)
@@ -701,46 +708,72 @@ async def test_my_shifts_in_the_web_app(
             await hass.async_block_till_done()
             await page.wait_for_selector("#shifts-button:not([hidden])", timeout=TIMEOUT)
             await page.click("#shifts-button")
-            # No types yet: the usual three are offered; saved as they are.
-            await page.wait_for_selector("#sheet:not([hidden]) >> text=Tipi di turno")
+            # No types yet: the section is open with the usual three; saved as they are, and the
+            # board is there at once (no need to close and open again).
+            await page.wait_for_selector("#board-types[open]")
             names = await page.eval_on_selector_all(
                 ".shift-type input[type=text]", "els => els.map(e => e.value)"
             )
             assert names == ["Mattina", "Pomeriggio", "Notte"]
             await page.click("#save-types")
-            await page.wait_for_selector(f"select[data-day='{_day(1)}']", timeout=TIMEOUT)
-            # One day.
-            mattina = await page.eval_on_selector(
-                f"select[data-day='{_day(1)}'] option:nth-child(2)", "o => o.value"
+            await page.wait_for_selector("[data-tool]:has-text('Mattina')", timeout=TIMEOUT)
+            labels = await page.eval_on_selector_all(
+                ".board-tool", "els => els.map(e => e.textContent.trim())"
             )
-            await page.select_option(f"select[data-day='{_day(1)}']", mattina)
+            assert labels == ["MAMattina", "POPomeriggio", "NONotte", "Riposo", "Cancella"]
+            assert not await page.locator("#board-types").evaluate("d => d.open")
+            # Three days of the month shown (the next month if this one ends too soon).
+            start = dt_util.now().date() + timedelta(days=1)
+            if (start + timedelta(days=2)).month != start.month:
+                await page.click(".board-nav button:has-text('›')")
+                start = (start + timedelta(days=3)).replace(day=1)
+            days = [(start + timedelta(days=n)).isoformat() for n in range(3)]
+            await page.click("[data-tool]:has-text('Mattina')")
+            for day in days:
+                await page.click(f"[data-day='{day}']")
+            assert "has-shift" in await page.get_attribute(f"[data-day='{days[0]}']", "class")
+            # A second tap on the same day takes it away.
+            await page.click(f"[data-day='{days[2]}']")
+            assert "has-shift" not in await page.get_attribute(f"[data-day='{days[2]}']", "class")
+            assert "2" in await page.inner_text("#board-save")
+            await page.click("#board-save")
             await page.wait_for_selector("text=Turni salvati.")
-            # A rotation: Notte, Riposo, for 1 week from the day after tomorrow.
+            # A rotation: Notte, Riposo for one week, from ten days on.
+            rotation_start = (dt_util.now().date() + timedelta(days=10)).isoformat()
             await page.click("[data-pattern]:has-text('Notte')")
             await page.click("[data-pattern='']")
-            await page.fill("#rotation-start", _day(2))
+            await page.fill("#rotation-start", rotation_start)
             await page.select_option("#rotation-weeks", "1")
             await page.click("#apply-rotation")
-            await page.wait_for_function(
-                "day => { const s = document.querySelector(`select[data-day='${day}']`);"
-                " return !!s && s.selectedOptions[0].textContent.startsWith('Notte'); }",
-                arg=_day(2),
-            )
+            await page.wait_for_selector("text=Turni salvati.")
             assert await page.evaluate("document.documentElement.scrollWidth") <= PHONE["width"]
         finally:
             await browser.close()
+    await hass.async_block_till_done()
     person_id = entry.runtime_data.guests.devices[device["id"]]["person_id"]
     shifts = sorted(
         (r["start"][:10], r["summary"])
         for r in entry.runtime_data.store.events.values()
         if person_id in r["persons"]
     )
-    assert shifts[0] == (_day(1), "Mattina")
-    assert [s for s in shifts if s[1] == "Notte"] == [
-        (_day(2), "Notte"),
-        (_day(4), "Notte"),
-        (_day(6), "Notte"),
-        (_day(8), "Notte"),
-    ]
+    mornings = [d for d, summary in shifts if summary == "Nonna Ines · Mattina"]
+    assert mornings == days[:2]
+    first = dt_util.now().date() + timedelta(days=10)
+    nights = [d for d, summary in shifts if summary == "Nonna Ines · Notte"]
+    assert nights == [(first + timedelta(days=n)).isoformat() for n in (0, 2, 4, 6)]
+    # In Family Hub's own calendar, with the name in front.
+    response = await hass.services.async_call(
+        "calendar",
+        "get_events",
+        {
+            "entity_id": "calendar.family_hub_famiglia",
+            "start_date_time": f"{days[0]} 00:00:00",
+            "end_date_time": f"{days[1]} 23:59:00",
+        },
+        blocking=True,
+        return_response=True,
+    )
+    summaries = [e["summary"] for e in response["calendar.family_hub_famiglia"]["events"]]
+    assert summaries.count("Nonna Ines · Mattina") == 2
     person = next(p for p in entry.options["persons"] if p["id"] == person_id)
     assert person["color"] == "#0EA5E9" and person["name"] == "Nonna Ines"

@@ -143,7 +143,7 @@ async def test_shifts_from_the_web_app_days_and_rotation(
     assert night["end"][:10] > night["start"][:10]
     # The guest sees its shifts in its own list too.
     titles = [e["title"] for e in (await (await _list(client, token)).json())["events"]]
-    assert "Mattina" in titles
+    assert "Nonna Lavoratrice · Mattina" in titles
 
 
 async def test_adults_see_the_shifts_other_guests_only_when_chosen(
@@ -175,9 +175,9 @@ async def test_adults_see_the_shifts_other_guests_only_when_chosen(
         return_response=True,
     )
     events = response["calendar.family_hub_asilo"]["events"]
-    assert any(e["summary"] == "Mattina" for e in events)
+    assert any(e["summary"] == "Nonna Lavoratrice · Mattina" for e in events)
     assert any(
-        r["summary"] == "Mattina" and r["persons"] == [person_id]
+        r["summary"] == "Nonna Lavoratrice · Mattina" and r["persons"] == [person_id]
         for r in family.runtime_data.store.events.values()
     )
     # Another guest who sees Sofia in "asilo": not the grandmother's shifts.
@@ -201,7 +201,7 @@ async def test_adults_see_the_shifts_other_guests_only_when_chosen(
         changes={"persons": ["sofia", person_id]},
     )
     titles = [e["title"] for e in (await (await _list(client, other)).json())["events"]]
-    assert titles == ["Mattina"]
+    assert titles == ["Nonna Lavoratrice · Mattina"]
     # And the other guest cannot touch them.
     answer = await client.get(f"{API}shifts", params={"from": _day(0)}, headers=_auth(other))
     assert answer.status == 403

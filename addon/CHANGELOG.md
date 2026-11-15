@@ -1,5 +1,25 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.9.0b9
+
+Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
+
+- «I miei turni» nella web app: la stessa plancia dei Turni di Family Hub, adattata al telefono.
+  Tipi di turno come pulsanti grandi colorati (con sigla) più Riposo e Cancella; si sceglie un
+  turno e si toccano i giorni del mese (Lun–Dom, frecce, oggi evidenziato), un secondo tocco lo
+  toglie; «Salva» con «Turni salvati». Sotto, la rotazione che si ripete; «Tipi di turno» in una
+  sezione a parte, chiusa di default. Riposo e Cancella lasciano il giorno libero.
+- Dopo «Salva i tipi» la plancia si aggiorna subito.
+- In Family Hub i turni di una persona ospite si chiamano «<nome> · Mattina» (calendario, Elenco,
+  notifiche).
+- Web app: un solo pulsante per le notifiche (la striscia in alto); spazio in fondo, così l'ultimo
+  appuntamento non finisce sotto «+ Aggiungi».
+- Rilasci: ogni release ha l'asset `family_hub.zip` (il contenuto di custom_components/family_hub),
+  creato da un workflow; `hacs.json` usa `zip_release` e `filename`, così HACS/Marketplace scarica
+  l'asset e GitHub conta i download. README con i badge dei download e delle installazioni attive.
+- Web app: se Family Hub si sta ricaricando (un adulto ha salvato le impostazioni) il telefono
+  riprova invece di mostrare «Accesso disattivato» e cancellare i propri dati.
+
 ## 0.9.0b8
 
 Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
