@@ -155,3 +155,10 @@ def test_events_carry_who_added_them() -> None:
             await shutdown(ha_server, client)
 
     _run(scenario)
+
+
+def test_outside_the_supervisor_there_is_no_panel_address(monkeypatch: Any) -> None:
+    from app.server import own_panel
+
+    monkeypatch.delenv("SUPERVISOR_TOKEN", raising=False)
+    assert asyncio.run(own_panel()) is None

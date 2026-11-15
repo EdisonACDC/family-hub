@@ -24,14 +24,17 @@ import secrets
 import time as monotime
 import uuid
 from collections import deque
+from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.event import async_track_point_in_time, async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
 
 from . import webpush
 from .const import (
@@ -94,6 +97,22 @@ FUTURE_DAYS = 731
 MAX_CHANGE_PUSHES = 3
 ACTION_PREFIX = "FH_GUEST_"
 ATTEMPT_NOTICE_SECONDS = 600
+# Invites that are used, expired or cancelled go away by themselves after this long.
+INVITE_KEEP = timedelta(days=30)
+CLEANUP_EVERY = timedelta(hours=6)
+# Reminders of phones with their own minutes are planned this far ahead, again every hour.
+OWN_REMINDERS_AHEAD = timedelta(hours=49)
+OWN_REMINDERS_EVERY = timedelta(hours=1)
+MAX_OWN_OFFSETS = 5
+TEST_PUSH_EVERY = 60.0
+# The notification status of a phone, as the adults see it.
+PUSH_ACTIVE = "active"
+PUSH_OFF = "off"
+PUSH_BLOCKED = "blocked"
+# Who gets the requests (a phone opened an invite, an appointment to approve).
+RECIPIENTS_ADULTS = "adults"
+RECIPIENTS_PERSONS = "persons"
+RECIPIENT_MODES = (RECIPIENTS_ADULTS, RECIPIENTS_PERSONS)
 
 _HHMM = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -121,6 +140,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "cancelled": "Annullato: {title} ({when})",
         "many_changes": "Alcuni appuntamenti sono cambiati. Apri Family Hub per vederli.",
         "reminder": "Promemoria",
+        "test_push": "Prova: le notifiche di Family Hub arrivano su questo telefono.",
         "all_day": "tutto il giorno",
         "tomorrow": "domani",
         "attempt_used": (
@@ -158,6 +178,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "cancelled": "Abgesagt: {title} ({when})",
         "many_changes": "Einige Termine haben sich geändert. Family Hub öffnen, um sie zu sehen.",
         "reminder": "Erinnerung",
+        "test_push": "Test: Mitteilungen von Family Hub kommen auf diesem Telefon an.",
         "all_day": "ganztägig",
         "tomorrow": "morgen",
         "attempt_used": (
@@ -194,6 +215,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "cancelled": "Cancelled: {title} ({when})",
         "many_changes": "Some appointments changed. Open Family Hub to see them.",
         "reminder": "Reminder",
+        "test_push": "Test: Family Hub notifications reach this phone.",
         "all_day": "all day",
         "tomorrow": "tomorrow",
         "attempt_used": (
@@ -505,6 +527,17 @@ class GuestManager:
         self._reminded: dict[str, float] = {}
         # When the adults were last told about a refused try, per invite.
         self._attempt_told: dict[str, float] = {}
+        # Who gets the requests: the adults with a phone, or chosen persons. Without any phone
+        # among them, Home Assistant's administrators who have the Companion app.
+        self.recipients: dict[str, Any] = {"mode": RECIPIENTS_ADULTS, "persons": []}
+        # Where Family Hub opens in Home Assistant (told by the add-on), for a tapped notification.
+        self.panel = ""
+        self._unsub_cleanup: Callable[[], None] | None = None
+        self._unsub_own: Callable[[], None] | None = None
+        # Reminders of phones with their own minutes: (device, uid, moment) -> cancel.
+        self._own_timers: dict[tuple[str, str, str], Callable[[], None]] = {}
+        self._own_sent: set[tuple[str, str, str]] = set()
+        self._test_sent: dict[str, float] = {}
         self._tasks: set[asyncio.Task[Any]] = set()
 
     # ----- storage --------------------------------------------------------
@@ -517,6 +550,22 @@ class GuestManager:
             self.pending = dict(data.get("pending", {}))
             self.log = list(data.get("log", []))[-LOG_SIZE:]
             self.vapid = dict(data.get("vapid", {}))
+            self.recipients = dict(data.get("recipients") or self.recipients)
+            self.panel = str(data.get("panel") or "")
+        if self._cleanup_invites():
+            await self._store.async_save(self._data())
+
+        async def _cleanup(_now: datetime) -> None:
+            if self._cleanup_invites():
+                await self.async_save()
+
+        self._unsub_cleanup = async_track_time_interval(self.hass, _cleanup, CLEANUP_EVERY)
+
+        async def _plan(_now: datetime) -> None:
+            self._plan_own_reminders()
+
+        self._unsub_own = async_track_time_interval(self.hass, _plan, OWN_REMINDERS_EVERY)
+        self._plan_own_reminders()
         if self.in_use():
             guest_hub(self.hass).ensure_views()
 
@@ -527,6 +576,8 @@ class GuestManager:
             "pending": self.pending,
             "log": self.log,
             "vapid": self.vapid,
+            "recipients": self.recipients,
+            "panel": self.panel,
         }
 
     async def async_save(self) -> None:
@@ -613,6 +664,15 @@ class GuestManager:
         days = raw.get("expires_days", DEFAULT_EXPIRY_DAYS)
         if isinstance(days, bool) or not isinstance(days, int) or not 1 <= days <= MAX_EXPIRY_DAYS:
             raise GuestError("invalid", 422)
+        invite, token = await self._new_invite(name, scope, days)
+        self._record("invite_created", name)
+        await self.async_save()
+        guest_hub(self.hass).ensure_views()
+        return invite, token
+
+    async def _new_invite(
+        self, name: str, scope: dict[str, Any], days: int, replaces: str | None = None
+    ) -> tuple[dict[str, Any], str]:
         token = new_token()
         now = _now()
         invite = {
@@ -624,14 +684,59 @@ class GuestManager:
             "status": OPEN,
             "token_hash": token_hash(token),
             "device_id": None,
+            "closed_at": None,
+            # "Nuovo telefono": the device this invite's phone will take the place of.
+            "replaces": replaces,
         }
         self.invites[invite["id"]] = invite
         if not self.vapid:
             self.vapid = await self.hass.async_add_executor_job(webpush.generate_keys)
-        self._record("invite_created", name)
-        await self.async_save()
-        guest_hub(self.hass).ensure_views()
         return invite, token
+
+    def _closed_at(self, invite: dict[str, Any], now: datetime) -> datetime | None:
+        """When an invite stopped being usable (used, cancelled or expired); None if open."""
+        if self._invite_open(invite, now):
+            return None
+        closed = _parse(invite.get("closed_at"))
+        if closed is not None:
+            return closed
+        expires = _parse(invite.get("expires_at"))
+        if invite.get("status") == OPEN and expires is not None:
+            return expires
+        return _parse(invite.get("created_at")) or now
+
+    def _cleanup_invites(self) -> bool:
+        """Remove invites closed more than 30 days ago. True if something was removed. The
+        activity log keeps what happened."""
+        now = _now()
+        old = [
+            invite_id
+            for invite_id, invite in self.invites.items()
+            if (closed := self._closed_at(invite, now)) is not None and now - closed >= INVITE_KEEP
+        ]
+        for invite_id in old:
+            del self.invites[invite_id]
+        return bool(old)
+
+    async def async_delete_invite(self, invite_id: str) -> None:
+        """Delete an invite that is no longer usable (used, expired or cancelled)."""
+        invite = self.invites.get(invite_id)
+        if invite is None:
+            raise GuestError("not_found", 404)
+        if self._invite_open(invite, _now()):
+            raise GuestError("still_open", 409)
+        del self.invites[invite_id]
+        await self.async_save()
+
+    async def async_delete_inactive_invites(self) -> int:
+        """Delete every invite that is no longer usable. Returns how many."""
+        now = _now()
+        gone = [i for i, invite in self.invites.items() if not self._invite_open(invite, now)]
+        for invite_id in gone:
+            del self.invites[invite_id]
+        if gone:
+            await self.async_save()
+        return len(gone)
 
     async def async_revoke_invite(self, invite_id: str) -> None:
         invite = self.invites.get(invite_id)
@@ -639,6 +744,7 @@ class GuestManager:
             raise GuestError("not_found", 404)
         if invite["status"] == OPEN:
             invite["status"] = REVOKED
+            invite["closed_at"] = _iso(_now())
         self._record("invite_revoked", invite["name"])
         await self.async_save()
 
@@ -676,8 +782,10 @@ class GuestManager:
             "approval": invite["approval"],
             "notify": invite["notify"],
             "push": None,
+            "replaces": invite.get("replaces"),
         }
         invite["status"] = USED
+        invite["closed_at"] = _iso(now)
         invite["device_id"] = device["id"]
         self.devices[device["id"]] = device
         self._record("activated", device["name"], device["label"])
@@ -748,7 +856,9 @@ class GuestManager:
             raise GuestError("not_found", 404)
         return device
 
-    async def async_confirm(self, device_id: str, accept: bool) -> dict[str, Any]:
+    async def async_confirm(
+        self, device_id: str, accept: bool, from_phone: bool = False
+    ) -> dict[str, Any]:
         device = self._device(device_id)
         if device["status"] != PENDING:
             raise GuestError("not_pending", 409)
@@ -756,9 +866,57 @@ class GuestManager:
         if not accept:
             device["push"] = None
         self._record("confirmed" if accept else "rejected", device["name"], device["label"])
-        persistent_notification.async_dismiss(self.hass, f"{DOMAIN}_guest_{device_id}")
+        self._spawn(self._clear_on_phones(f"{DOMAIN}_guest_{device_id}", from_phone))
+        old_id = device.pop("replaces", None)
+        if accept and old_id and old_id in self.devices:
+            await self._take_place(self.devices[old_id], device)
         await self.async_save()
         return device
+
+    async def _take_place(self, old: dict[str, Any], new: dict[str, Any]) -> None:
+        """The new phone replaces the old one: the appointments "aggiunto da" stay linked to it,
+        and the old phone and its used invite go away."""
+        changed = False
+        for record in self.events.events.values():
+            added = record.get("added_by")
+            if isinstance(added, dict) and added.get("device") == old["id"]:
+                record["added_by"] = {"device": new["id"], "name": new["name"]}
+                changed = True
+        for item in self.pending.values():
+            if item["device_id"] == old["id"]:
+                item["device_id"] = new["id"]
+        self._forget_device(old["id"])
+        self._record("replaced", new["name"], new["label"])
+        if changed:
+            await self.events.async_save()
+
+    def _forget_device(self, device_id: str) -> None:
+        """Remove a device and the invite it used, so nothing is left without its other half."""
+        device = self.devices.pop(device_id, None)
+        invite_ids = {i for i, inv in self.invites.items() if inv.get("device_id") == device_id}
+        if device and device.get("invite_id"):
+            invite_ids.add(str(device["invite_id"]))
+        for invite_id in invite_ids:
+            self.invites.pop(invite_id, None)
+
+    async def async_replace_device(self, device_id: str) -> tuple[dict[str, Any], str]:
+        """ "Nuovo telefono": the old phone is turned off at once, and a new invite with the same
+        name and permissions is made. Its phone takes the old one's place once confirmed."""
+        old = self._device(device_id)
+        if old["status"] not in (ACTIVE, DISABLED):
+            raise GuestError("not_active", 409)
+        if old["status"] == ACTIVE:
+            await self.async_disable(device_id)
+        scope = {
+            key: old[key] for key in ("persons", "categories", "permission", "approval", "notify")
+        }
+        invite, token = await self._new_invite(
+            old["name"], scope, DEFAULT_EXPIRY_DAYS, replaces=device_id
+        )
+        self._record("invite_created", old["name"])
+        await self.async_save()
+        guest_hub(self.hass).ensure_views()
+        return invite, token
 
     async def async_update_device(self, device_id: str, raw: dict[str, Any]) -> dict[str, Any]:
         device = self._device(device_id)
@@ -769,6 +927,10 @@ class GuestManager:
             if name != device["name"]:
                 self._record("renamed", name, device["name"])
                 device["name"] = name
+        if any(key in raw for key in ("reminder_offsets", "quiet_start", "quiet_end")):
+            device.update(self._clean_own_notify(raw, device))
+            self._record("permissions", device["name"])
+            self._plan_own_reminders()
         if any(key in raw for key in ("persons", "categories", "permission", "approval", "notify")):
             scope = self.clean_scope({**device, **raw})
             device.update(scope)
@@ -777,6 +939,35 @@ class GuestManager:
             self._record("permissions", device["name"])
         await self.async_save()
         return device
+
+    @staticmethod
+    def _clean_own_notify(raw: dict[str, Any], device: dict[str, Any]) -> dict[str, Any]:
+        """The phone's own reminders: minutes before (None = as the family) and quiet hours
+        (both empty = as the family)."""
+        offsets = raw.get("reminder_offsets", device.get("reminder_offsets"))
+        if offsets is not None and (
+            not isinstance(offsets, list)
+            or not 1 <= len(offsets) <= MAX_OWN_OFFSETS
+            or not all(
+                isinstance(o, int) and not isinstance(o, bool) and 0 <= o <= 1440 for o in offsets
+            )
+        ):
+            raise GuestError("invalid_offsets", 422)
+        quiet: list[str | None] = []
+        for key in ("quiet_start", "quiet_end"):
+            value = raw.get(key, device.get(key))
+            if value in (None, ""):
+                quiet.append(None)
+                continue
+            _clock(value)
+            quiet.append(value)
+        if (quiet[0] is None) != (quiet[1] is None):
+            raise GuestError("invalid_quiet", 422)
+        return {
+            "reminder_offsets": None if offsets is None else sorted(set(offsets), reverse=True),
+            "quiet_start": quiet[0],
+            "quiet_end": quiet[1],
+        }
 
     async def async_disable(self, device_id: str) -> None:
         device = self._device(device_id)
@@ -794,7 +985,7 @@ class GuestManager:
         device = self._device(device_id)
         if device["status"] not in (DISABLED, REJECTED):
             raise GuestError("still_active", 409)
-        del self.devices[device_id]
+        self._forget_device(device_id)
         await self.async_save()
 
     # ----- what a guest sees ------------------------------------------------
@@ -1034,7 +1225,11 @@ class GuestManager:
     # ----- approval (adults) ------------------------------------------------
 
     async def async_approve(
-        self, item_id: str, accept: bool, changes: dict[str, Any] | None = None
+        self,
+        item_id: str,
+        accept: bool,
+        changes: dict[str, Any] | None = None,
+        from_phone: bool = False,
     ) -> str | None:
         """Approve (optionally with an adult's changes) or reject a waiting appointment."""
         item = self.pending.get(item_id)
@@ -1058,7 +1253,7 @@ class GuestManager:
             uid = await self._write(event, dict(event.get("added_by") or {}), None)
         del self.pending[item_id]
         self._record("approved" if accept else "declined", name, str(event["summary"]))
-        persistent_notification.async_dismiss(self.hass, f"{DOMAIN}_guest_{item_id}")
+        self._spawn(self._clear_on_phones(f"{DOMAIN}_guest_{item_id}", from_phone))
         await self.async_save()
         if device is not None and device["status"] == ACTIVE:
             text = texts_for(self.language)
@@ -1082,13 +1277,59 @@ class GuestManager:
 
     # ----- notifications to adults -----------------------------------------
 
-    def _adult_phones(self) -> list[str]:
-        phones = [
-            str(p["phone_notify"])
-            for p in self.entry.options.get(OPT_PERSONS, [])
-            if p.get("role", "adult") == "adult" and p.get("phone_notify")
-        ]
+    async def async_set_recipients(self, raw: Any) -> None:
+        if not isinstance(raw, dict) or raw.get("mode") not in RECIPIENT_MODES:
+            raise GuestError("invalid", 422)
+        persons = raw.get("persons", [])
+        known = self._persons()
+        if not isinstance(persons, list) or not all(
+            isinstance(p, str) and p in known for p in persons
+        ):
+            raise GuestError("invalid_persons", 422)
+        if raw["mode"] == RECIPIENTS_PERSONS and not persons:
+            raise GuestError("invalid_persons", 422)
+        self.recipients = {"mode": raw["mode"], "persons": list(dict.fromkeys(persons))}
+        await self.async_save()
+
+    async def async_set_panel(self, path: Any) -> None:
+        """The add-on says where Family Hub opens (/app/<slug>): a tapped notification goes
+        there."""
+        if not isinstance(path, str) or not re.fullmatch(r"/[A-Za-z0-9_/-]{1,80}", path):
+            raise GuestError("invalid", 422)
+        if path != self.panel:
+            self.panel = path
+            await self._store.async_save(self._data())
+
+    def _person_phones(self) -> list[str]:
+        """The phones of the adults, or of the persons chosen in "Chi riceve le richieste"."""
+        persons = self._persons()
+        if self.recipients.get("mode") == RECIPIENTS_PERSONS:
+            chosen = [persons[p] for p in self.recipients.get("persons", []) if p in persons]
+        else:
+            chosen = [p for p in persons.values() if p.get("role", "adult") == "adult"]
+        phones = [str(p["phone_notify"]) for p in chosen if p.get("phone_notify")]
+        return [p for p in dict.fromkeys(phones) if self.hass.services.has_service("notify", p)]
+
+    async def _admin_phones(self) -> list[str]:
+        """The Companion app phones of Home Assistant's administrators: each phone's own user,
+        as the mobile app integration records it, and its notify service as that integration
+        names it."""
+        phones: list[str] = []
+        for entry in self.hass.config_entries.async_entries("mobile_app"):
+            user_id = entry.data.get("user_id")
+            device_name = entry.data.get("device_name")
+            if not user_id or not device_name:
+                continue
+            user = await self.hass.auth.async_get_user(str(user_id))
+            if user is None or not user.is_active or not user.is_admin:
+                continue
+            service = slugify(f"mobile_app_{device_name}")
+            if self.hass.services.has_service("notify", service):
+                phones.append(service)
         return list(dict.fromkeys(phones))
+
+    async def recipient_phones(self) -> list[str]:
+        return self._person_phones() or await self._admin_phones()
 
     async def _notify_adults(
         self,
@@ -1096,27 +1337,48 @@ class GuestManager:
         phone_message: str,
         tablet_message: str,
         actions: list[dict[str, str]],
+        open_what: str = "",
     ) -> None:
         text = texts_for(self.language)
         persistent_notification.async_create(
             self.hass, tablet_message, title=text["title"], notification_id=notification_id
         )
-        for phone in self._adult_phones():
-            if not self.hass.services.has_service("notify", phone):
-                continue
+        data: dict[str, Any] = {"tag": notification_id}
+        if actions:
+            data["actions"] = actions
+        if self.panel:
+            # Tapping the notification opens Family Hub on what it is about.
+            url = self.open_url(open_what) if open_what else self.panel
+            data["url"] = url
+            data["clickAction"] = url
+        for phone in await self.recipient_phones():
             try:
                 await self.hass.services.async_call(
                     "notify",
                     phone,
-                    {
-                        "title": text["title"],
-                        "message": phone_message,
-                        "data": (
-                            {"tag": notification_id, "actions": actions}
-                            if actions
-                            else {"tag": notification_id}
-                        ),
-                    },
+                    {"title": text["title"], "message": phone_message, "data": dict(data)},
+                    blocking=True,
+                )
+            except HomeAssistantError:
+                LOGGER.warning("Family Hub could not reach an adult's phone")
+
+    def open_url(self, what: str) -> str:
+        """The address a tapped notification opens: Family Hub's page in Home Assistant, with
+        what to show (fh_open=device.<id> / pending.<id> / event.<uid>.<date>)."""
+        return f"{self.panel}?fh_open={what}" if self.panel else ""
+
+    async def _clear_on_phones(self, notification_id: str, from_phone: bool = False) -> None:
+        """Answered on one phone (or on the tablet): the same request goes from the others."""
+        persistent_notification.async_dismiss(self.hass, notification_id)
+        phones = await self.recipient_phones()
+        if from_phone and len(phones) < 2:
+            return  # answered on the only phone: nothing to take away elsewhere
+        for phone in phones:
+            try:
+                await self.hass.services.async_call(
+                    "notify",
+                    phone,
+                    {"message": "clear_notification", "data": {"tag": notification_id}},
                     blocking=True,
                 )
             except HomeAssistantError:
@@ -1133,6 +1395,7 @@ class GuestManager:
                 {"action": f"{ACTION_PREFIX}CONFIRM_{device['id']}", "title": text["confirm"]},
                 {"action": f"{ACTION_PREFIX}REJECT_{device['id']}", "title": text["reject"]},
             ],
+            open_what=f"device.{device['id']}",
         )
 
     async def _tell_adults_pending(self, item_id: str) -> None:
@@ -1154,6 +1417,7 @@ class GuestManager:
                 {"action": f"{ACTION_PREFIX}APPROVE_{item_id}", "title": text["approve"]},
                 {"action": f"{ACTION_PREFIX}DECLINE_{item_id}", "title": text["decline"]},
             ],
+            open_what=f"pending.{item_id}",
         )
 
     async def async_handle_action(self, action: str) -> bool:
@@ -1162,10 +1426,10 @@ class GuestManager:
         command, _, item_id = action.removeprefix(ACTION_PREFIX).partition("_")
         try:
             if command in ("CONFIRM", "REJECT") and item_id in self.devices:
-                await self.async_confirm(item_id, command == "CONFIRM")
+                await self.async_confirm(item_id, command == "CONFIRM", from_phone=True)
                 return True
             if command in ("APPROVE", "DECLINE") and item_id in self.pending:
-                await self.async_approve(item_id, command == "APPROVE")
+                await self.async_approve(item_id, command == "APPROVE", from_phone=True)
                 return True
         except GuestError:
             return True
@@ -1199,6 +1463,35 @@ class GuestManager:
             device["push"] = None
             await self._store.async_save(self._data())
 
+    async def async_set_blocked(self, device: dict[str, Any], blocked: bool) -> None:
+        """The phone says its notifications are blocked in its settings (or no longer)."""
+        self.check_active(device)
+        if bool(device.get("push_blocked")) != blocked:
+            device["push_blocked"] = blocked
+            if blocked:
+                device["push"] = None
+            await self.async_save()
+
+    @staticmethod
+    def push_status(device: dict[str, Any]) -> str:
+        if device.get("push"):
+            return PUSH_ACTIVE
+        return PUSH_BLOCKED if device.get("push_blocked") else PUSH_OFF
+
+    async def async_test_push(self, device_id: str) -> None:
+        """ "Invia notifica di prova": at most one a minute per phone."""
+        device = self._device(device_id)
+        self.check_active(device)
+        if not device.get("push") or not device["notify"]:
+            raise GuestError("no_push", 409)
+        now = monotime.monotonic()
+        last = self._test_sent.get(device_id)
+        if last is not None and now - last < TEST_PUSH_EVERY:
+            raise GuestError("slow_down", 429)
+        self._test_sent[device_id] = now
+        text = texts_for(self.language)
+        await self._push(device, {"title": text["title"], "body": text["test_push"], "tag": "test"})
+
     async def async_set_push(self, device: dict[str, Any], raw: Any) -> bool:
         self.check_active(device)
         if raw is None:
@@ -1210,7 +1503,9 @@ class GuestManager:
             if subscription is None:
                 raise GuestError("invalid", 422)
             device["push"] = subscription
-        await self._store.async_save(self._data())
+            device["push_blocked"] = False
+        await self.async_save()
+        self._plan_own_reminders()
         return device["push"] is not None
 
     def _listeners(self) -> list[dict[str, Any]]:
@@ -1219,6 +1514,64 @@ class GuestManager:
             for d in self.devices.values()
             if d["status"] == ACTIVE and d["notify"] and d.get("push")
         ]
+
+    def _quiet_for(self, device: dict[str, Any]) -> bool:
+        """The phone's own quiet hours when set, else the family's."""
+        if device.get("quiet_start") and device.get("quiet_end"):
+            from .reminders import in_quiet_hours  # noqa: PLC0415
+
+            now = dt_util.as_local(dt_util.now()).time()
+            return in_quiet_hours(now, _clock(device["quiet_start"]), _clock(device["quiet_end"]))
+        return self._quiet_now()
+
+    def _plan_own_reminders(self) -> None:
+        """Timers for the phones with their own minutes before (timed appointments they see),
+        for the next two days; planned again every hour and after every change."""
+        for cancel in self._own_timers.values():
+            cancel()
+        self._own_timers.clear()
+        now = _now()
+        until = now + OWN_REMINDERS_AHEAD
+        devices = [d for d in self._listeners() if d.get("reminder_offsets") is not None]
+        for device in devices:
+            for record in self.events.events.values():
+                if record.get("all_day") or record.get("reminders_off"):
+                    continue
+                if not self.visible(record, device):
+                    continue
+                start = _start_of(record)
+                for offset in device["reminder_offsets"]:
+                    moment = start - timedelta(minutes=int(offset))
+                    key = (device["id"], record["uid"], moment.isoformat())
+                    if not now < moment <= until or key in self._own_sent:
+                        continue
+                    self._own_timers[key] = async_track_point_in_time(
+                        self.hass, self._own_reminder(key), moment
+                    )
+
+    def _own_reminder(self, key: tuple[str, str, str]) -> Callable[[datetime], Any]:
+        async def _fire(_now: datetime) -> None:
+            self._own_timers.pop(key, None)
+            device = self.devices.get(key[0])
+            record = self.events.events.get(key[1])
+            if device is None or record is None or key in self._own_sent:
+                return
+            if device not in self._listeners() or not self.visible(record, device):
+                return
+            self._own_sent.add(key)
+            if self._quiet_for(device):
+                return
+            text = texts_for(self.language)
+            clock = "%I:%M %p" if self.entry.options.get(CONF_TIME_FORMAT) == "12h" else "%H:%M"
+            when = dt_util.as_local(_start_of(record)).strftime(clock)
+            payload = {
+                "title": text["reminder"],
+                "body": f"{when} · {record['summary']}",
+                "tag": record["uid"],
+            }
+            await self._push(device, payload)
+
+        return _fire
 
     def _quiet_now(self) -> bool:
         from .reminders import _clock, in_quiet_hours  # noqa: PLC0415
@@ -1230,8 +1583,15 @@ class GuestManager:
     async def async_on_reminder(self, record: dict[str, Any], message: str) -> None:
         """A family reminder went out: guests who see the appointment get it too, at the same
         moment, outside the family's quiet hours."""
-        listeners = [d for d in self._listeners() if self.visible(record, d)]
-        if not listeners or self._quiet_now():
+        listeners = [
+            d
+            for d in self._listeners()
+            if self.visible(record, d)
+            and not self._quiet_for(d)
+            # Timed appointments of a phone with its own minutes are planned for it apart.
+            and (d.get("reminder_offsets") is None or bool(record.get("all_day")))
+        ]
+        if not listeners:
             return
         now = monotime.monotonic()
         self._reminded = {k: t for k, t in self._reminded.items() if t > now - 120}
@@ -1258,6 +1618,7 @@ class GuestManager:
     async def async_store_changed(self) -> None:
         """After every save of the appointments: guests hear about changes and cancellations of
         appointments they can see (not about their own changes, nor past appointments)."""
+        self._plan_own_reminders()
         if not self._listeners():
             self._snapshot = None
             return
@@ -1322,6 +1683,7 @@ class GuestManager:
                         "created_at",
                         "expires_at",
                         "device_id",
+                        "replaces",
                     )
                 }
                 | {"status": status}
@@ -1343,7 +1705,13 @@ class GuestManager:
                     "notify",
                 )
             }
-            | {"push": device.get("push") is not None}
+            | {
+                "push": device.get("push") is not None,
+                "push_status": self.push_status(device),
+                "reminder_offsets": device.get("reminder_offsets"),
+                "quiet_start": device.get("quiet_start"),
+                "quiet_end": device.get("quiet_end"),
+            }
             for device in self.devices.values()
         ]
         pending = []
@@ -1365,7 +1733,16 @@ class GuestManager:
                     "note": event.get("description", ""),
                 }
             )
+        if any(d["status"] == PENDING for d in self.devices.values()):
+            attention = "devices"
+        elif self.pending:
+            attention = "approvals"
+        else:
+            attention = ""
         return {
+            # What waits for an adult: the page opens it by itself (a tapped notification).
+            "attention": attention,
+            "recipients": dict(self.recipients),
             "invites": sorted(invites, key=lambda i: str(i["created_at"]), reverse=True),
             "devices": sorted(devices, key=lambda d: str(d["activated_at"]), reverse=True),
             "pending": sorted(pending, key=lambda p: str(p["created_at"])),
@@ -1391,6 +1768,15 @@ class GuestManager:
 
     @callback
     def async_stop(self) -> None:
+        if self._unsub_cleanup is not None:
+            self._unsub_cleanup()
+            self._unsub_cleanup = None
+        if self._unsub_own is not None:
+            self._unsub_own()
+            self._unsub_own = None
+        for cancel in self._own_timers.values():
+            cancel()
+        self._own_timers.clear()
         for task in list(self._tasks):
             task.cancel()
 

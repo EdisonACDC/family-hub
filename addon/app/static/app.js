@@ -369,6 +369,7 @@
         $("guide-start").hidden = true;
       }
       refreshEvents();
+      handleOpenRequest();
     }).catch(function () {
       // Not "no calendars": the calendars could not be read (Home Assistant or the add-on is busy).
       $("empty-note").textContent = t("hubUnreachable");
@@ -2009,6 +2010,77 @@
       d.toLocaleTimeString(I.lang, { hour: "2-digit", minute: "2-digit", hour12: state.timeFormat === "12h" });
   }
 
+  // ---- a tapped notification: open what it is about ----------------------------------
+  // The notification opens Family Hub's page in Home Assistant with ?fh_open=<kind>.<id>[.<day>].
+  // This page is in Home Assistant's own frame, on the same address, so it reads that from the
+  // top window (or from its own address, when opened by itself); then it takes it away.
+
+  function readOpenRequest() {
+    var search = "";
+    try { search = window.top.location.search || ""; } catch (e) { search = ""; }
+    if (search.indexOf("fh_open=") === -1) search = window.location.search || "";
+    var m = /[?&]fh_open=(device|pending|event)\.([0-9a-f]{32})(?:\.(\d{4}-\d{2}-\d{2}))?/.exec(search);
+    return m ? { kind: m[1], id: m[2], day: m[3] || "" } : null;
+  }
+
+  function forgetOpenRequest() {
+    [window.top, window].forEach(function (win) {
+      try {
+        var url = new URL(win.location.href);
+        if (!url.searchParams.has("fh_open")) return;
+        url.searchParams.delete("fh_open");
+        win.history.replaceState(win.history.state, "", url.pathname + url.search + url.hash);
+      } catch (e) { /* another address: nothing to take away */ }
+    });
+  }
+
+  function handleOpenRequest() {
+    var open = state.openRequest;
+    if (!open || state.openHandled) return;
+    state.openHandled = true;
+    forgetOpenRequest();
+    if (open.kind === "event") {
+      openEventFromNotification(open.id, open.day);
+      return;
+    }
+    if (state.role !== "adult") return;
+    state.highlight = open.id;
+    request({ op: "share_get" }).then(function (data) {
+      state.share = data;
+      renderApprovalBanner();
+      if (open.kind === "device") {
+        state.shareTab = "devices";
+        openShare();
+      } else {
+        openApprovals();
+      }
+    }).catch(function () { /* the notice and the menu stay */ });
+  }
+
+  // A reminder: the day of the event, and its card open.
+  function openEventFromNotification(uid, day) {
+    var parts = day.split("-").map(Number);
+    var date = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (state.mode === "phone") {
+      var today = new Date();
+      state.dayOffset = Math.round((date - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
+    } else {
+      state.weekStart = viewStart(date);
+    }
+    refreshEvents();
+    var next = addDays(date, 1);
+    request({ op: "events", start: ymd(date) + " 00:00:00", end: ymd(next) + " 00:00:00" }).then(function (events) {
+      Object.keys(events).forEach(function (entityId) {
+        (events[entityId] || []).forEach(function (ev) {
+          if (ev.record_id !== uid) return;
+          var cal = (state.calendars || []).filter(function (c) { return c.entity_id === entityId; })[0] || {};
+          var color = cal.color || "#64748B";
+          openCard({ ev: ev, color: color, colors: [color], type: "" });
+        });
+      });
+    }).catch(function () { /* the day is shown anyway */ });
+  }
+
   function refreshGuestSummary() {
     if (state.role !== "adult") { $("approval-banner").hidden = true; return; }
     request({ op: "share_get" }).then(function (data) {
@@ -2016,7 +2088,23 @@
       renderApprovalBanner();
       if (!$("share-overlay").hidden) renderShare();
       if (!$("approvals-overlay").hidden) renderApprovals();
+      openWhatWaits(data);
     }).catch(function () { $("approval-banner").hidden = true; });
+  }
+
+  // Opened from a notification on an adult's phone (a phone waits, or an appointment to approve):
+  // the page opens it by itself, once, as it loads.
+  state.openRequest = readOpenRequest();
+
+  function openWhatWaits(data) {
+    if (state.attentionShown || state.openRequest) return;
+    state.attentionShown = true;
+    if (data.attention === "devices") {
+      state.shareTab = "devices";
+      openShare();
+    } else if (data.attention === "approvals") {
+      openApprovals();
+    }
   }
 
   function renderApprovalBanner() {
@@ -2157,10 +2245,22 @@
     }));
     body.appendChild(form);
     if (data.invites.length) body.appendChild(el("h3", {}, I.f("shareInvites")));
+    var closed = data.invites.filter(function (invite) { return invite.status !== "open"; });
+    if (closed.length) {
+      body.appendChild(button(I.f("shareCleanup"), "btn share-cleanup", function () {
+        shareCall({ op: "share_invite_cleanup" }).catch(function () {});
+      }));
+    }
     data.invites.forEach(function (invite) {
-      var card = el("div", { class: "share-card share-invite" });
+      var card = el("div", { class: "share-card share-invite", "data-invite": invite.id });
       card.appendChild(el("strong", {}, invite.name));
+      if (invite.replaces) card.appendChild(el("p", { class: "hint" }, I.f("shareReplaceFor").replace("{name}", invite.name)));
       card.appendChild(el("p", { class: "hint" }, inviteStatus(invite)));
+      if (invite.status !== "open") {
+        card.appendChild(button(I.f("shareDelete"), "btn", function () {
+          shareCall({ op: "share_invite_delete", invite_id: invite.id }).catch(function () {});
+        }));
+      }
       card.appendChild(el("p", { class: "hint" }, scopeText(invite)));
       if (invite.status === "open") {
         card.appendChild(button(I.f("shareRevoke"), "btn", function () {
@@ -2169,6 +2269,41 @@
       }
       body.appendChild(card);
     });
+    body.appendChild(recipientsCard(data));
+  }
+
+  function recipientsCard(data) {
+    var chosen = data.recipients || { mode: "adults", persons: [] };
+    var draft = { mode: chosen.mode, persons: (chosen.persons || []).slice() };
+    var card = el("div", { class: "share-card share-recipients", id: "share-recipients" });
+    card.appendChild(el("h3", {}, I.f("shareRecipients")));
+    card.appendChild(el("p", { class: "hint" }, I.f("shareRecipientsHint")));
+    var personsBox = el("div", { class: "share-checks", "data-field": "recipients" });
+    [["adults", "shareRecipientsAdults"], ["persons", "shareRecipientsPersons"]].forEach(function (option) {
+      var label = el("label", { class: "check share-check" });
+      var input = el("input", { type: "radio", name: "share-recipients", value: option[0] });
+      input.checked = draft.mode === option[0];
+      input.addEventListener("change", function () {
+        draft.mode = option[0];
+        personsBox.hidden = draft.mode !== "persons";
+      });
+      label.appendChild(input);
+      label.appendChild(el("span", {}, I.f(option[1])));
+      card.appendChild(label);
+    });
+    personList().forEach(function (p) {
+      personsBox.appendChild(checkRow(p.name, draft.persons.indexOf(p.id) !== -1, function (on) {
+        draft.persons = on ? draft.persons.concat([p.id]) : draft.persons.filter(function (x) { return x !== p.id; });
+      }));
+    });
+    personsBox.hidden = draft.mode !== "persons";
+    card.appendChild(personsBox);
+    card.appendChild(button(I.f("save"), "btn btn-primary", function () {
+      shareCall({ op: "share_recipients_save", recipients: draft }).then(function () {
+        showStatusNote(I.f("shareRecipientsSaved"));
+      }).catch(function () {});
+    }));
+    return card;
   }
 
   function scopeText(item) {
@@ -2230,7 +2365,7 @@
     permissions: "shareLog_permissions", disabled: "shareLog_disabled",
     event_pending: "shareLog_event_pending", event_added: "shareLog_event_added",
     event_changed: "shareLog_event_changed", event_deleted: "shareLog_event_deleted",
-    approved: "shareLog_approved", declined: "shareLog_declined",
+    approved: "shareLog_approved", declined: "shareLog_declined", replaced: "shareLog_replaced",
     attempt_used: "shareLog_attempt_used", attempt_expired: "shareLog_attempt_expired",
     attempt_revoked: "shareLog_attempt_revoked"
   };
@@ -2243,11 +2378,17 @@
     if (!data.devices.length) body.appendChild(el("p", { class: "hint" }, I.f("shareNoDevices")));
     data.devices.forEach(function (device) {
       var card = el("div", { class: "share-card share-device share-" + device.status, "data-device": device.id });
+      if (state.highlight === device.id) card.classList.add("share-highlight");
       card.appendChild(el("strong", {}, device.name));
       card.appendChild(el("p", { class: "hint" }, device.label + " · " + deviceStatus(device)));
       card.appendChild(el("p", { class: "hint" }, I.f("shareActivated") + ": " + shortDateTime(device.activated_at)
         + " · " + I.f("shareLastSeen") + ": " + shortDateTime(device.last_seen)));
       card.appendChild(el("p", { class: "hint" }, scopeText(device)));
+      if (device.status === "active" && device.notify) {
+        card.appendChild(el("p", { class: "hint share-push share-push-" + (device.push_status || "off") },
+          I.f("sharePushLabel") + ": " + I.f(PUSH_STATUS_KEYS[device.push_status] || "sharePush_off")
+          + " · " + ownNotifyText(device)));
+      }
       var actions = el("div", { class: "actions" });
       if (device.status === "pending") {
         actions.appendChild(button(I.f("shareConfirm"), "btn btn-primary", function () {
@@ -2256,7 +2397,31 @@
         actions.appendChild(button(I.f("shareReject"), "btn", function () {
           shareCall({ op: "share_device_confirm", device_id: device.id, accept: false }).catch(function () {});
         }));
-      } else if (device.status === "active") {
+      }
+      if (device.status === "active" || device.status === "disabled") {
+        actions.appendChild(button(I.f("shareReplace"), "btn", function () {
+          askConfirm(I.f("shareReplaceAsk").replace("{name}", device.name), I.f("shareReplace")).then(function (yes) {
+            if (!yes) return;
+            request({ op: "share_device_replace", device_id: device.id }).then(function (answer) {
+              state.share = answer;
+              state.newLink = answer.link;
+              state.shareTab = "invites";
+              renderShare();
+              renderApprovalBanner();
+              var box = $("share-link");
+              if (box) box.scrollIntoView({ block: "nearest" });
+            }).catch(showShareError);
+          });
+        }));
+      }
+      if (device.status === "active" && device.notify) {
+        actions.appendChild(button(I.f("shareTestPush"), "btn", function () {
+          request({ op: "share_device_test_push", device_id: device.id }).then(function () {
+            showStatusNote(I.f("shareTestSent"));
+          }).catch(showShareError);
+        }));
+      }
+      if (device.status === "active") {
         actions.appendChild(button(I.f("shareRename"), "btn", function () { editDevice(card, device, "name"); }));
         actions.appendChild(button(I.f("sharePermissions"), "btn", function () { editDevice(card, device, "scope"); }));
         actions.appendChild(button(I.f("shareDisable"), "btn", function () {
@@ -2264,7 +2429,7 @@
             if (yes) shareCall({ op: "share_device_disable", device_id: device.id }).catch(function () {});
           });
         }));
-      } else {
+      } else if (device.status !== "pending") {
         actions.appendChild(button(I.f("shareRemove"), "btn", function () {
           shareCall({ op: "share_device_remove", device_id: device.id }).catch(function () {});
         }));
@@ -2288,20 +2453,27 @@
     var form = el("div", { class: "share-edit" });
     var draft = {
       name: device.name, persons: device.persons.slice(), categories: device.categories.slice(),
-      permission: device.permission, approval: device.approval, notify: device.notify
+      permission: device.permission, approval: device.approval, notify: device.notify,
+      own: device.reminder_offsets ? device.reminder_offsets.join(", ") : "",
+      ownOn: !!device.reminder_offsets,
+      quiet_start: device.quiet_start || "", quiet_end: device.quiet_end || ""
     };
     if (what === "name") {
       form.appendChild(fieldRow(I.f("shareName"), textInput(draft.name, function (v) { draft.name = v; },
         { maxlength: "40", "data-field": "rename" })));
     } else {
       form.appendChild(scopeFields(draft));
+      form.appendChild(ownNotifyFields(draft));
     }
     var actions = el("div", { class: "actions" });
     actions.appendChild(button(I.f("save"), "btn btn-primary", function () {
       var changes = what === "name" ? { name: draft.name.trim() } : {
         persons: draft.persons, categories: draft.categories, permission: draft.permission,
-        approval: draft.approval, notify: draft.notify
+        approval: draft.approval, notify: draft.notify,
+        reminder_offsets: draft.ownOn ? minutesFrom(draft.own) : null,
+        quiet_start: draft.quiet_start, quiet_end: draft.quiet_end
       };
+      if (draft.ownOn && !changes.reminder_offsets) { showShareError({ code: "invalid_offsets" }); return; }
       shareCall({ op: "share_device_update", device_id: device.id, changes: changes }).catch(function () {});
     }));
     actions.appendChild(button(t("cancel"), "btn", renderShare));
@@ -2309,6 +2481,47 @@
     card.appendChild(form);
     var first = form.querySelector("input, select");
     if (first) first.focus();
+  }
+
+  var PUSH_STATUS_KEYS = { active: "sharePush_active", off: "sharePush_off", blocked: "sharePush_blocked" };
+
+  function minutesFrom(text) {
+    var list = String(text || "").split(/[^0-9]+/).filter(Boolean).map(Number);
+    return list.length ? list : null;
+  }
+
+  function ownNotifyText(device) {
+    var minutes = device.reminder_offsets
+      ? I.f("shareOwnMinutes").replace("{m}", device.reminder_offsets.join(", "))
+      : I.f("shareAsFamily");
+    var quiet = device.quiet_start && device.quiet_end
+      ? " · " + I.f("shareQuiet") + " " + device.quiet_start + "–" + device.quiet_end : "";
+    return minutes + quiet;
+  }
+
+  // The phone's own reminders (minutes before) and quiet hours; empty = as the family.
+  function ownNotifyFields(draft) {
+    var box = el("div", { class: "share-scope share-own" });
+    box.appendChild(el("p", { class: "share-label" }, I.f("shareOwnTitle")));
+    box.appendChild(fieldRow(I.f("shareOwnReminders"), selectInput([
+      ["family", I.f("shareAsFamily")], ["own", I.f("shareOwnChoose")]
+    ], draft.ownOn ? "own" : "family", function (v) {
+      draft.ownOn = v === "own";
+      minutes.hidden = !draft.ownOn;
+    }, { "data-field": "own-mode" })));
+    var minutes = fieldRow(I.f("shareOwnMinutesLabel"), textInput(draft.own, function (v) { draft.own = v; },
+      { placeholder: "60, 15", "data-field": "own-minutes", inputmode: "numeric" }));
+    minutes.hidden = !draft.ownOn;
+    box.appendChild(minutes);
+    ["quiet_start", "quiet_end"].forEach(function (key) {
+      var input = el("input", { type: "time", "data-field": key });
+      input.value = draft[key];
+      input.addEventListener("input", function () { draft[key] = input.value; });
+      var label = key === "quiet_start" ? I.f("shareQuietFrom") : I.f("shareQuietTo");
+      box.appendChild(fieldRow(label, input));
+    });
+    box.appendChild(el("p", { class: "hint" }, I.f("shareQuietHint")));
+    return box;
   }
 
   // ---- appointments waiting for approval ----
@@ -2331,6 +2544,7 @@
     if (!items.length) body.appendChild(el("p", { class: "hint" }, I.f("shareNothingToApprove")));
     items.forEach(function (item) {
       var card = el("div", { class: "share-card share-pending", "data-pending": item.id });
+      if (state.highlight === item.id) card.classList.add("share-highlight");
       card.appendChild(el("strong", {}, item.title));
       card.appendChild(el("p", {}, approvalWhen(item)));
       card.appendChild(el("p", { class: "hint" }, item.persons.map(personName).join(", ") + " · " + categoryName(item.category)));

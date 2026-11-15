@@ -332,6 +332,10 @@ class GuestPushView(_GuestView):
         try:
             manager, device = self._device(hub, request, write=True)
             body = await _body(request)
+            if isinstance(body, dict) and isinstance(body.get("blocked"), bool):
+                # The phone's settings block notifications (or no longer do): the adults see it.
+                await manager.async_set_blocked(device, body["blocked"])
+                return _json({"push": False, "blocked": body["blocked"]})
             subscription = body.get("subscription") if isinstance(body, dict) else None
             if subscription is None:
                 raise GuestError("invalid", 422)

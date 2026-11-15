@@ -90,6 +90,7 @@
       pushOff: "Disattiva le notifiche",
       pushActive: "Le notifiche sono attive.",
       pushDenied: "Le notifiche sono bloccate nelle impostazioni del telefono.",
+      pushBanner: "🔔 Attiva le notifiche per ricevere i promemoria",
       pushIos: "Su iPhone le notifiche funzionano solo con iOS 16.4 o più recente e aprendo Family Hub dall'icona sulla schermata Home (aggiunta da Safari o da Chrome).",
       pushNone: "Questo browser non può ricevere notifiche.",
       pushError: "Non è stato possibile attivare le notifiche.",
@@ -170,6 +171,7 @@
       pushOff: "Turn off notifications",
       pushActive: "Notifications are on.",
       pushDenied: "Notifications are blocked in the phone's settings.",
+      pushBanner: "🔔 Turn on notifications to get the reminders",
       pushIos: "On iPhone, notifications work only with iOS 16.4 or later and when Family Hub is opened from its icon on the Home Screen (added from Safari or Chrome).",
       pushNone: "This browser cannot receive notifications.",
       pushError: "Notifications could not be turned on.",
@@ -250,6 +252,7 @@
       pushOff: "Mitteilungen ausschalten",
       pushActive: "Mitteilungen sind eingeschaltet.",
       pushDenied: "Mitteilungen sind in den Einstellungen des Telefons gesperrt.",
+      pushBanner: "🔔 Mitteilungen einschalten, um die Erinnerungen zu bekommen",
       pushIos: "Auf dem iPhone gehen Mitteilungen nur ab iOS 16.4 und wenn Family Hub über sein Symbol auf dem Home-Bildschirm geöffnet wird (hinzugefügt aus Safari oder Chrome).",
       pushNone: "Dieser Browser kann keine Mitteilungen empfangen.",
       pushError: "Mitteilungen konnten nicht eingeschaltet werden.",
@@ -504,6 +507,7 @@
     stopTimers();
     $("paste-box").hidden = true;
     $("message-cancel").hidden = true;
+    $("push-banner").hidden = true;
     $("message-icon").textContent = icon;
     $("message-title").textContent = title;
     $("message-text").textContent = text;
@@ -1093,18 +1097,39 @@
     return bytes;
   }
 
+  // A strip at the top, well in sight, until notifications are on.
+  function pushBanner(text, onTap) {
+    var banner = $("push-banner");
+    banner.hidden = !text;
+    banner.textContent = text || "";
+    banner.disabled = !onTap;
+    banner.onclick = onTap || null;
+  }
+
+  // Blocked in the phone's settings: Family Hub is told, so the adults see "Bloccate".
+  function reportBlocked(blocked) {
+    if (!state.me || state.me.blockedReported === blocked) return;
+    state.me.blockedReported = blocked;
+    api("POST", "push", { blocked: blocked }).catch(function () { state.me.blockedReported = null; });
+  }
+
   function renderPush() {
     var box = $("push-box");
     box.textContent = "";
+    pushBanner("");
     if (!state.me || !state.me.notify || !state.me.vapid) return;
     if (!pushSupported()) {
       box.appendChild(el("p", { class: "note-box", text: isIOS() ? t("pushIos") : t("pushNone") }));
+      pushBanner(isIOS() ? t("pushIos") : "");
       return;
     }
     if (window.Notification.permission === "denied") {
       box.appendChild(el("p", { class: "note-box", text: t("pushDenied") }));
+      pushBanner(t("pushDenied"));
+      reportBlocked(true);
       return;
     }
+    if (!state.me.push) pushBanner(t("pushBanner"), pushOn);
     if (state.me.push) {
       box.appendChild(el("p", { class: "note-box", text: t("pushActive") }));
       box.appendChild(el("button", { type: "button", class: "btn", id: "push-off", text: t("pushOff"), onclick: pushOff }));

@@ -188,7 +188,7 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.9.0b5"
+    integration_version = "0.9.0b6"
     ha_language = "it"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
@@ -245,6 +245,7 @@ class FakeHA:
             "log": [],
             "external_url": True,
             "has_url": True,
+            "recipients": {"mode": "adults", "persons": []},
         }
         self.guest_calls: list[dict[str, Any]] = []
         self.app = web.Application()
@@ -333,7 +334,49 @@ class FakeHA:
                 if device["id"] == msg["device_id"]:
                     device["status"] = "disabled"
         elif command == "device_remove":
+            gone = next((d for d in guest["devices"] if d["id"] == msg["device_id"]), None)
             guest["devices"] = [d for d in guest["devices"] if d["id"] != msg["device_id"]]
+            if gone is not None:
+                guest["invites"] = [i for i in guest["invites"] if i.get("device_id") != gone["id"]]
+        elif command == "invite_delete":
+            guest["invites"] = [i for i in guest["invites"] if i["id"] != msg["invite_id"]]
+        elif command == "invite_cleanup":
+            guest["invites"] = [i for i in guest["invites"] if i["status"] == "open"]
+        elif command == "device_test_push":
+            pass  # recorded in guest_calls
+        elif command == "recipients_save":
+            guest["recipients"] = dict(msg["recipients"])
+        elif command == "device_replace":
+            old = next(d for d in guest["devices"] if d["id"] == msg["device_id"])
+            old["status"] = "disabled"
+            item = {
+                "id": uuid.uuid4().hex,
+                "status": "open",
+                "device_id": None,
+                "created_at": "2026-11-15T10:00:00+00:00",
+                "expires_at": "2026-11-22T10:00:00+00:00",
+                "name": old["name"],
+                "persons": old["persons"],
+                "categories": old["categories"],
+                "permission": old["permission"],
+                "approval": old["approval"],
+                "notify": old["notify"],
+                "replaces": old["id"],
+            }
+            guest["invites"].insert(0, item)
+            await self._reply(
+                ws,
+                msg["id"],
+                True,
+                {
+                    **self._guest_view(),
+                    "id": item["id"],
+                    "link": "https://casa.example.org/api/family_hub/guest/#i=" + "R" * 43,
+                    "external_url": True,
+                },
+            )
+            await self.guest_changed()
+            return
         elif command == "pending_decide":
             item = next((p for p in guest["pending"] if p["id"] == msg["pending_id"]), None)
             guest["pending"] = [p for p in guest["pending"] if p["id"] != msg["pending_id"]]
@@ -349,9 +392,19 @@ class FakeHA:
         elif command != "list":
             await self._reply(ws, msg["id"], False, None, "unknown command")
             return
-        await self._reply(ws, msg["id"], True, copy.deepcopy(guest))
+        await self._reply(ws, msg["id"], True, self._guest_view())
         if command != "list":
             await self.guest_changed()
+
+    def _guest_view(self) -> dict[str, Any]:
+        view = copy.deepcopy(self.guest)
+        if any(d["status"] == "pending" for d in view["devices"]):
+            view["attention"] = "devices"
+        elif view["pending"]:
+            view["attention"] = "approvals"
+        else:
+            view["attention"] = ""
+        return view
 
     async def drop_connections(self) -> None:
         for ws in list(self._sockets):

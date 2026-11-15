@@ -111,6 +111,9 @@ class ReminderManager:
         # Told after each reminder that goes out (the guest web app sends it on); None without
         # guests.
         self.after_fire: Callable[[dict[str, Any], str], Coroutine[Any, Any, None]] | None = None
+        # Family Hub's page with what to open ("event.<uid>.<day>"), when the add-on said where
+        # it is; None or "" leaves the phone notification as before.
+        self.open_url: Callable[[str], str] | None = None
 
     @property
     def settings(self) -> dict[str, Any]:
@@ -319,6 +322,7 @@ class ReminderManager:
                 language=self._entry.options.get(CONF_LANGUAGE, "en"),
                 actions=reminder_actions(uid, text),
                 uid=uid,
+                url=self._event_url(record),
             ),
         )
         if mark_sent:
@@ -446,16 +450,50 @@ class ReminderManager:
         except (IndexError, ValueError):
             LOGGER.warning("Malformed reminder action")
 
+    def _event_url(self, record: dict[str, Any]) -> str:
+        if self.open_url is None:
+            return ""
+        day = str(record["start"])[:10]
+        if not record["all_day"]:
+            day = dt_util.as_local(datetime.fromisoformat(record["start"])).date().isoformat()
+        return self.open_url(f"event.{record['uid']}.{day}")
+
+    async def _clear_phones(self, uid: str) -> None:
+        """A reminder answered on one phone (Fatto, Ferma, Posticipa) goes from the other phones
+        that got it."""
+        record = self._store.events.get(uid)
+        if record is None:
+            return
+        tag = f"{NOTIFICATION_PREFIX}{uid}"
+        phones = sorted(
+            {
+                t.phone_notify
+                for t in self.targets_for(record.get("persons", []))
+                if t.phone_notify and self._hass.services.has_service("notify", t.phone_notify)
+            }
+        )
+        if len(phones) < 2:
+            return  # one phone: the one that answered; nothing to take away elsewhere
+        for phone in phones:
+            await self._hass.services.async_call(
+                "notify",
+                phone,
+                {"message": "clear_notification", "data": {"tag": tag}},
+                blocking=False,
+            )
+
     async def async_snooze(self, uid: str, minutes: int) -> None:
         """Remind again in ``minutes``. The event must exist."""
         if uid not in self._store.events:
             return
         self._schedule("snooze", uid, dt_util.now() + timedelta(minutes=minutes))
+        await self._clear_phones(uid)
 
     async def async_dismiss(self, uid: str) -> None:
         """Remove this reminder's popup and cancel its snoozes. Later reminders still come."""
         self._cancel(uid, "snooze")
         await async_dismiss(self._hass, f"{NOTIFICATION_PREFIX}{uid}", uid)
+        await self._clear_phones(uid)
 
     async def async_stop_event(self, uid: str) -> None:
         """Stop every reminder of an event ("Fatto" or the stop_reminder action)."""
@@ -466,6 +504,7 @@ class ReminderManager:
         self._cancel(uid)
         await self._store.async_save()
         await async_dismiss(self._hass, f"{NOTIFICATION_PREFIX}{uid}", uid)
+        await self._clear_phones(uid)
 
     def _cancel(self, uid: str, kind: str | None = None) -> None:
         for key in [key for key in self._timers if key[1] == uid and kind in (None, key[0])]:

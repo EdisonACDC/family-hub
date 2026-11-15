@@ -133,6 +133,8 @@ class Delivery:
     uid: str = ""
     # The family's language: the phone's channel name follows it.
     language: str = "en"
+    # What a tap on the phone notification opens (Family Hub on this event); "" for nothing.
+    url: str = ""
 
 
 async def _call(hass: HomeAssistant, domain: str, service: str, data: dict[str, Any]) -> None:
@@ -296,6 +298,9 @@ async def async_send(hass: HomeAssistant, delivery: Delivery) -> None:
                 data: dict[str, Any] = {"tag": delivery.notification_id}
                 if delivery.actions:
                     data["actions"] = delivery.actions
+                if delivery.url:
+                    data["url"] = delivery.url
+                    data["clickAction"] = delivery.url
                 data.update(
                     sound_data(
                         target.phone_sound,

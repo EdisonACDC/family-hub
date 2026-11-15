@@ -163,7 +163,67 @@ async def _approve(manager: GuestManager, msg: dict[str, Any]) -> None:
     await manager.async_approve(msg["pending_id"], msg["accept"], msg.get("changes"))
 
 
+async def _delete_invite(manager: GuestManager, msg: dict[str, Any]) -> None:
+    await manager.async_delete_invite(msg["invite_id"])
+
+
+async def _cleanup(manager: GuestManager, msg: dict[str, Any]) -> None:
+    await manager.async_delete_inactive_invites()
+
+
+async def _recipients(manager: GuestManager, msg: dict[str, Any]) -> None:
+    await manager.async_set_recipients(msg["recipients"])
+
+
+async def _test_push(manager: GuestManager, msg: dict[str, Any]) -> None:
+    await manager.async_test_push(msg["device_id"])
+
+
+async def _panel(manager: GuestManager, msg: dict[str, Any]) -> None:
+    await manager.async_set_panel(msg["path"])
+
+
+@require_admin
+@websocket_command(
+    {
+        vol.Required("type"): "family_hub/guest/device_replace",
+        vol.Optional("entry_id"): str,
+        vol.Required("device_id"): str,
+    }
+)
+@async_response
+async def ws_device_replace(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """ "Nuovo telefono": the old phone is off at once; the new invite's link is in this
+    answer only."""
+    manager = _manager(hass, msg.get("entry_id"))
+    if manager is None:
+        _not_set_up(connection, msg["id"])
+        return
+    try:
+        invite, token = await manager.async_replace_device(msg["device_id"])
+    except GuestError as err:
+        _error(connection, msg["id"], err)
+        return
+    url, external = base_url(hass)
+    connection.send_result(
+        msg["id"],
+        {
+            **manager.describe(),
+            "id": invite["id"],
+            "link": f"{url.rstrip('/')}{GUEST_PATH}#i={token}",
+            "external_url": external,
+        },
+    )
+
+
 COMMANDS = [
+    _simple("invite_delete", {vol.Required("invite_id"): str}, _delete_invite),
+    _simple("invite_cleanup", {}, _cleanup),
+    _simple("recipients_save", {vol.Required("recipients"): dict}, _recipients),
+    _simple("panel", {vol.Required("path"): str}, _panel),
+    _simple("device_test_push", {vol.Required("device_id"): str}, _test_push),
     _simple("invite_revoke", {vol.Required("invite_id"): str}, _revoke),
     _simple(
         "device_confirm", {vol.Required("device_id"): str, vol.Required("accept"): bool}, _confirm
@@ -189,5 +249,6 @@ COMMANDS = [
 def async_register_guest_commands(hass: HomeAssistant) -> None:
     async_register_command(hass, ws_list)
     async_register_command(hass, ws_invite_create)
+    async_register_command(hass, ws_device_replace)
     for command in COMMANDS:
         async_register_command(hass, command)

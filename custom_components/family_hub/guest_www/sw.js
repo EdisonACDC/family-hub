@@ -3,7 +3,7 @@
  * last copy of the appointments). */
 "use strict";
 
-var CACHE = "family-hub-guest-v1";
+var CACHE = "family-hub-guest-v2";
 var BASE = "/api/family_hub/guest/";
 var SHELL = [
   BASE,
@@ -63,8 +63,13 @@ self.addEventListener("push", function (event) {
     self.registration.showNotification(String(data.title || "Family Hub"), {
       body: String(data.body || ""),
       tag: data.tag ? String(data.tag) : undefined,
+      renotify: !!data.tag,
       icon: BASE + "icon-192.png",
-      badge: BASE + "icon-192.png"
+      badge: BASE + "icon-192.png",
+      // Web notifications cannot ring like an alarm: they vibrate, and stay on screen until
+      // touched where the system allows it.
+      vibrate: [300, 150, 300, 150, 600],
+      requireInteraction: data.tag !== "test"
     })
   );
 });

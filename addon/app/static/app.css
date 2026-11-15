@@ -1717,6 +1717,9 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .share-edit { margin-top: 10px; border-top: 1px dashed var(--line, rgba(127, 127, 127, .35)); padding-top: 10px; }
 .share-pending .actions, .share-device .actions { flex-wrap: wrap; }
 .added-by { font-style: italic; }
+.share-highlight { outline: 3px solid #F59E0B; outline-offset: 2px; }
+.share-push-blocked { color: #B91C1C; font-weight: 700; }
+.share-push-off { font-weight: 700; }
 
 /* "Prossimi 12 mesi" as written: only dates and months take a capital letter (0.9.0b3). */
 .period-title.as-written { text-transform: none; }

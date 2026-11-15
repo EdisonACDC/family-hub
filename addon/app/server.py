@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from aiohttp import WSMsgType, web
+from aiohttp import ClientError, ClientSession, ClientTimeout, WSMsgType, web
 
 from . import importer
 from .access import (
@@ -79,7 +79,13 @@ SHARE_OPS: dict[str, tuple[str, dict[str, type]]] = {
     "share_device_disable": ("device_disable", {"device_id": str}),
     "share_device_remove": ("device_remove", {"device_id": str}),
     "share_pending_decide": ("pending_decide", {"pending_id": str, "accept": bool}),
+    "share_invite_delete": ("invite_delete", {"invite_id": str}),
+    "share_invite_cleanup": ("invite_cleanup", {}),
+    "share_device_replace": ("device_replace", {"device_id": str}),
+    "share_recipients_save": ("recipients_save", {"recipients": dict}),
+    "share_device_test_push": ("device_test_push", {"device_id": str}),
 }
+SUPERVISOR_SELF = "http://supervisor/addons/self/info"
 SYNC_SECONDS = 30
 LOOKUP_YEARS = 3
 
@@ -184,6 +190,12 @@ class Hub:
             self._guest_sub = await self.ha.subscribe(
                 "subscribe_events", self.on_guest_change, event_type=GUEST_EVENT
             )
+            # A tapped notification on an adult's phone opens Family Hub: tell the integration
+            # where this app is in Home Assistant.
+            panel = await own_panel()
+            if panel:
+                with contextlib.suppress(HAError):
+                    await self.ha.call("family_hub/guest/panel", path=panel)
 
     async def share_op(self, identity: Identity, op: str, request: dict[str, Any]) -> Any:
         """Invites for the grandparents. Adults only; the integration checks everything again."""
@@ -1154,6 +1166,25 @@ class Hub:
             if service == "update_event" and identity.role == CHILD and "persons" in data:
                 raise PermissionError("children cannot change the persons of an event")
         await self.ha.call("call_service", domain=DOMAIN, service=service, service_data=data)
+
+
+async def own_panel() -> str | None:
+    """This app's page in Home Assistant (/app/<slug>), from the Supervisor; None outside it."""
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        return None
+    try:
+        async with (
+            ClientSession(timeout=ClientTimeout(total=5)) as session,
+            session.get(SUPERVISOR_SELF, headers={"Authorization": f"Bearer {token}"}) as resp,
+        ):
+            if resp.status != 200:
+                return None
+            data = (await resp.json()).get("data") or {}
+    except (ClientError, TimeoutError, ValueError):
+        return None
+    slug = str(data.get("slug") or "")
+    return f"/app/{slug}" if slug.replace("_", "").isalnum() else None
 
 
 def _shift_fields(shift: dict[str, Any]) -> tuple[Any, Any, Any, Any]:

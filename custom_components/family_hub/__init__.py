@@ -73,6 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: FamilyHubConfigEntry) ->
     entry.async_on_unload(_forget_guests)
     entry.async_on_unload(guests.async_stop)
     reminders.after_fire = guests.async_on_reminder
+    reminders.open_url = guests.open_url
     entry.async_on_unload(store.add_listener(guests.async_store_changed))
     entry.async_on_unload(reminders.async_stop)
     await reminders.async_start()

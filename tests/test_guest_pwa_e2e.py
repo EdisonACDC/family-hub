@@ -10,6 +10,7 @@ the test is skipped, and says so.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from datetime import timedelta
 from typing import Any
@@ -258,10 +259,20 @@ async def test_grandmothers_phone_from_invite_to_approved_appointment(
             # Headless Chromium keeps notifications blocked even when granted; then the app must
             # say so instead of offering the button.
             permission = await page.evaluate("Notification.permission")
+            banner = page.locator("#push-banner")
             if permission == "denied":
                 assert "bloccate" in await page.inner_text("#push-box")
+                # The strip at the top says so too, and the adults see "Bloccate".
+                assert "bloccate" in await banner.inner_text()
+                await page.wait_for_function("1")
+                for _ in range(20):
+                    if (await admin("list"))["devices"][0]["push_status"] == "blocked":
+                        break
+                    await asyncio.sleep(0.1)
+                assert (await admin("list"))["devices"][0]["push_status"] == "blocked"
             else:
                 assert await page.is_visible("#push-on")
+                assert "Attiva le notifiche per ricevere i promemoria" in await banner.inner_text()
 
             # Offline: the last copy, with the notice.
             await context.set_offline(True)

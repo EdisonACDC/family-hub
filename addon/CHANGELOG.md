@@ -1,5 +1,35 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.9.0b6
+
+Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
+
+- Richieste agli adulti (un telefono apre un invito, appuntamenti da approvare): notifica sul
+  telefono con l'app Companion, con Conferma / Rifiuta (o Approva / Rifiuta); senza nessun adulto
+  con telefono collegato vanno agli amministratori di Home Assistant che hanno l'app.
+- Toccando una notifica si apre Family Hub nel punto giusto: Condivisione › Dispositivi con quel
+  telefono evidenziato, «Da approvare» su quell'appuntamento, oppure la scheda dell'evento di un
+  promemoria sul suo giorno. Il link porta `?fh_open=…` sull'indirizzo del pannello (ricavato dal
+  Supervisor, vale anche per l'app «(beta)»); il pannello lo legge una volta e lo toglie. Se il
+  link non arriva, il pannello apre comunque da solo quello che aspetta.
+- Dopo una risposta (Conferma, Approva, Fatto, Rimanda…) la stessa notifica (stesso tag) sparisce
+  dagli altri telefoni che l'avevano ricevuta; risposta dal tablet: anche dall'unico telefono.
+- «Chi riceve le richieste» in Condivisione: gli adulti con un telefono, oppure le persone scelte.
+- Inviti usati, scaduti o annullati: «Elimina» e «Elimina tutti quelli non attivi»; si eliminano
+  da soli dopo 30 giorni. Il registro resta. Eliminando un dispositivo si elimina anche il suo
+  invito usato.
+- «Nuovo telefono» su ogni dispositivo: il telefono vecchio si disattiva subito, si crea un invito
+  con lo stesso nome e gli stessi permessi (link e QR subito); confermato il nuovo, prende il posto
+  del vecchio, gli appuntamenti «aggiunto da» restano collegati, e nel registro «Telefono
+  sostituito».
+- Notifiche di ogni telefono (Modifica permessi): promemoria con i minuti scelti per quel telefono
+  (es. 60, 15) o come la famiglia, orari di silenzio propri; nella scheda lo stato «Attive», «Non
+  attivate dal telefono» o «Bloccate» e «Invia notifica di prova» (una al minuto).
+- Web app: una striscia ben visibile «Attiva le notifiche per ricevere i promemoria» finché non
+  sono attive; se il telefono le blocca lo dice, e gli adulti vedono «Bloccate». Le notifiche web
+  non suonano come una sveglia: vibrano e restano visibili finché non si toccano, dove il sistema
+  lo permette.
+
 ## 0.9.0b5
 
 Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
