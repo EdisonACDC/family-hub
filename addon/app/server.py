@@ -209,6 +209,8 @@ class Hub:
             if not isinstance(value, kind):
                 raise TypeError(name)
             payload[name] = value
+        if op == "share_device_remove" and isinstance(request.get("keep_shifts"), bool):
+            payload["keep_shifts"] = request["keep_shifts"]
         if op == "share_pending_decide" and request.get("changes") is not None:
             if not isinstance(request["changes"], dict):
                 raise TypeError("changes")

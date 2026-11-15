@@ -47,7 +47,9 @@ from .const import (
     OPT_CATEGORIES,
     OPT_PERSONS,
     OPT_REMINDERS,
+    OPT_SHIFTS,
 )
+from .shifts import ShiftError, clean_shifts
 
 if TYPE_CHECKING:
     from .calendar import FamilyHubCalendar
@@ -106,6 +108,11 @@ OWN_REMINDERS_EVERY = timedelta(hours=1)
 MAX_OWN_OFFSETS = 5
 # New appointments for a guest: collected for this long, then one message (or one summary).
 NEW_BATCH = timedelta(minutes=2)
+# A guest's shifts: at most this many days at once, and a rotation of at most this many steps.
+MAX_SHIFT_DAYS = 62
+MAX_ROTATION = 28
+DEFAULT_SHIFT_COLOR = "#8B5CF6"
+_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
 TEST_PUSH_EVERY = 60.0
 # The notification status of a phone, as the adults see it.
 PUSH_ACTIVE = "active"
@@ -148,6 +155,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "and": " e ",
         "at": "ore",
         "days": "lun mar mer gio ven sab dom",
+        "shifts_week": "{name} ha aggiornato i turni della prossima settimana",
+        "shifts_range": "{name} ha aggiornato i turni dal {first} al {last}",
+        "shifts_types": "{name} ha aggiornato i suoi tipi di turno",
         "reminder": "Promemoria",
         "test_push": "Prova: le notifiche di Family Hub arrivano su questo telefono.",
         "all_day": "tutto il giorno",
@@ -193,6 +203,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "and": " und ",
         "at": "um",
         "days": "Mo Di Mi Do Fr Sa So",
+        "shifts_week": "{name} hat die Schichten der nächsten Woche aktualisiert",
+        "shifts_range": "{name} hat die Schichten vom {first} bis {last} aktualisiert",
+        "shifts_types": "{name} hat die eigenen Schichtarten aktualisiert",
         "reminder": "Erinnerung",
         "test_push": "Test: Mitteilungen von Family Hub kommen auf diesem Telefon an.",
         "all_day": "ganztägig",
@@ -237,6 +250,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "and": " and ",
         "at": "at",
         "days": "Mon Tue Wed Thu Fri Sat Sun",
+        "shifts_week": "{name} updated the shifts of the coming week",
+        "shifts_range": "{name} updated the shifts from {first} to {last}",
+        "shifts_types": "{name} updated their shift types",
         "reminder": "Reminder",
         "test_push": "Test: Family Hub notifications reach this phone.",
         "all_day": "all day",
@@ -564,6 +580,9 @@ class GuestManager:
         # New appointments waiting to be told, per device, and the timer that tells them.
         self._new_queue: dict[str, list[str]] = {}
         self._new_timers: dict[str, Callable[[], None]] = {}
+        # The guests' shift changes, told to the adults a little later.
+        self._shift_notices: dict[str, dict[str, Any]] = {}
+        self._shift_timers: dict[str, Callable[[], None]] = {}
         self._tasks: set[asyncio.Task[Any]] = set()
 
     # ----- storage --------------------------------------------------------
@@ -677,6 +696,13 @@ class GuestManager:
             raise GuestError("invalid", 422)
         if not isinstance(notify, bool) or not isinstance(family_events, bool):
             raise GuestError("invalid", 422)
+        has_shifts = raw.get("has_shifts", False)
+        shift_color = raw.get("shift_color") or DEFAULT_SHIFT_COLOR
+        shifts_category = raw.get("shifts_category") or next(iter(known_categories), "")
+        if not isinstance(has_shifts, bool) or not isinstance(shift_color, str):
+            raise GuestError("invalid", 422)
+        if not _COLOR.match(shift_color) or shifts_category not in known_categories:
+            raise GuestError("invalid", 422)
         return {
             "persons": list(dict.fromkeys(persons)),
             "categories": list(dict.fromkeys(categories)),
@@ -685,6 +711,11 @@ class GuestManager:
             "notify": notify,
             # Also the appointments of the whole family (no person) in the chosen calendars.
             "family_events": family_events,
+            # The guest's own work shifts: a guest person of the family, with its colour, and the
+            # calendar its shifts go to.
+            "has_shifts": has_shifts,
+            "shift_color": shift_color,
+            "shifts_category": shifts_category,
         }
 
     async def async_create_invite(self, raw: dict[str, Any]) -> tuple[dict[str, Any], str]:
@@ -826,6 +857,11 @@ class GuestManager:
             "approval": invite["approval"],
             "notify": invite["notify"],
             "family_events": bool(invite.get("family_events", False)),
+            "has_shifts": bool(invite.get("has_shifts", False)),
+            "shift_color": invite.get("shift_color") or DEFAULT_SHIFT_COLOR,
+            "shifts_category": invite.get("shifts_category") or "",
+            # "Nuovo telefono": the guest person (and its shifts) of the old phone.
+            "person_id": invite.get("person_id"),
             "push": None,
             "replaces": invite.get("replaces"),
         }
@@ -916,8 +952,258 @@ class GuestManager:
         if accept and old_id and old_id in self.devices:
             await self._take_place(self.devices[old_id], device)
         await self.async_save()
+        if accept:
+            # Last: a new or changed guest person reloads Family Hub.
+            await self._ensure_person(device)
+            await self._update_person(device)
         self._ensure_snapshot()
         return device
+
+    # ----- the guest's own work shifts ------------------------------------------------
+
+    async def _update_options(self, **changes: Any) -> None:
+        """Change the entry's options. This reloads Family Hub: the guest store is saved first,
+        so the reloaded manager reads everything as it is now."""
+        await self._store.async_save(self._data())
+        self.hass.config_entries.async_update_entry(
+            self.entry, options={**self.entry.options, **changes}
+        )
+
+    async def _ensure_person(self, device: dict[str, Any]) -> None:
+        """A device with its own shifts has a guest person of the family (its name and colour, no
+        Home Assistant account), made once and kept with "Nuovo telefono"."""
+        persons = list(self.entry.options.get(OPT_PERSONS, []))
+        known = {str(p["id"]) for p in persons}
+        if not device.get("has_shifts"):
+            return
+        if device.get("person_id") in known:
+            await self._update_person(device, color=device.get("shift_color"))
+            return
+        person_id = f"guest_{uuid.uuid4().hex[:8]}"
+        device["person_id"] = person_id
+        persons.append(
+            {
+                "id": person_id,
+                "name": device["name"],
+                "color": device.get("shift_color") or DEFAULT_SHIFT_COLOR,
+                "role": "guest",
+                "channels": [],
+                "guest_device": device["id"],
+                # Shown in the person filter of Family Hub (guests otherwise are not).
+                "has_shifts": True,
+            }
+        )
+        await self._update_options(**{OPT_PERSONS: persons})
+
+    async def _update_person(self, device: dict[str, Any], **fields: Any) -> None:
+        person_id = device.get("person_id")
+        if not person_id:
+            return
+        persons = list(self.entry.options.get(OPT_PERSONS, []))
+        changed = False
+        for index, person in enumerate(persons):
+            if person["id"] != person_id:
+                continue
+            updated = {**person, "guest_device": device["id"]}
+            for key, value in fields.items():
+                if value:
+                    updated[key] = value
+            if updated != person:
+                persons[index] = updated
+                changed = True
+        if changed:
+            await self._update_options(**{OPT_PERSONS: persons})
+
+    def _shift_person(self, device: dict[str, Any], raw: Any) -> str:
+        """The device's own guest person. Asking for anyone else's shifts is refused."""
+        self.check_active(device)
+        person_id = device.get("person_id")
+        if not device.get("has_shifts") or not person_id or person_id not in self._persons():
+            raise GuestError("forbidden", 403)
+        if isinstance(raw, dict) and raw.get("person") not in (None, person_id):
+            raise GuestError("forbidden", 403)
+        return str(person_id)
+
+    def shift_types(self, person_id: str) -> list[dict[str, str]]:
+        return [dict(t) for t in self.entry.options.get(OPT_SHIFTS, {}).get(person_id, [])]
+
+    def shift_state(self, device: dict[str, Any], start: date, days: int) -> dict[str, Any]:
+        person_id = self._shift_person(device, None)
+        if not 1 <= days <= MAX_SHIFT_DAYS:
+            raise GuestError("invalid", 422)
+        zone = dt_util.get_default_time_zone()
+        window_start = datetime.combine(start, time(0), tzinfo=zone)
+        window_end = window_start + timedelta(days=days)
+        rows = [
+            {
+                "date": str(record["start"])[:10],
+                "shift_id": record.get("shift_id", ""),
+                "name": record["summary"],
+                "start": record["start"],
+                "end": record["end"],
+            }
+            for record in self.events.events.values()
+            if record.get("shift_id")
+            and person_id in (record.get("persons") or [])
+            and _overlaps(record, window_start, window_end)
+        ]
+        return {
+            "types": [
+                {"id": t["id"], "name": t["name"], "start": t["start"], "end": t["end"]}
+                for t in self.shift_types(person_id)
+            ],
+            "days": sorted(rows, key=lambda r: r["start"]),
+        }
+
+    async def async_save_shift_types(self, device: dict[str, Any], raw: Any) -> None:
+        """The guest's shift types (Mattina, Pomeriggio, Notte...). They go to its calendar."""
+        person_id = self._shift_person(device, raw)
+        items = raw.get("types") if isinstance(raw, dict) else None
+        if not isinstance(items, list) or len(items) > 12:
+            raise GuestError("invalid", 422)
+        category = device.get("shifts_category") or ""
+        try:
+            cleaned = clean_shifts(
+                [{**item, "category": category} for item in items if isinstance(item, dict)],
+                set(self._categories()),
+            )
+        except ShiftError as err:
+            raise GuestError("invalid", 422) from err
+        if len(cleaned) != len(items):
+            raise GuestError("invalid", 422)
+        shifts = dict(self.entry.options.get(OPT_SHIFTS, {}))
+        shifts[person_id] = cleaned
+        # Only the types: nothing changes in the calendar, so the adults are not told.
+        await self._update_options(**{OPT_SHIFTS: shifts})
+
+    async def async_apply_shifts(
+        self, device: dict[str, Any], raw: Any, *, rotation: bool = False
+    ) -> int:
+        """Put a shift (or a free day) on chosen days, or a rotation that repeats from a start
+        day. Only this guest's own shifts are touched."""
+        person_id = self._shift_person(device, raw)
+        if not isinstance(raw, dict):
+            raise GuestError("invalid", 422)
+        types = {t["id"]: t for t in self.shift_types(person_id)}
+        today = self._today()
+        plan: list[tuple[date, str]] = []
+        if rotation:
+            pattern = raw.get("pattern")
+            count = raw.get("days")
+            first = _day(raw.get("start"))
+            if (
+                not isinstance(pattern, list)
+                or not 1 <= len(pattern) <= MAX_ROTATION
+                or isinstance(count, bool)
+                or not isinstance(count, int)
+                or not 1 <= count <= MAX_SHIFT_DAYS
+            ):
+                raise GuestError("invalid", 422)
+            plan = [(first + timedelta(days=i), pattern[i % len(pattern)]) for i in range(count)]
+        else:
+            days = raw.get("days")
+            if not isinstance(days, list) or not 1 <= len(days) <= MAX_SHIFT_DAYS:
+                raise GuestError("invalid", 422)
+            plan = [(_day(day), raw.get("shift_id") or "") for day in days]
+        for day, shift_id in plan:
+            if not isinstance(shift_id, str) or (shift_id and shift_id not in types):
+                raise GuestError("invalid", 422)
+            if not today - timedelta(days=PAST_DAYS) <= day <= today + timedelta(days=FUTURE_DAYS):
+                raise GuestError("invalid", 422)
+        zone = dt_util.get_default_time_zone()
+        written = 0
+        self._changing = device["id"]
+        try:
+            for day, shift_id in plan:
+                for record in list(self.events.events.values()):
+                    if (
+                        record.get("shift_id")
+                        and person_id in (record.get("persons") or [])
+                        and str(record["start"])[:10] == day.isoformat()
+                    ):
+                        await self._calendar(record["category"]).async_delete_event(record["uid"])
+                if not shift_id:
+                    continue  # a free day (riposo)
+                shift = types[shift_id]
+                start = datetime.combine(day, time.fromisoformat(shift["start"]), tzinfo=zone)
+                end_day = day + timedelta(days=1) if shift["end"] < shift["start"] else day
+                end = datetime.combine(end_day, time.fromisoformat(shift["end"]), tzinfo=zone)
+                await self._calendar(shift["category"]).async_add_event(
+                    summary=shift["name"],
+                    start=start,
+                    end=end,
+                    persons=[person_id],
+                    shift_id=shift_id,
+                    added_by={"device": device["id"], "name": device["name"]},
+                )
+                written += 1
+        finally:
+            self._changing = None
+        self._queue_shift_notice(device, [day for day, _ in plan])
+        return written
+
+    def _queue_shift_notice(
+        self, device: dict[str, Any], days: list[date], types: bool = False
+    ) -> None:
+        """The adults hear once, a little later, that the guest changed its shifts."""
+        if not self.recipients.get("shifts", True):
+            return
+        notice = self._shift_notices.setdefault(device["id"], {"days": set(), "types": False})
+        notice["days"].update(days)
+        notice["types"] = notice["types"] or types
+        if device["id"] not in self._shift_timers:
+            self._shift_timers[device["id"]] = async_track_point_in_time(
+                self.hass, self._shift_flush(device["id"]), _now() + NEW_BATCH
+            )
+
+    def _shift_flush(self, device_id: str) -> Callable[[datetime], Any]:
+        async def _flush(_moment: datetime) -> None:
+            self._shift_timers.pop(device_id, None)
+            notice = self._shift_notices.pop(device_id, None)
+            device = self.devices.get(device_id)
+            if notice is None or device is None:
+                return
+            text = texts_for(self.language)
+            days = sorted(notice["days"])
+            today = self._today()
+            if days and all(today <= d <= today + timedelta(days=7) for d in days):
+                message = text["shifts_week"].format(name=device["name"])
+            elif days:
+                message = text["shifts_range"].format(
+                    name=device["name"],
+                    first=days[0].strftime("%d/%m"),
+                    last=days[-1].strftime("%d/%m"),
+                )
+            else:
+                message = text["shifts_types"].format(name=device["name"])
+            await self._notify_adults(f"{DOMAIN}_guest_shifts_{device_id}", message, message, [])
+
+        return _flush
+
+    async def _drop_person(self, device: dict[str, Any], keep_shifts: bool) -> None:
+        """The device goes. Its shifts are the guest's own data: kept (the guest person stays, no
+        longer tied to a phone) or deleted with the person, as the adult chose."""
+        person_id = device.get("person_id")
+        if not person_id or person_id not in self._persons():
+            return
+        persons = list(self.entry.options.get(OPT_PERSONS, []))
+        if keep_shifts:
+            persons = [
+                {k: v for k, v in p.items() if k != "guest_device"} if p["id"] == person_id else p
+                for p in persons
+            ]
+            await self._update_options(**{OPT_PERSONS: persons})
+            return
+        for uid in [
+            uid
+            for uid, record in self.events.events.items()
+            if person_id in (record.get("persons") or []) and record.get("shift_id")
+        ]:
+            self.events.events.pop(uid, None)
+        await self.events.async_save()
+        shifts = {k: v for k, v in self.entry.options.get(OPT_SHIFTS, {}).items() if k != person_id}
+        persons = [p for p in persons if p["id"] != person_id]
+        await self._update_options(**{OPT_PERSONS: persons, OPT_SHIFTS: shifts})
 
     async def _take_place(self, old: dict[str, Any], new: dict[str, Any]) -> None:
         """The new phone replaces the old one: the appointments "aggiunto da" stay linked to it,
@@ -931,6 +1217,8 @@ class GuestManager:
         for item in self.pending.values():
             if item["device_id"] == old["id"]:
                 item["device_id"] = new["id"]
+        if old.get("person_id") and not new.get("person_id"):
+            new["person_id"] = old["person_id"]
         self._forget_device(old["id"])
         self._record("replaced", new["name"], new["label"])
         if changed:
@@ -954,7 +1242,7 @@ class GuestManager:
         if old["status"] == ACTIVE:
             await self.async_disable(device_id)
         scope = {
-            key: old.get(key, False if key == "family_events" else None)
+            key: old.get(key, False if key in ("family_events", "has_shifts") else None)
             for key in (
                 "persons",
                 "categories",
@@ -962,11 +1250,15 @@ class GuestManager:
                 "approval",
                 "notify",
                 "family_events",
+                "has_shifts",
+                "shift_color",
+                "shifts_category",
             )
         }
         invite, token = await self._new_invite(
             old["name"], scope, DEFAULT_EXPIRY_DAYS, replaces=device_id
         )
+        invite["person_id"] = old.get("person_id")
         self._record("invite_created", old["name"])
         await self.async_save()
         guest_hub(self.hass).ensure_views()
@@ -974,6 +1266,8 @@ class GuestManager:
 
     async def async_update_device(self, device_id: str, raw: dict[str, Any]) -> dict[str, Any]:
         device = self._device(device_id)
+        rename: str | None = None
+        needs_person = False
         if device["status"] in (REJECTED, DISABLED):
             raise GuestError("not_active", 409)
         if "name" in raw:
@@ -981,6 +1275,7 @@ class GuestManager:
             if name != device["name"]:
                 self._record("renamed", name, device["name"])
                 device["name"] = name
+                rename = name
         if any(key in raw for key in ("reminder_offsets", "quiet_start", "quiet_end")):
             device.update(self._clean_own_notify(raw, device))
             self._record("permissions", device["name"])
@@ -998,6 +1293,9 @@ class GuestManager:
                 "approval",
                 "notify",
                 "family_events",
+                "has_shifts",
+                "shift_color",
+                "shifts_category",
             )
         ):
             scope = self.clean_scope({**device, **raw})
@@ -1005,8 +1303,14 @@ class GuestManager:
             if not scope["notify"]:
                 device["push"] = None
             self._record("permissions", device["name"])
+            if device["status"] == ACTIVE:
+                needs_person = True
         await self.async_save()
         self._ensure_snapshot()
+        if needs_person:
+            await self._ensure_person(device)
+        if rename:
+            await self._update_person(device, name=rename)
         return device
 
     @staticmethod
@@ -1049,13 +1353,19 @@ class GuestManager:
         persistent_notification.async_dismiss(self.hass, f"{DOMAIN}_guest_{device_id}")
         await self.async_save()
 
-    async def async_remove_device(self, device_id: str) -> None:
-        """Forget a device that is already off (disabled or rejected)."""
+    async def async_remove_device(self, device_id: str, keep_shifts: bool | None = None) -> None:
+        """Forget a device that is already off (disabled or rejected). A device with its own
+        shifts needs the adult's answer: keep them or delete them."""
         device = self._device(device_id)
         if device["status"] not in (DISABLED, REJECTED):
             raise GuestError("still_active", 409)
+        has_person = bool(device.get("person_id")) and device["person_id"] in self._persons()
+        if has_person and keep_shifts is None:
+            raise GuestError("keep_shifts", 409)
         self._forget_device(device_id)
         await self.async_save()
+        if has_person:
+            await self._drop_person(device, bool(keep_shifts))
 
     # ----- what a guest sees ------------------------------------------------
 
@@ -1063,9 +1373,14 @@ class GuestManager:
     def visible(record: dict[str, Any], device: dict[str, Any]) -> bool:
         """An appointment of an allowed calendar with at least one allowed person, or with no
         person at all when the device may see those too. Never a private one."""
-        if record.get("private") or record.get("category") not in device["categories"]:
+        if record.get("private"):
             return False
         persons = record.get("persons") or []
+        own = device.get("person_id")
+        if own and own in persons:
+            return True  # its own shifts and appointments, whatever the calendar
+        if record.get("category") not in device["categories"]:
+            return False
         if not persons:
             return bool(device.get("family_events", False))
         return bool(set(persons) & set(device["persons"]))
@@ -1089,7 +1404,11 @@ class GuestManager:
             "end": record["end"],
             "all_day": bool(record["all_day"]),
             "category": record["category"],
-            "persons": [p for p in record.get("persons") or [] if p in device["persons"]],
+            "persons": [
+                p
+                for p in record.get("persons") or []
+                if p in device["persons"] or p == device.get("person_id")
+            ],
             "location": record.get("location") or "",
             "added_by": str(added.get("name") or "") if isinstance(added, dict) else "",
             "mine": mine,
@@ -1126,9 +1445,11 @@ class GuestManager:
                         "name": str(persons[pid].get("name", "")),
                         "color": str(persons[pid].get("color") or ""),
                     }
-                    for pid in device["persons"]
-                    if pid in persons
+                    for pid in [*device["persons"], device.get("person_id")]
+                    if pid and pid in persons
                 ],
+                "own_person": device.get("person_id") if device.get("person_id") in persons else "",
+                "has_shifts": bool(device.get("has_shifts")) and device.get("person_id") in persons,
                 "categories": [
                     {
                         "id": cid,
@@ -1361,7 +1682,14 @@ class GuestManager:
             raise GuestError("invalid_persons", 422)
         if raw["mode"] == RECIPIENTS_PERSONS and not persons:
             raise GuestError("invalid_persons", 422)
-        self.recipients = {"mode": raw["mode"], "persons": list(dict.fromkeys(persons))}
+        shifts = raw.get("shifts", True)
+        if not isinstance(shifts, bool):
+            raise GuestError("invalid", 422)
+        self.recipients = {
+            "mode": raw["mode"],
+            "persons": list(dict.fromkeys(persons)),
+            "shifts": shifts,
+        }
         await self.async_save()
 
     async def async_set_panel(self, path: Any) -> None:
@@ -1880,7 +2208,12 @@ class GuestManager:
                         "replaces",
                     )
                 }
-                | {"family_events": bool(invite.get("family_events", False))}
+                | {
+                    "family_events": bool(invite.get("family_events", False)),
+                    "has_shifts": bool(invite.get("has_shifts", False)),
+                    "shift_color": invite.get("shift_color") or DEFAULT_SHIFT_COLOR,
+                    "shifts_category": invite.get("shifts_category") or "",
+                }
                 | {"status": status, "in_use": self._in_use(invite)}
             )
         devices = [
@@ -1906,6 +2239,10 @@ class GuestManager:
                 "reminder_offsets": device.get("reminder_offsets"),
                 "family_events": bool(device.get("family_events", False)),
                 "notify_new": device.get("notify_new", True) is not False,
+                "has_shifts": bool(device.get("has_shifts", False)),
+                "shift_color": device.get("shift_color") or DEFAULT_SHIFT_COLOR,
+                "shifts_category": device.get("shifts_category") or "",
+                "person_id": device.get("person_id") or "",
                 "quiet_start": device.get("quiet_start"),
                 "quiet_end": device.get("quiet_end"),
             }
@@ -1971,9 +2308,10 @@ class GuestManager:
         if self._unsub_own is not None:
             self._unsub_own()
             self._unsub_own = None
-        for cancel in list(self._new_timers.values()):
+        for cancel in list(self._new_timers.values()) + list(self._shift_timers.values()):
             cancel()
         self._new_timers.clear()
+        self._shift_timers.clear()
         for cancel in self._own_timers.values():
             cancel()
         self._own_timers.clear()

@@ -356,6 +356,62 @@ class GuestPushView(_GuestView):
         return _json({"push": on})
 
 
+class GuestShiftsView(_GuestView):
+    """GET ?from=YYYY-MM-DD&days=N: the guest's own shift types and shifts."""
+
+    url = f"{BASE}/api/shifts"
+    name = "api:family_hub:guest:shifts"
+
+    async def get(self, request: web.Request) -> web.Response:
+        hub = self._hub(request)
+        if hub is None:
+            return _not_found()
+        try:
+            manager, device = self._device(hub, request)
+            if set(request.query) - {"from", "days"}:
+                raise GuestError("invalid", 422)
+            try:
+                start = date.fromisoformat(request.query.get("from", ""))
+                days = int(request.query.get("days", "28"))
+            except ValueError as err:
+                raise GuestError("invalid", 422) from err
+            result = manager.shift_state(device, start, days)
+        except GuestError as err:
+            return _fail(err)
+        return _json(result)
+
+
+class GuestShiftActionView(_GuestView):
+    """PUT types (the guest's shift types); POST apply (chosen days) or rotation (repeating)."""
+
+    url = BASE + "/api/shifts/{action}"
+    name = "api:family_hub:guest:shifts:action"
+
+    async def put(self, request: web.Request, action: str) -> web.Response:
+        hub = self._hub(request)
+        if hub is None or action != "types":
+            return _not_found()
+        try:
+            manager, device = self._device(hub, request, write=True)
+            await manager.async_save_shift_types(device, await _body(request))
+        except GuestError as err:
+            return _fail(err)
+        return _json({"saved": True})
+
+    async def post(self, request: web.Request, action: str) -> web.Response:
+        hub = self._hub(request)
+        if hub is None or action not in ("apply", "rotation"):
+            return _not_found()
+        try:
+            manager, device = self._device(hub, request, write=True)
+            written = await manager.async_apply_shifts(
+                device, await _body(request), rotation=action == "rotation"
+            )
+        except GuestError as err:
+            return _fail(err)
+        return _json({"written": written})
+
+
 def register_views(hass: HomeAssistant) -> None:
     """Called once, when the first invite or device exists (see GuestHub.ensure_views)."""
     access = logging.getLogger("aiohttp.access")
@@ -368,6 +424,8 @@ def register_views(hass: HomeAssistant) -> None:
         GuestEventsView(),
         GuestEventView(),
         GuestPushView(),
+        GuestShiftsView(),
+        GuestShiftActionView(),
         GuestPageView(),
         GuestFileView(),
     ):

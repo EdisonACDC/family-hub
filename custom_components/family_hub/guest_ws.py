@@ -156,7 +156,7 @@ async def _disable(manager: GuestManager, msg: dict[str, Any]) -> None:
 
 
 async def _remove(manager: GuestManager, msg: dict[str, Any]) -> None:
-    await manager.async_remove_device(msg["device_id"])
+    await manager.async_remove_device(msg["device_id"], msg.get("keep_shifts"))
 
 
 async def _approve(manager: GuestManager, msg: dict[str, Any]) -> None:
@@ -232,7 +232,11 @@ COMMANDS = [
         "device_update", {vol.Required("device_id"): str, vol.Required("changes"): dict}, _update
     ),
     _simple("device_disable", {vol.Required("device_id"): str}, _disable),
-    _simple("device_remove", {vol.Required("device_id"): str}, _remove),
+    _simple(
+        "device_remove",
+        {vol.Required("device_id"): str, vol.Optional("keep_shifts"): bool},
+        _remove,
+    ),
     _simple(
         "pending_decide",
         {

@@ -104,7 +104,11 @@ async def test_requests_go_to_the_chosen_persons(
         "recipients_save",
         recipients={"mode": "persons", "persons": ["mamma"]},
     )
-    assert answer["result"]["recipients"] == {"mode": "persons", "persons": ["mamma"]}
+    assert answer["result"]["recipients"] == {
+        "mode": "persons",
+        "persons": ["mamma"],
+        "shifts": True,
+    }
     _, token = await _device(hass, client, hass_ws_client)
     calls.clear()
     await client.post(f"{API}events", json=_new(), headers=_auth(token))

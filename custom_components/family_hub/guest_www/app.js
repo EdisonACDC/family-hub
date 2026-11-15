@@ -95,6 +95,15 @@
       pushNone: "Questo browser non può ricevere notifiche.",
       pushError: "Non è stato possibile attivare le notifiche.",
       installAgain: "Come installare l'app",
+      myShifts: "🗓️ I miei turni", shiftTypes: "Tipi di turno", shiftName: "Nome",
+      shiftStart: "Inizio", shiftEnd: "Fine", addType: "+ Aggiungi tipo", saveTypes: "Salva i tipi",
+      removeType: "Togli", nextDays: "Prossimi giorni", rest: "Riposo",
+      rotation: "Rotazione che si ripete",
+      rotationHint: "Tocca i turni nell'ordine, per esempio Mattina, Mattina, Notte, Riposo.",
+      rotationStart: "Dal giorno", rotationWeeks: "Per quante settimane", weeksN: "{n} settimane",
+      weekOne: "1 settimana", applyRotation: "Applica la rotazione", clearPattern: "Ricomincia",
+      shiftsSaved: "Turni salvati.", typesSaved: "Tipi salvati.", typesFirst: "Prima scrivi i tipi di turno e salvali.",
+      defaultTypes: "Mattina|06:00|14:00;Pomeriggio|14:00|22:00;Notte|22:00|06:00",
       haTitle: "Questo link è per il telefono dell'invitato",
       haText: "Questo browser è già collegato a Home Assistant. Se apri l'invito qui, lo usi tu e sul telefono dell'invitato non funzionerà più. Manda il link alla persona invitata.",
       haAnyway: "Usalo comunque su questo telefono",
@@ -176,6 +185,15 @@
       pushNone: "This browser cannot receive notifications.",
       pushError: "Notifications could not be turned on.",
       installAgain: "How to install the app",
+      myShifts: "🗓️ My shifts", shiftTypes: "Shift types", shiftName: "Name",
+      shiftStart: "Start", shiftEnd: "End", addType: "+ Add a type", saveTypes: "Save the types",
+      removeType: "Remove", nextDays: "Next days", rest: "Day off",
+      rotation: "Repeating rotation",
+      rotationHint: "Tap the shifts in their order, for example Morning, Morning, Night, Day off.",
+      rotationStart: "From", rotationWeeks: "For how many weeks", weeksN: "{n} weeks",
+      weekOne: "1 week", applyRotation: "Apply the rotation", clearPattern: "Start again",
+      shiftsSaved: "Shifts saved.", typesSaved: "Types saved.", typesFirst: "First write the shift types and save them.",
+      defaultTypes: "Morning|06:00|14:00;Afternoon|14:00|22:00;Night|22:00|06:00",
       haTitle: "This link is for the invited person's phone",
       haText: "This browser is already signed in to Home Assistant. If you open the invite here, you use it up and it will no longer work on the invited person's phone. Send the link to the person invited.",
       haAnyway: "Use it on this phone anyway",
@@ -257,6 +275,15 @@
       pushNone: "Dieser Browser kann keine Mitteilungen empfangen.",
       pushError: "Mitteilungen konnten nicht eingeschaltet werden.",
       installAgain: "So wird die App installiert",
+      myShifts: "🗓️ Meine Schichten", shiftTypes: "Schichtarten", shiftName: "Name",
+      shiftStart: "Beginn", shiftEnd: "Ende", addType: "+ Art hinzufügen", saveTypes: "Arten speichern",
+      removeType: "Entfernen", nextDays: "Nächste Tage", rest: "Frei",
+      rotation: "Sich wiederholender Wechsel",
+      rotationHint: "Die Schichten der Reihe nach antippen, zum Beispiel Früh, Früh, Nacht, Frei.",
+      rotationStart: "Ab", rotationWeeks: "Für wie viele Wochen", weeksN: "{n} Wochen",
+      weekOne: "1 Woche", applyRotation: "Wechsel übernehmen", clearPattern: "Neu beginnen",
+      shiftsSaved: "Schichten gespeichert.", typesSaved: "Arten gespeichert.", typesFirst: "Zuerst die Schichtarten eintragen und speichern.",
+      defaultTypes: "Früh|06:00|14:00;Spät|14:00|22:00;Nacht|22:00|06:00",
       haTitle: "Dieser Link ist für das Telefon der eingeladenen Person",
       haText: "Dieser Browser ist schon bei Home Assistant angemeldet. Wird die Einladung hier geöffnet, ist sie verbraucht und funktioniert auf dem Telefon der eingeladenen Person nicht mehr. Den Link bitte der eingeladenen Person schicken.",
       haAnyway: "Trotzdem auf diesem Telefon verwenden",
@@ -842,6 +869,7 @@
     show("screen-main");
     renderPush();
     $("install-again").hidden = standalone();
+    $("shifts-button").hidden = !state.me.has_shifts;
     loadEvents();
   }
 
@@ -1124,6 +1152,139 @@
     });
   }
 
+
+  // ----- my shifts (a guest who works: its own shift types, days and rotations) -------------
+  // Only its own: Family Hub decides who that is, never this page.
+
+  function openShifts() {
+    api("GET", "shifts?from=" + dayKey(today()) + "&days=28").then(function (data) {
+      state.shifts = data;
+      renderShifts();
+    }).catch(function (err) {
+      if (err.status === 403) { accessOff(); return; }
+      toast(t("errSave"));
+    });
+  }
+
+  function defaultTypes() {
+    return t("defaultTypes").split(";").map(function (row) {
+      var p = row.split("|");
+      return { name: p[0], start: p[1], end: p[2] };
+    });
+  }
+
+  function renderShifts() {
+    var data = state.shifts;
+    var types = data.types.length ? data.types.map(function (x) { return Object.assign({}, x); }) : defaultTypes();
+    var body = el("div", { class: "shifts" });
+
+    // Types.
+    body.appendChild(el("h3", { text: t("shiftTypes") }));
+    var list = el("div", { class: "shift-types" });
+    function drawTypes() {
+      list.textContent = "";
+      types.forEach(function (type, index) {
+        var name = el("input", { type: "text", maxlength: "60", value: type.name, "aria-label": t("shiftName") });
+        name.addEventListener("input", function () { type.name = name.value; });
+        var start = el("input", { type: "time", value: type.start, "aria-label": t("shiftStart") });
+        start.addEventListener("input", function () { type.start = start.value; });
+        var end = el("input", { type: "time", value: type.end, "aria-label": t("shiftEnd") });
+        end.addEventListener("input", function () { type.end = end.value; });
+        list.appendChild(el("div", { class: "shift-type", "data-type": index }, [
+          name, el("div", { class: "row" }, [start, end]),
+          el("button", { type: "button", class: "btn", text: t("removeType"), onclick: function () {
+            types.splice(index, 1); drawTypes();
+          } })
+        ]));
+      });
+    }
+    drawTypes();
+    body.appendChild(list);
+    body.appendChild(el("button", { type: "button", class: "btn", text: t("addType"), onclick: function () {
+      types.push({ name: "", start: "08:00", end: "16:00" }); drawTypes();
+    } }));
+    body.appendChild(el("button", { type: "button", class: "btn btn-primary", id: "save-types", text: t("saveTypes"),
+      onclick: function () {
+        var payload = types.filter(function (x) { return x.name.trim(); }).map(function (x) {
+          var item = { name: x.name.trim(), start: x.start, end: x.end };
+          if (x.id) item.id = x.id;
+          return item;
+        });
+        api("PUT", "shifts/types", { types: payload }).then(function () {
+          toast(t("typesSaved"));
+          window.setTimeout(openShifts, 1500);  // Family Hub reloads its shift types
+        }).catch(function () { sheetError(t("errSave")); });
+      } }));
+
+    var saved = data.types;
+    var byDay = {};
+    data.days.forEach(function (d) { byDay[d.date] = d.shift_id; });
+
+    // The next four weeks, one day at a time.
+    body.appendChild(el("h3", { text: t("nextDays") }));
+    if (!saved.length) body.appendChild(el("p", { class: "note-box", text: t("typesFirst") }));
+    var days = el("div", { class: "shift-days" });
+    for (var i = 0; i < 28 && saved.length; i++) {
+      (function (d) {
+        var key = dayKey(d);
+        var select = el("select", { "data-day": key, "aria-label": dayTitle(d) });
+        select.appendChild(el("option", { value: "", text: t("rest") }));
+        saved.forEach(function (x) { select.appendChild(el("option", { value: x.id, text: x.name + " " + x.start + "–" + x.end })); });
+        select.value = byDay[key] || "";
+        select.addEventListener("change", function () {
+          api("POST", "shifts/apply", { days: [key], shift_id: select.value }).then(function () {
+            toast(t("shiftsSaved"));
+          }).catch(function () { sheetError(t("errSave")); });
+        });
+        days.appendChild(el("label", { class: "field shift-day" }, [el("span", { text: dayTitle(d) }), select]));
+      })(addDays(today(), i));
+    }
+    body.appendChild(days);
+
+    // A rotation that repeats.
+    if (saved.length) {
+      body.appendChild(el("h3", { text: t("rotation") }));
+      body.appendChild(el("p", { class: "note-box", text: t("rotationHint") }));
+      var pattern = [];
+      var shown = el("div", { class: "chips", id: "rotation-pattern" });
+      function drawPattern() {
+        shown.textContent = "";
+        pattern.forEach(function (id) {
+          var type = saved.filter(function (x) { return x.id === id; })[0];
+          shown.appendChild(el("span", { class: "chip", text: type ? type.name : t("rest") }));
+        });
+      }
+      var pick = el("div", { class: "chips" });
+      saved.concat([{ id: "", name: t("rest") }]).forEach(function (x) {
+        pick.appendChild(el("button", { type: "button", class: "chip", "data-pattern": x.id, text: "+ " + x.name,
+          onclick: function () { if (pattern.length < 28) { pattern.push(x.id); drawPattern(); } } }));
+      });
+      var from = el("input", { type: "date", id: "rotation-start", value: dayKey(today()) });
+      var weeks = el("select", { id: "rotation-weeks" });
+      for (var w = 1; w <= 8; w++) {
+        weeks.appendChild(el("option", { value: String(w), text: w === 1 ? t("weekOne") : t("weeksN", { n: String(w) }) }));
+      }
+      weeks.value = "4";
+      body.appendChild(pick);
+      body.appendChild(shown);
+      body.appendChild(el("button", { type: "button", class: "btn", text: t("clearPattern"), onclick: function () {
+        pattern = []; drawPattern();
+      } }));
+      body.appendChild(el("label", { class: "field" }, [el("span", { text: t("rotationStart") }), from]));
+      body.appendChild(el("label", { class: "field" }, [el("span", { text: t("rotationWeeks") }), weeks]));
+      body.appendChild(el("button", { type: "button", class: "btn btn-primary", id: "apply-rotation", text: t("applyRotation"),
+        onclick: function () {
+          if (!pattern.length) return;
+          api("POST", "shifts/rotation", { start: from.value, pattern: pattern, days: Number(weeks.value) * 7 })
+            .then(function () { toast(t("shiftsSaved")); openShifts(); })
+            .catch(function () { sheetError(t("errSave")); });
+        } }));
+    }
+    openSheet(t("myShifts").replace(/^\S+\s/, ""), body, [
+      el("button", { type: "button", class: "btn", text: t("close"), onclick: function () { closeSheet(); loadEvents(); } })
+    ]);
+  }
+
   // ----- notifications --------------------------------------------------------
 
   function pushSupported() {
@@ -1253,6 +1414,7 @@
     $("tab-week").textContent = t("week");
     $("add-button").textContent = t("add");
     $("install-again").textContent = t("installAgain");
+    $("shifts-button").textContent = t("myShifts");
   }
 
   $("tab-list").addEventListener("click", function () { state.view = "list"; render(); loadEvents(); });
@@ -1262,6 +1424,7 @@
   $("add-button").addEventListener("click", function () { openForm(null); });
   $("install-button").addEventListener("click", install);
   $("install-again").addEventListener("click", function () { installScreen(openMain); });
+  $("shifts-button").addEventListener("click", openShifts);
   $("sheet").addEventListener("click", function (event) { if (event.target === $("sheet")) closeSheet(); });
   document.addEventListener("keydown", function (event) { if (event.key === "Escape" && !$("sheet").hidden) closeSheet(); });
   document.addEventListener("visibilitychange", function () {

@@ -1,5 +1,23 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.9.0b8
+
+Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
+
+- Turni di lavoro degli ospiti (per esempio una nonna che lavora ancora): nell'invito e in
+  «Modifica permessi» «Ha i suoi turni di lavoro», con colore e calendario. Family Hub crea una
+  persona ospite con quel nome e colore, senza account di Home Assistant, collegata al telefono;
+  con «Nuovo telefono» la persona e i suoi turni restano.
+- Web app: «I miei turni» con i tipi di turno (orari, anche la notte), i prossimi 28 giorni uno
+  per uno (con «Riposo») e la rotazione che si ripete (es. Mattina, Mattina, Notte, Riposo, per
+  1–8 settimane). L'ospite cambia solo i propri turni; tutto il resto risponde 403.
+- In Family Hub i turni dell'ospite stanno nel calendario con il suo colore e nel filtro persone,
+  e contano per il tempo libero. Gli altri ospiti li vedono solo se quella persona è tra le loro
+  «Persone visibili» (non scelta di default). La regola zero non cambia.
+- Gli adulti ricevono una notifica riassuntiva («Nonna ha aggiornato i turni della prossima
+  settimana»), con l'interruttore in «Chi riceve le richieste».
+- Eliminando il telefono di un ospite con turni si sceglie se tenere o cancellare i turni.
+
 ## 0.9.0b7
 
 Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.

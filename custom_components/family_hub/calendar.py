@@ -231,6 +231,8 @@ class FamilyHubCalendar(CalendarEntity):
                     "role": person.get("role", "adult"),
                     "ha_user_id": person.get("ha_user_id"),
                     "color": person.get("color") or "",
+                    # A guest with its own shifts: in the person filter like the family.
+                    **({"has_shifts": True} if person.get("has_shifts") else {}),
                 }
                 for person in self._persons
             ],

@@ -2218,6 +2218,26 @@
       draft.family_events = on;
     }));
     box.appendChild(el("p", { class: "hint share-warning-text" }, I.f("shareFamilyEventsHint")));
+    // A guest who still works: its own shifts, as a guest person with a colour, in a calendar.
+    var shiftsBox = el("div", { class: "share-shifts", "data-field": "shifts-box" });
+    shiftsBox.appendChild(fieldRow(I.f("shareShiftColor"), (function () {
+      var input = el("input", { type: "color", "data-field": "shift_color" });
+      input.value = draft.shift_color || "#8B5CF6";
+      input.addEventListener("input", function () { draft.shift_color = input.value; });
+      return input;
+    })()));
+    var cats = shareCategories();
+    if (!draft.shifts_category && cats.length) draft.shifts_category = cats[0].id;
+    shiftsBox.appendChild(fieldRow(I.f("shareShiftCalendar"), selectInput(cats.map(function (c) {
+      return [c.id, c.name];
+    }), draft.shifts_category || "", function (v) { draft.shifts_category = v; }, { "data-field": "shifts_category" })));
+    shiftsBox.appendChild(el("p", { class: "hint" }, I.f("shareShiftsHint")));
+    shiftsBox.hidden = !draft.has_shifts;
+    box.appendChild(switchRow(I.f("shareHasShifts"), !!draft.has_shifts, function (on) {
+      draft.has_shifts = on;
+      shiftsBox.hidden = !on;
+    }));
+    box.appendChild(shiftsBox);
     box.appendChild(switchRow(I.f("shareNotify"), draft.notify, function (on) { draft.notify = on; }));
     return box;
   }
@@ -2246,7 +2266,7 @@
     if (state.newLink) body.appendChild(linkBox(state.newLink));
     var draft = state.inviteDraft = state.inviteDraft || {
       name: "", persons: [], categories: [], permission: "add", approval: "approve", notify: true,
-      family_events: false,
+      family_events: false, has_shifts: false, shift_color: "#8B5CF6", shifts_category: "",
       expires_days: 7
     };
     var form = el("div", { class: "share-card share-new", id: "share-new" });
@@ -2266,7 +2286,9 @@
       request({ op: "share_invite_create", invite: {
         name: draft.name.trim(), persons: draft.persons, categories: draft.categories,
         permission: draft.permission, approval: draft.approval, notify: draft.notify,
-        family_events: draft.family_events, expires_days: draft.expires_days
+        family_events: draft.family_events, expires_days: draft.expires_days,
+        has_shifts: draft.has_shifts, shift_color: draft.shift_color,
+        shifts_category: draft.shifts_category || undefined
       } }).then(function (answer) {
         state.newLink = answer.link;
         state.inviteDraft = null;
@@ -2314,7 +2336,7 @@
 
   function recipientsCard(data) {
     var chosen = data.recipients || { mode: "adults", persons: [] };
-    var draft = { mode: chosen.mode, persons: (chosen.persons || []).slice() };
+    var draft = { mode: chosen.mode, persons: (chosen.persons || []).slice(), shifts: chosen.shifts !== false };
     var card = el("div", { class: "share-card share-recipients", id: "share-recipients" });
     card.appendChild(el("h3", {}, I.f("shareRecipients")));
     card.appendChild(el("p", { class: "hint" }, I.f("shareRecipientsHint")));
@@ -2338,6 +2360,7 @@
     });
     personsBox.hidden = draft.mode !== "persons";
     card.appendChild(personsBox);
+    card.appendChild(switchRow(I.f("shareShiftsNotice"), draft.shifts, function (on) { draft.shifts = on; }));
     card.appendChild(button(I.f("save"), "btn btn-primary", function () {
       shareCall({ op: "share_recipients_save", recipients: draft }).then(function () {
         showStatusNote(I.f("shareRecipientsSaved"));
@@ -2471,7 +2494,22 @@
         }));
       } else if (device.status !== "pending") {
         actions.appendChild(button(I.f("shareRemove"), "btn", function () {
-          shareCall({ op: "share_device_remove", device_id: device.id }).catch(function () {});
+          if (!device.person_id) {
+            shareCall({ op: "share_device_remove", device_id: device.id }).catch(function () {});
+            return;
+          }
+          var ask = el("div", { class: "share-edit share-keep-shifts" });
+          ask.appendChild(el("p", {}, I.f("shareKeepShiftsAsk").replace("{name}", device.name)));
+          var row = el("div", { class: "actions" });
+          row.appendChild(button(I.f("shareKeepShifts"), "btn btn-primary", function () {
+            shareCall({ op: "share_device_remove", device_id: device.id, keep_shifts: true }).catch(function () {});
+          }));
+          row.appendChild(button(I.f("shareDeleteShifts"), "btn", function () {
+            shareCall({ op: "share_device_remove", device_id: device.id, keep_shifts: false }).catch(function () {});
+          }));
+          row.appendChild(button(t("cancel"), "btn", renderShare));
+          ask.appendChild(row);
+          card.appendChild(ask);
         }));
       }
       card.appendChild(actions);
@@ -2495,6 +2533,8 @@
       name: device.name, persons: device.persons.slice(), categories: device.categories.slice(),
       permission: device.permission, approval: device.approval, notify: device.notify,
       family_events: !!device.family_events, notify_new: device.notify_new !== false,
+      has_shifts: !!device.has_shifts, shift_color: device.shift_color || "#8B5CF6",
+      shifts_category: device.shifts_category || "",
       own: device.reminder_offsets ? device.reminder_offsets.join(", ") : "",
       ownOn: !!device.reminder_offsets,
       quiet_start: device.quiet_start || "", quiet_end: device.quiet_end || ""
@@ -2512,6 +2552,8 @@
         persons: draft.persons, categories: draft.categories, permission: draft.permission,
         approval: draft.approval, notify: draft.notify,
         family_events: draft.family_events, notify_new: draft.notify_new,
+        has_shifts: draft.has_shifts, shift_color: draft.shift_color,
+        shifts_category: draft.shifts_category || undefined,
         reminder_offsets: draft.ownOn ? minutesFrom(draft.own) : null,
         quiet_start: draft.quiet_start, quiet_end: draft.quiet_end
       };
@@ -3891,7 +3933,7 @@
     if (!box) return;
     box.textContent = "";
     box.setAttribute("aria-label", I.f("personFilter"));
-    var people = personList().filter(function (p) { return p.role !== "guest"; });
+    var people = personList().filter(function (p) { return p.role !== "guest" || p.has_shifts; });
     if (state.monthPerson && !people.some(function (p) { return p.id === state.monthPerson; })) state.monthPerson = "";
     [{ id: "", name: I.f("personAll") }].concat(people).forEach(function (p, i) {
       var on = (state.monthPerson || "") === p.id;

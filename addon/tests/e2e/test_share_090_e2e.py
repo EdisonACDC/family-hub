@@ -275,7 +275,7 @@ def test_who_gets_the_requests_is_saved(stack_full: Stack, browser: Browser) -> 
         box.get_by_role("button", name="Salva").click()
         expect(page.locator("#status-note")).to_have_text("Salvato.")
         (call,) = [c for c in stack_full.fake.guest_calls if c["type"].endswith("recipients_save")]
-        assert call["recipients"] == {"mode": "persons", "persons": ["mamma"]}
+        assert call["recipients"] == {"mode": "persons", "persons": ["mamma"], "shifts": True}
 
 
 def test_an_invite_in_use_is_kept_and_one_day_is_singular(

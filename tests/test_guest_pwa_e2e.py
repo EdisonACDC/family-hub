@@ -630,3 +630,117 @@ async def test_iphone_invite_reaches_the_home_screen_app(
             await plain.close()
         finally:
             await browser.close()
+
+
+@pytest.mark.parametrize("expected_lingering_tasks", [True])
+async def test_my_shifts_in_the_web_app(
+    hass: HomeAssistant, hass_client_no_auth: Any, hass_ws_client: Any, socket_enabled: Any
+) -> None:
+    """A grandmother who still works: her shift types, one day, and a rotation, from her phone;
+    Family Hub has them for her guest person."""
+    assert await async_setup_component(hass, "http", {})
+    await hass.config.async_set_time_zone("Europe/Rome")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_FAMILY_NAME: "Esempio", CONF_LANGUAGE: "it", CONF_FIRST_WEEKDAY: "monday"},
+        options={
+            CONF_LANGUAGE: "it",
+            OPT_PERSONS: [{"id": "sofia", "name": "Sofia", "color": "#F97316", "role": "child"}],
+            OPT_CATEGORIES: [{"id": "famiglia", "name": "Famiglia", "color": "#10B981"}],
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    ws = await hass_ws_client()
+
+    async def admin(command: str, **data: Any) -> Any:
+        await ws.send_json_auto_id({"type": f"family_hub/guest/{command}", **data})
+        answer = await ws.receive_json()
+        assert answer["success"], answer
+        return answer["result"]
+
+    created = await admin(
+        "invite_create",
+        invite={
+            "name": "Nonna Ines",
+            "persons": ["sofia"],
+            "categories": ["famiglia"],
+            "has_shifts": True,
+            "shift_color": "#0EA5E9",
+        },
+    )
+    token = created["link"].split("#i=", 1)[1]
+    await admin(
+        "invite_create", invite={"name": "Zia", "persons": ["sofia"], "categories": ["famiglia"]}
+    )
+    client = await hass_client_no_auth()
+    base = str(client.make_url("/")).rstrip("/") + "/api/family_hub/guest/"
+
+    async with playwright_api.async_playwright() as p:
+        try:
+            browser = await p.chromium.launch(headless=True)
+        except Exception as err:  # noqa: BLE001
+            pytest.skip(f"Chromium for Playwright is not installed: {err}")
+        try:
+            context = await browser.new_context(
+                viewport=PHONE,
+                user_agent=ANDROID,
+                is_mobile=True,
+                has_touch=True,
+                locale="it-IT",
+                timezone_id="Europe/Rome",
+            )
+            page = await context.new_page()
+            page.set_default_timeout(TIMEOUT)
+            await page.goto(f"{base}#i={token}")
+            await page.click("#install-continue")
+            await page.wait_for_selector("text=In attesa della conferma della famiglia")
+            device = (await admin("list"))["devices"][0]
+            await admin("device_confirm", device_id=device["id"], accept=True)
+            await hass.async_block_till_done()
+            await page.wait_for_selector("#shifts-button:not([hidden])", timeout=TIMEOUT)
+            await page.click("#shifts-button")
+            # No types yet: the usual three are offered; saved as they are.
+            await page.wait_for_selector("#sheet:not([hidden]) >> text=Tipi di turno")
+            names = await page.eval_on_selector_all(
+                ".shift-type input[type=text]", "els => els.map(e => e.value)"
+            )
+            assert names == ["Mattina", "Pomeriggio", "Notte"]
+            await page.click("#save-types")
+            await page.wait_for_selector(f"select[data-day='{_day(1)}']", timeout=TIMEOUT)
+            # One day.
+            mattina = await page.eval_on_selector(
+                f"select[data-day='{_day(1)}'] option:nth-child(2)", "o => o.value"
+            )
+            await page.select_option(f"select[data-day='{_day(1)}']", mattina)
+            await page.wait_for_selector("text=Turni salvati.")
+            # A rotation: Notte, Riposo, for 1 week from the day after tomorrow.
+            await page.click("[data-pattern]:has-text('Notte')")
+            await page.click("[data-pattern='']")
+            await page.fill("#rotation-start", _day(2))
+            await page.select_option("#rotation-weeks", "1")
+            await page.click("#apply-rotation")
+            await page.wait_for_function(
+                "day => { const s = document.querySelector(`select[data-day='${day}']`);"
+                " return !!s && s.selectedOptions[0].textContent.startsWith('Notte'); }",
+                arg=_day(2),
+            )
+            assert await page.evaluate("document.documentElement.scrollWidth") <= PHONE["width"]
+        finally:
+            await browser.close()
+    person_id = entry.runtime_data.guests.devices[device["id"]]["person_id"]
+    shifts = sorted(
+        (r["start"][:10], r["summary"])
+        for r in entry.runtime_data.store.events.values()
+        if person_id in r["persons"]
+    )
+    assert shifts[0] == (_day(1), "Mattina")
+    assert [s for s in shifts if s[1] == "Notte"] == [
+        (_day(2), "Notte"),
+        (_day(4), "Notte"),
+        (_day(6), "Notte"),
+        (_day(8), "Notte"),
+    ]
+    person = next(p for p in entry.options["persons"] if p["id"] == person_id)
+    assert person["color"] == "#0EA5E9" and person["name"] == "Nonna Ines"
