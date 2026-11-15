@@ -105,7 +105,7 @@
       shiftsSaved: "Turni salvati.", typesSaved: "Tipi salvati.", typesFirst: "Prima scrivi i tipi di turno e salvali.",
       defaultTypes: "Mattina|06:00|14:00;Pomeriggio|14:00|22:00;Notte|22:00|06:00",
       chooseShift: "Scegli il turno", clearShift: "Cancella", saveShifts: "Salva",
-      saveShiftsN: "Salva ({n} giorni)",
+      saveShiftsN: "Salva ({n} giorni)", saveShiftsOne: "Salva (1 giorno)",
       boardHint: "Scegli un turno e tocca i giorni. Un secondo tocco lo toglie. Riposo e Cancella lasciano il giorno libero.",
       haTitle: "Questo link è per il telefono dell'invitato",
       haText: "Questo browser è già collegato a Home Assistant. Se apri l'invito qui, lo usi tu e sul telefono dell'invitato non funzionerà più. Manda il link alla persona invitata.",
@@ -198,7 +198,7 @@
       shiftsSaved: "Shifts saved.", typesSaved: "Types saved.", typesFirst: "First write the shift types and save them.",
       defaultTypes: "Morning|06:00|14:00;Afternoon|14:00|22:00;Night|22:00|06:00",
       chooseShift: "Choose the shift", clearShift: "Clear", saveShifts: "Save",
-      saveShiftsN: "Save ({n} days)",
+      saveShiftsN: "Save ({n} days)", saveShiftsOne: "Save (1 day)",
       boardHint: "Choose a shift and tap the days. A second tap takes it away. Day off and Clear leave the day free.",
       haTitle: "This link is for the invited person's phone",
       haText: "This browser is already signed in to Home Assistant. If you open the invite here, you use it up and it will no longer work on the invited person's phone. Send the link to the person invited.",
@@ -291,7 +291,7 @@
       shiftsSaved: "Schichten gespeichert.", typesSaved: "Arten gespeichert.", typesFirst: "Zuerst die Schichtarten eintragen und speichern.",
       defaultTypes: "Früh|06:00|14:00;Spät|14:00|22:00;Nacht|22:00|06:00",
       chooseShift: "Schicht wählen", clearShift: "Löschen", saveShifts: "Speichern",
-      saveShiftsN: "Speichern ({n} Tage)",
+      saveShiftsN: "Speichern ({n} Tage)", saveShiftsOne: "Speichern (1 Tag)",
       boardHint: "Schicht wählen und die Tage antippen. Ein zweites Antippen nimmt sie weg. Frei und Löschen lassen den Tag frei.",
       haTitle: "Dieser Link ist für das Telefon der eingeladenen Person",
       haText: "Dieser Browser ist schon bei Home Assistant angemeldet. Wird die Einladung hier geöffnet, ist sie verbraucht und funktioniert auf dem Telefon der eingeladenen Person nicht mehr. Den Link bitte der eingeladenen Person schicken.",
@@ -1309,7 +1309,7 @@
     body.appendChild(grid);
     var pending = Object.keys(b.plan).length;
     body.appendChild(el("button", { type: "button", class: "btn btn-primary", id: "board-save",
-      text: pending ? t("saveShiftsN", { n: String(pending) }) : t("saveShifts"), onclick: saveBoard }));
+      text: pending === 1 ? t("saveShiftsOne") : pending ? t("saveShiftsN", { n: String(pending) }) : t("saveShifts"), onclick: saveBoard }));
 
     // A rotation that repeats.
     if (b.types.length) body.appendChild(rotationSection());

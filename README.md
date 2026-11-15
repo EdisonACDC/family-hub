@@ -5,8 +5,10 @@
 <h1 align="center">Family Hub</h1>
 
 <p align="center">
-  <a href="https://github.com/EdisonACDC/family-hub/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/EdisonACDC/family-hub/total?label=Downloads"></a>
-  <a href="https://analytics.home-assistant.io/custom_integrations.json"><img alt="Active installations" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.family_hub.total&label=Active%20installations"></a>
+  <a href="https://github.com/EdisonACDC/family-hub/releases"><img alt="Downloads" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FEdisonACDC%2Ffamily-hub%2Fbadges%2Fdownloads.json&cacheSeconds=3600&label=Downloads"></a>
+  <a href="https://analytics.home-assistant.io/custom_integrations.json"><img alt="Active installations" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FEdisonACDC%2Ffamily-hub%2Fbadges%2Finstalls.json&cacheSeconds=3600&label=Active%20installations"></a>
+  <br>
+  <sub>Downloads also include updates; active installations come from Home Assistant Analytics (only people who turned on analytics).</sub>
 </p>
 
 <p align="center">
@@ -87,13 +89,13 @@ Everything is set from the guide, or later from **Settings → Devices & service
 
 ## Invites for the grandparents
 
-From Family Hub 0.9 (beta), people **without a Home Assistant account** (the grandparents, for example) can have Family Hub on their phone as an app, see only the appointments you choose, add their own and get notifications.
+From Family Hub 0.9, people **without a Home Assistant account** (the grandparents, for example) can have Family Hub on their phone as an app, see only the appointments you choose, add their own and get notifications.
 
 1. As an adult, open **☰ → Sharing → Invites** and create an invite: a name (“Grandma”), the persons and calendars it shows (for example Sofia: School, Nursery, Doctor), permissions (“View only”, “View and add”, “View, add and change their own”), where added appointments go (“Need approval”, the default, or “Straight into the calendar”), notifications on or off, and when an unused invite expires (7 days).
 2. Send the link with **Copy**, **Share** or let them scan the **QR code**. The link is shown only then and is **personal and single-use**: it works for one phone.
 3. The phone opens the link: Android/Chrome offers **Install app**; on iPhone (iOS 16.4+) with **Safari** or **Chrome**: **Share** (in Safari in the bottom bar, in Chrome in the address bar) **→ Add to Home Screen**; the invite is used by opening the icon on the Home Screen (the browser never uses it). If the icon opens on “An invite is needed”, tap **Paste the invite link**.
 4. The phone **waits** until an adult confirms it: Home Assistant and the adults' phones get a notification with **Confirm / Reject**, and the phone appears under **Sharing → Devices**.
-5. Under **Devices** you can rename a phone, change its permissions or **Turn off** its access, at once. A new phone needs a new invite. The **Activity log** keeps the last 200 events.
+5. Under **Devices** you can rename a phone, change its permissions or **Turn off** its access, at once. If they change phone, **New phone** makes an invite that replaces the old one, with the same choices. The **Activity log** keeps the last 200 events.
 
 Appointments that need approval show in Family Hub as **“1 appointment to approve”** (Approve / Change / Reject); approved ones are signed “added by Grandma”.
 
@@ -102,6 +104,12 @@ Appointments that need approval show in Family Hub as **“1 appointment to appr
 **Security.** Invite and phone tokens are random (256 bits), kept only as a hash (SHA-256) and never logged; the invite token sits after the `#` of the link, so it never reaches the server's logs. The filter on persons and calendars always runs in Home Assistant: a guest never receives other appointments, other persons, entities or configuration. Requests are limited per phone and per address, an address is blocked after 10 wrong activations, and the phone token is renewed every 30 days. A family that makes no invite has no new reachable address.
 
 **Notifications on the grandparents' phone.** They are turned on with the **🔔 Turn on notifications** button in the app (never by themselves): reminders of the appointments they see (same minutes before and same quiet hours as the family), changes and cancellations, and the outcome of their requests. iPhone needs **iOS 16.4 or later**, with the app opened from its Home Screen icon (added from Safari or Chrome).
+
+**In the web app.** The week and the next days in the family's colours, **+ Add** (when the permission allows it) and, for each phone, its own reminders and quiet hours (empty: the family's). Appointments stay readable without a network (a copy on the phone, wiped when access ends).
+
+**The grandparents' shifts.** When the invite is for a person with **“Has their own work shifts”**, the web app shows **My shifts**: a month board like Family Hub's (choose the shift, tap the days, **Save**) and a rotation to repeat. In the family calendar the shifts read “Grandma · Morning”.
+
+**Privacy.** A guest sees only the persons chosen in their invite; other people's appointments never reach them, not in the app, not in notifications, not in the copy on the phone. An appointment marked **Private** never goes to guests, even when it involves a person they see.
 
 ## FAQ
 

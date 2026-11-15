@@ -732,10 +732,16 @@ async def test_my_shifts_in_the_web_app(
             for day in days:
                 await page.click(f"[data-day='{day}']")
             assert "has-shift" in await page.get_attribute(f"[data-day='{days[0]}']", "class")
+            assert "(3 giorni)" in await page.inner_text("#board-save")
             # A second tap on the same day takes it away.
             await page.click(f"[data-day='{days[2]}']")
             assert "has-shift" not in await page.get_attribute(f"[data-day='{days[2]}']", "class")
-            assert "2" in await page.inner_text("#board-save")
+            assert "(2 giorni)" in await page.inner_text("#board-save")
+            # One day pending: singular.
+            await page.click(f"[data-day='{days[1]}']")
+            assert "(1 giorno)" in await page.inner_text("#board-save")
+            await page.click(f"[data-day='{days[1]}']")
+            assert "(2 giorni)" in await page.inner_text("#board-save")
             await page.click("#board-save")
             await page.wait_for_selector("text=Turni salvati.")
             # A rotation: Notte, Riposo for one week, from ten days on.

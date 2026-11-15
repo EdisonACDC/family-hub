@@ -5,8 +5,10 @@
 <h1 align="center">Family Hub</h1>
 
 <p align="center">
-  <a href="https://github.com/EdisonACDC/family-hub/releases"><img alt="Download" src="https://img.shields.io/github/downloads/EdisonACDC/family-hub/total?label=Download"></a>
-  <a href="https://analytics.home-assistant.io/custom_integrations.json"><img alt="Installazioni attive" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.family_hub.total&label=Installazioni%20attive"></a>
+  <a href="https://github.com/EdisonACDC/family-hub/releases"><img alt="Download" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FEdisonACDC%2Ffamily-hub%2Fbadges%2Fdownloads.json&cacheSeconds=3600&label=Download"></a>
+  <a href="https://analytics.home-assistant.io/custom_integrations.json"><img alt="Installazioni attive" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FEdisonACDC%2Ffamily-hub%2Fbadges%2Finstalls.json&cacheSeconds=3600&label=Installazioni%20attive"></a>
+  <br>
+  <sub>I download includono anche gli aggiornamenti; le installazioni attive vengono da Home Assistant Analytics (solo chi ha attivato le statistiche).</sub>
 </p>
 
 <p align="center">
@@ -76,13 +78,13 @@ Dalla procedura guidata, o più tardi da **Impostazioni → Dispositivi e serviz
 
 ## Inviti per i nonni
 
-Da Family Hub 0.9 (beta) chi **non ha un account Home Assistant** (per esempio i nonni) può avere Family Hub sul telefono come app, vedere solo gli impegni che scegli tu, aggiungerne e ricevere le notifiche.
+Da Family Hub 0.9 chi **non ha un account Home Assistant** (per esempio i nonni) può avere Family Hub sul telefono come app, vedere solo gli impegni che scegli tu, aggiungerne e ricevere le notifiche.
 
 1. Da adulto apri **☰ → Condivisione → Inviti** e crea un invito: nome («Nonna»), persone e calendari visibili (per esempio Sofia: Scuola, Asilo, Dottore), permessi («Solo vedere», «Vedere e aggiungere», «Vedere, aggiungere e modificare i propri»), dove finiscono gli appuntamenti aggiunti («Da approvare», predefinito, oppure «Subito nel calendario»), notifiche sì o no, scadenza dell'invito non usato (7 giorni).
 2. Manda il link con **Copia**, **Condividi** o fai inquadrare il **codice QR**. Il link si vede solo in quel momento ed è **personale e monouso**: vale per un solo telefono.
 3. Il telefono apre il link: Android/Chrome propone **Installa app**; su iPhone (iOS 16.4+) con **Safari** o **Chrome**: **Condividi** (in Safari nella barra in basso, in Chrome nella barra dell'indirizzo) **→ Aggiungi alla schermata Home**; l'invito si attiva aprendo l'icona sulla schermata Home (nel browser l'invito non viene usato). Se l'icona si apre su «Serve un invito», tocca **Incolla il link dell'invito**.
 4. Il telefono resta **in attesa** finché un adulto non lo conferma: arriva una notifica in Home Assistant e sul telefono degli adulti con **Conferma / Rifiuta**, e il telefono compare in **Condivisione → Dispositivi**.
-5. In **Dispositivi** puoi rinominare, cambiare i permessi o **Disattivare** un telefono: l'accesso finisce subito. Per un telefono nuovo si crea un nuovo invito. Il **Registro attività** mostra gli ultimi 200 eventi.
+5. In **Dispositivi** puoi rinominare, cambiare i permessi o **Disattivare** un telefono: l'accesso finisce subito. Se cambia telefono, **Nuovo telefono** crea un invito che sostituisce il vecchio, con le stesse scelte. Il **Registro attività** mostra gli ultimi 200 eventi.
 
 Gli appuntamenti aggiunti «da approvare» compaiono in Family Hub con l'avviso **«1 appuntamento da approvare»** (Approva / Modifica / Rifiuta); quelli approvati portano la firma «aggiunto da Nonna».
 
@@ -91,6 +93,12 @@ Gli appuntamenti aggiunti «da approvare» compaiono in Family Hub con l'avviso 
 **Sicurezza.** I token degli inviti e dei telefoni sono casuali (256 bit), salvati solo come impronta (SHA-256) e mai scritti nei log; il token dell'invito sta dopo il `#` del link, quindi non arriva nei log del server. Il filtro su persone e calendari è fatto sempre da Home Assistant: un ospite non riceve mai altri appuntamenti, altre persone, entità o configurazione. Limiti di richieste per telefono e per indirizzo, blocco dopo 10 attivazioni sbagliate, token del telefono rinnovato ogni 30 giorni. Chi non crea inviti non ha nessun indirizzo nuovo raggiungibile.
 
 **Notifiche sul telefono dei nonni.** Si attivano con il pulsante **🔔 Attiva le notifiche** nell'app (mai da sole). Arrivano i promemoria degli appuntamenti visibili (stessi minuti prima e stessi orari di silenzio della famiglia), le modifiche e gli annullamenti, e l'esito delle richieste. Su iPhone servono **iOS 16.4 o più recente** e l'app aperta dall'icona sulla schermata Home (aggiunta da Safari o da Chrome).
+
+**Nella web app.** Settimana e prossimi giorni con i colori della famiglia, **+ Aggiungi** (se il permesso lo consente) e, per ogni telefono, i suoi promemoria e i suoi orari di silenzio (vuoti: quelli di famiglia). Gli impegni restano consultabili anche senza rete (copia sul telefono, cancellata quando l'accesso finisce).
+
+**Turni dei nonni.** Se l'invito è per una persona con **«Ha i suoi turni di lavoro»**, nella web app compare **I miei turni**: una plancia del mese come quella di Family Hub (scegli il turno, tocca i giorni, **Salva**) e una rotazione da ripetere. Nel calendario di famiglia i turni si leggono «Nonna · Mattina».
+
+**Privacy.** Un ospite vede solo le persone scelte nel suo invito; gli impegni degli altri non gli arrivano mai, né nell'app né nelle notifiche né nella copia sul telefono. Un appuntamento segnato **Privato** non va mai agli ospiti, anche se riguarda una persona che vedono.
 
 ## Domande frequenti
 

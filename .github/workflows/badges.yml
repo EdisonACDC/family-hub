@@ -1,0 +1,42 @@
+name: Badges
+
+# README badges count stable versions only: downloads of non pre-release releases and active
+# installations of versions without b/rc/dev. The numbers are written once a day to the
+# "badges" branch (one commit, replaced each time) and read by shields.io "endpoint" badges.
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: badges
+  cancel-in-progress: false
+
+jobs:
+  badges:
+    name: Update badge numbers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Compute stable downloads and installations
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python .github/scripts/badge_stats.py "$RUNNER_TEMP/badges"
+      - name: Publish to the badges branch
+        run: |
+          cd "$RUNNER_TEMP/badges"
+          git init -q -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads.json installs.json
+          git commit -q -m "Badge numbers"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" badges

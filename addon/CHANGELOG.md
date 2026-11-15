@@ -1,5 +1,42 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.9.0
+
+Stabile. Raccoglie le beta 0.9.0b1–b9. Nessuna modifica incompatibile: chi non crea inviti ha
+Family Hub come nella 0.8.0 (nessun indirizzo nuovo raggiungibile), dati e impostazioni restano.
+
+- **Inviti per i nonni** (☰ → Condivisione, solo adulti): una web app installabile sul telefono
+  per chi non ha un account Home Assistant. Invito personale e monouso (link, Condividi, QR) con
+  persone e calendari visibili, permessi, appuntamenti «Da approvare» o «Subito nel calendario»,
+  notifiche e scadenza. Su iPhone l'invito si attiva solo dall'icona sulla schermata Home, con il
+  piano B «Incolla il link dell'invito».
+- **Dispositivi**: il telefono resta in attesa finché un adulto non lo conferma; Rinomina, Modifica
+  permessi, Disattiva subito, **Nuovo telefono** che sostituisce il vecchio, registro attività.
+  Inviti usati o scaduti si eliminano a mano o da soli dopo 30 giorni; quelli in uso sono protetti.
+- **Notifiche agli adulti** sul telefono con l'app Companion (Conferma / Rifiuta, Approva / Rifiuta),
+  con «Chi riceve le richieste»; toccandole Family Hub si apre nel punto giusto, e la notifica
+  sparisce dagli altri telefoni dopo la risposta.
+- **Web app**: settimana e prossimi giorni, «+ Aggiungi», IT/EN/DE, tema chiaro/scuro, copia
+  offline in IndexedDB (cancellata quando l'accesso finisce), notifiche Web Push attivate solo dal
+  pulsante, promemoria e orari di silenzio per telefono, avviso dei nuovi impegni (raggruppati e
+  rimandati dopo il silenzio), notifica di prova.
+- **Privacy (regola zero)**: un ospite vede solo le persone scelte nel suo invito, in app,
+  notifiche, promemoria, copia offline e API; appuntamenti **Privato** mai agli ospiti; «anche gli
+  appuntamenti senza persona» solo se acceso nell'invito. Il filtro è sempre lato server.
+- **Turni degli ospiti**: «Ha i suoi turni di lavoro» crea una persona ospite con colore e
+  calendario; nella web app **I miei turni** è una plancia del mese (scegli il turno, tocca i
+  giorni, Salva; «Salva (1 giorno)» / «Salva (n giorni)») con la rotazione; in Family Hub si
+  leggono «<nome> · Mattina» e gli adulti ricevono un riepilogo dei giorni cambiati.
+- **Sicurezza**: token da 256 bit salvati solo come SHA-256, confronto a tempo costante, token del
+  telefono nell'header e rinnovato ogni 30 giorni, limiti di richieste, blocco dopo 10 attivazioni
+  sbagliate, CSP restrittiva, nessun CORS, diagnostica senza segreti.
+- **Integrazione**: `ical>=14.3.0`, manifest in ordine per hassfest, `CONFIG_SCHEMA` solo da
+  interfaccia; validazione HACS e hassfest verde.
+- **Rilasci**: ogni release ha l'asset `family_hub.zip` (`hacs.json` con `zip_release`). Badge
+  del README solo per le versioni stabili (download delle release non pre-release, installazioni
+  attive delle versioni senza b/rc/dev), aggiornati ogni giorno da un workflow, con una nota su
+  cosa contano.
+
 ## 0.9.0b9
 
 Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
