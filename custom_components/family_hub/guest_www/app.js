@@ -572,17 +572,28 @@
     window.clearTimeout(state.refreshTimer);
     var r = range();
     var key = state.view + ":" + dayKey(r.from);
+    // Only the latest request may draw: an older answer (another view or week, still on its
+    // way) must not replace what is on screen now.
+    var seq = state.loadSeq = (state.loadSeq || 0) + 1;
+    function current() { return seq === state.loadSeq; }
+    // Until it answers, the screen shows this view's last copy, never another view's.
+    var saved = (readJSON(KEY_CACHE) || {})[key];
+    state.events = saved ? saved.events : [];
+    render();
     api("GET", "events?from=" + dayKey(r.from) + "&days=" + r.days).then(function (data) {
-      state.events = data.events || [];
-      state.offline = false;
+      var events = data.events || [];
       var cache = readJSON(KEY_CACHE) || {};
-      cache[key] = { at: Date.now(), events: state.events };
+      cache[key] = { at: Date.now(), events: events };
       // Only the last few views are kept.
       Object.keys(cache).sort(function (a, b) { return cache[b].at - cache[a].at; })
         .slice(6).forEach(function (old) { delete cache[old]; });
       write(KEY_CACHE, JSON.stringify(cache));
+      if (!current()) return;
+      state.events = events;
+      state.offline = false;
       render();
     }).catch(function (err) {
+      if (!current()) return;
       if (isNetwork(err)) {
         var cache = readJSON(KEY_CACHE) || {};
         state.events = cache[key] ? cache[key].events : [];
@@ -593,7 +604,9 @@
         return;
       }
     }).then(function () {
-      if (!$("screen-main").hidden) state.refreshTimer = window.setTimeout(loadEvents, REFRESH_MS);
+      if (current() && !$("screen-main").hidden) {
+        state.refreshTimer = window.setTimeout(loadEvents, REFRESH_MS);
+      }
     });
   }
 

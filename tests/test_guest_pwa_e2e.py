@@ -209,6 +209,8 @@ async def test_grandmothers_phone_from_invite_to_approved_appointment(
             await page.click("#tab-week")
             await page.click("#tab-list")
             await page.wait_for_selector("text=Non aggiornato – senza connessione")
+            # The list's own last copy, also right after switching back from the week (which,
+            # on a Sunday, does not have tomorrow's appointment).
             assert "Recita di Sofia" in await page.inner_text("#days")
             await context.set_offline(False)
 
