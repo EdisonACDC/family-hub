@@ -1,5 +1,16 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.9.0b2
+
+Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
+
+- Web app degli ospiti: passando da «Settimana» a «Prossimi giorni» (soprattutto senza
+  connessione) non compare più per un attimo la lista della vista precedente, e una risposta
+  arrivata in ritardo non sostituisce quella giusta.
+- Integrazione: requisito `ical>=14.3.0` invece di `ical==14.3.0`, compatibile con la versione
+  di Home Assistant (14.3.1); chiavi del manifest nell'ordine richiesto da hassfest.
+- Validazione GitHub (hassfest e HACS) di nuovo verde.
+
 ## 0.9.0b1
 
 Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento; chi non crea inviti ha Family
