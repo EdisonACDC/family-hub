@@ -569,11 +569,19 @@
   }
 
   function begin() {
+    if (state.invite && state.token) {
+      // A link with an invite, and a phone that already has a token: the token wins only if
+      // it still works; a token that was turned off or rejected gives way to the new invite.
+      checkOldToken();
+      return;
+    }
     if (state.token) {
       forgetInviteInUrl();
       loadMe();
       return;
     }
+    // From here on a saved reason ("Accesso disattivato", "Invito non valido") counts only
+    // when the app opens without an invite: a link with a new one follows the invite.
     if (!state.invite) {
       if (state.ended === "off") message("🔒", t("offTitle"), t("offText"));
       else if (state.ended === "invalid") message("✉️", t("invalidTitle"), t("invalidText"));
@@ -595,6 +603,35 @@
       return;
     }
     activate();
+  }
+
+  function checkOldToken() {
+    stopTimers();
+    show("screen-loading");
+    api("GET", "me").then(function (me) {
+      if (me.status === "active" || me.status === "pending") {
+        // This phone is already in: the link is not needed (it may be the old one again).
+        state.invite = null;
+        forgetInviteInUrl();
+        loadMe();
+        return;
+      }
+      dropOldToken();
+    }).catch(function (err) {
+      if (isNetwork(err)) {
+        message("📶", t("netTitle"), t("netText"), checkOldToken);
+      } else if (err.status === 429) {
+        message("⏱️", t("netTitle"), t("errSlow"), checkOldToken);
+      } else {
+        dropOldToken();
+      }
+    });
+  }
+
+  // The old token no longer works: everything of it goes, and the new invite is followed.
+  function dropOldToken() {
+    wipe(null);
+    begin();
   }
 
   function activate() {
@@ -1088,6 +1125,17 @@
     if (document.visibilityState === "visible" && state.token && !$("screen-main").hidden) loadMe();
   });
   window.addEventListener("online", function () { if (state.token) loadMe(); });
+  // A new link opened in the tab that is already open changes only the part after #: the page
+  // does not load again, so the new invite is taken from here.
+  window.addEventListener("hashchange", function () {
+    var invite = readInvite();
+    if (!invite || invite === state.invite) return;
+    stopTimers();
+    $("sheet").hidden = true;
+    state.invite = invite;
+    state.forceHere = false;
+    begin();
+  });
 
   start();
 })();

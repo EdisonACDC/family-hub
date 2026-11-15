@@ -1,5 +1,18 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.9.0b4
+
+Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
+
+- Web app: un link con un invito nuovo (#i=…) vale sempre, anche su un telefono che aveva
+  «Accesso disattivato» o «Invito non valido», o un vecchio token ormai spento. Si segue il
+  flusso normale: prima l'avviso se il browser ha il login di Home Assistant, poi l'attivazione,
+  «In attesa» e la conferma. Il motivo salvato vale solo aprendo l'app senza invito, e sparisce
+  quando il nuovo invito è attivato.
+- Web app: un link nuovo aperto nella scheda già aperta (cambia solo la parte dopo #) viene
+  preso subito, senza ricaricare la pagina.
+- Un telefono che funziona e riapre il suo vecchio link resta com'è.
+
 ## 0.9.0b3
 
 Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.

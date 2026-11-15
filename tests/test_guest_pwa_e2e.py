@@ -318,3 +318,132 @@ def test_web_push_keys_are_valid_p256() -> None:
     keys = webpush.generate_keys()
     assert len(keys["public"]) == 87 and len(keys["private"]) == 43
     assert os.environ.get("FH_NO_SUCH_VAR") is None
+
+
+@pytest.mark.parametrize("expected_lingering_tasks", [True])
+@pytest.mark.parametrize("signed_in", [False, True], ids=["phone", "browser_with_ha_login"])
+async def test_a_new_invite_works_on_a_phone_whose_access_ended(
+    hass: HomeAssistant,
+    hass_client_no_auth: Any,
+    hass_ws_client: Any,
+    socket_enabled: Any,
+    signed_in: bool,
+) -> None:
+    """A phone turned off, then a new invite opened in the same browser: the new invite is
+    followed (HA-login warning first when needed), waits, is confirmed, and shows the calendar.
+    The saved "Accesso disattivato" counts only when the app opens without an invite."""
+    assert await async_setup_component(hass, "http", {})
+    await hass.config.async_set_time_zone("Europe/Rome")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_FAMILY_NAME: "Esempio", CONF_LANGUAGE: "it", CONF_FIRST_WEEKDAY: "monday"},
+        options={
+            CONF_LANGUAGE: "it",
+            OPT_PERSONS: [{"id": "sofia", "name": "Sofia", "color": "#F97316", "role": "child"}],
+            OPT_CATEGORIES: [{"id": "scuola", "name": "Scuola", "color": "#10B981"}],
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        DOMAIN,
+        "add_event",
+        {
+            "category": "scuola",
+            "summary": "Recita di Sofia",
+            "persons": ["sofia"],
+            "start": f"{_day(1)} 10:00:00",
+            "end": f"{_day(1)} 11:00:00",
+        },
+        blocking=True,
+    )
+    ws = await hass_ws_client()
+
+    async def admin(command: str, **data: Any) -> Any:
+        await ws.send_json_auto_id({"type": f"family_hub/guest/{command}", **data})
+        answer = await ws.receive_json()
+        assert answer["success"], answer
+        return answer["result"]
+
+    async def invite(name: str) -> str:
+        created = await admin(
+            "invite_create",
+            invite={"name": name, "persons": ["sofia"], "categories": ["scuola"]},
+        )
+        return str(created["link"].split("#i=", 1)[1])
+
+    async def device_named(name: str) -> dict[str, Any]:
+        return next(d for d in (await admin("list"))["devices"] if d["name"] == name)
+
+    await invite("Zia")  # an open invite keeps the web app on throughout
+    client = await hass_client_no_auth()
+    base = str(client.make_url("/")).rstrip("/") + "/api/family_hub/guest/"
+
+    async with playwright_api.async_playwright() as p:
+        try:
+            browser = await p.chromium.launch(headless=True)
+        except Exception as err:  # noqa: BLE001
+            pytest.skip(f"Chromium for Playwright is not installed: {err}")
+        try:
+            context = await browser.new_context(
+                viewport=PHONE,
+                user_agent=ANDROID,
+                is_mobile=True,
+                has_touch=True,
+                locale="it-IT",
+                timezone_id="Europe/Rome",
+            )
+            if signed_in:
+                await context.add_init_script("localStorage.setItem('hassTokens', '{}')")
+            page = await context.new_page()
+            page.set_default_timeout(TIMEOUT)
+            page.on("dialog", lambda dialog: dialog.accept())
+
+            async def follow_invite(token: str, name: str, *, same_tab: bool) -> None:
+                if same_tab:
+                    # Only the part after # changes: the page does not load again.
+                    await page.evaluate(f"location.hash = 'i={token}'")
+                else:
+                    await page.goto(f"{base}#i={token}")
+                if signed_in:
+                    await page.wait_for_selector("text=Questo link è per il telefono dell'invitato")
+                    await page.click("text=Usalo comunque su questo telefono")
+                await page.wait_for_selector("#screen-install:not([hidden])")
+                await page.click("#install-continue")
+                await page.wait_for_selector("text=In attesa della conferma della famiglia")
+                device = await device_named(name)
+                assert device["status"] == "pending"
+                await admin("device_confirm", device_id=device["id"], accept=True)
+                await page.wait_for_selector("#days >> text=Recita di Sofia")
+                assert await page.evaluate(IDB_KEYS) == ["cache", "me", "token"]
+
+            # 1. The first phone, then turned off by an adult while the app is not looking.
+            await follow_invite(await invite("Nonna"), "Nonna", same_tab=False)
+            await admin("device_disable", device_id=(await device_named("Nonna"))["id"])
+
+            # 2. A new invite in the same open tab: the old token is turned off, so it gives way.
+            await follow_invite(await invite("Prova b4 A"), "Prova b4 A", same_tab=True)
+            assert (await device_named("Nonna"))["status"] == "disabled"
+
+            # 3. Turned off again and seen as such: "Accesso disattivato" is saved...
+            await admin("device_disable", device_id=(await device_named("Prova b4 A"))["id"])
+            await page.evaluate("window.dispatchEvent(new Event('online'))")
+            await page.wait_for_selector("text=Accesso disattivato")
+            await page.goto(base)
+            await page.wait_for_selector("text=Accesso disattivato")
+            # ...but a link with a new invite, in a newly loaded page, follows the invite.
+            await follow_invite(await invite("Prova b4 B"), "Prova b4 B", same_tab=False)
+
+            # 4. A phone that works opens its old (used) link again: it stays as it is.
+            used = await invite("Usato")
+            other = await browser.new_context(viewport=PHONE, user_agent=ANDROID)
+            other_page = await other.new_page()
+            await other_page.goto(f"{base}#i={used}")
+            await other_page.wait_for_selector("#screen-install:not([hidden])")
+            await other.close()
+            await page.goto(f"{base}#i={used}")
+            await page.wait_for_selector("#days >> text=Recita di Sofia")
+            assert (await device_named("Prova b4 B"))["status"] == "active"
+        finally:
+            await browser.close()
