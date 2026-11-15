@@ -1,5 +1,21 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.9.0b5
+
+Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.
+
+- iPhone: nel browser (Safari o Chrome) l'invito non viene mai usato; la pagina mostra solo
+  «1. Condividi → Aggiungi alla schermata Home  2. Apri Family Hub dall'icona». L'indirizzo
+  diventa `.../guest/?i=<invito>`, così l'icona apre l'app con l'invito; su iPhone la pagina non
+  usa il manifest (il suo start_url aprirebbe l'icona senza invito). L'attivazione avviene solo
+  nell'app sulla schermata Home, che toglie subito `?i=` dall'indirizzo.
+- Piano B: in «Serve un invito» (e dopo «Accesso disattivato» / «Invito non valido») il pulsante
+  «Incolla il link dell'invito» (legge gli appunti al tocco) e un campo per incollarlo; stesse
+  regole: monouso, avviso login HA, In attesa, conferma.
+- `?i=`: la pagina con l'invito nell'indirizzo non viene mai salvata (Cache-Control: no-store) e
+  il log di accesso di aiohttp (spento di default in Home Assistant) mostra `?i=***`.
+- «Usalo comunque»: la conferma è nella pagina, non più una finestra del browser.
+
 ## 0.9.0b4
 
 Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.

@@ -72,14 +72,19 @@
       retry: "Riprova",
       installTitle: "Benvenuto in Family Hub",
       installIntro: "Metti Family Hub sulla schermata Home: lo apri come un'app, con un tocco.",
-      iosStep1: "Puoi usare Safari oppure Chrome (serve iOS 16.4 o più recente).",
-      iosStep2: "Tocca Condividi (il quadrato con la freccia in su): in Safari è nella barra in basso, in Chrome nella barra dell'indirizzo.",
-      iosStep3: "Scorri e tocca «Aggiungi alla schermata Home», poi «Aggiungi».",
-      iosStep4: "Apri Family Hub dall'icona sulla schermata Home: l'invito si attiva lì, e solo così arrivano le notifiche.",
+      iosStep1: "Condividi → «Aggiungi alla schermata Home». Condividi è il quadrato con la freccia in su: in Safari nella barra in basso, in Chrome nella barra dell'indirizzo.",
+      iosStep2: "Apri Family Hub dall'icona sulla schermata Home: l'invito si attiva lì, e solo così arrivano le notifiche.",
+      iosNote: "Va bene Safari o Chrome, con iOS 16.4 o più recente. Qui nel browser l'invito non viene usato.",
+      pasteButton: "Incolla il link dell'invito",
+      pasteLabel: "Oppure incolla qui il link dell'invito",
+      pasteUse: "Usa questo link",
+      pasteBad: "Questo non è un link di invito di Family Hub.",
+      pasteDenied: "Non riesco a leggere gli appunti: tieni premuto nel campo qui sotto e scegli «Incolla».",
+      haYes: "Sì, usalo su questo telefono",
+      haNo: "No, torna indietro",
       androidStep1: "Tocca il menu ⋮ in alto a destra.",
       androidStep2: "Tocca «Installa app» (oppure «Aggiungi a schermata Home»).",
       installButton: "Installa app",
-      continueBrowser: "Continua nel browser",
       continueApp: "Continua",
       pushOn: "🔔 Attiva le notifiche",
       pushOff: "Disattiva le notifiche",
@@ -147,14 +152,19 @@
       retry: "Try again",
       installTitle: "Welcome to Family Hub",
       installIntro: "Put Family Hub on the Home Screen: it opens like an app, with one tap.",
-      iosStep1: "You can use Safari or Chrome (iOS 16.4 or later is needed).",
-      iosStep2: "Tap Share (the square with the arrow pointing up): in Safari it is in the bottom bar, in Chrome in the address bar.",
-      iosStep3: "Scroll down and tap “Add to Home Screen”, then “Add”.",
-      iosStep4: "Open Family Hub from its icon on the Home Screen: the invite is used there, and only then do notifications arrive.",
+      iosStep1: "Share → “Add to Home Screen”. Share is the square with the arrow pointing up: in Safari in the bottom bar, in Chrome in the address bar.",
+      iosStep2: "Open Family Hub from its icon on the Home Screen: the invite is used there, and only then do notifications arrive.",
+      iosNote: "Safari or Chrome both work, with iOS 16.4 or later. Here in the browser the invite is not used.",
+      pasteButton: "Paste the invite link",
+      pasteLabel: "Or paste the invite link here",
+      pasteUse: "Use this link",
+      pasteBad: "This is not a Family Hub invite link.",
+      pasteDenied: "The clipboard cannot be read: press and hold in the field below and choose “Paste”.",
+      haYes: "Yes, use it on this phone",
+      haNo: "No, go back",
       androidStep1: "Tap the ⋮ menu at the top right.",
       androidStep2: "Tap “Install app” (or “Add to Home screen”).",
       installButton: "Install app",
-      continueBrowser: "Continue in the browser",
       continueApp: "Continue",
       pushOn: "🔔 Turn on notifications",
       pushOff: "Turn off notifications",
@@ -222,14 +232,19 @@
       retry: "Noch einmal",
       installTitle: "Willkommen bei Family Hub",
       installIntro: "Family Hub auf den Home-Bildschirm legen: es öffnet sich wie eine App, mit einem Tipp.",
-      iosStep1: "Safari oder Chrome verwenden (iOS 16.4 oder neuer ist nötig).",
-      iosStep2: "Auf Teilen tippen (das Quadrat mit dem Pfeil nach oben): in Safari unten in der Leiste, in Chrome in der Adressleiste.",
-      iosStep3: "Nach unten scrollen, auf „Zum Home-Bildschirm“ tippen, dann auf „Hinzufügen“.",
-      iosStep4: "Family Hub über das Symbol auf dem Home-Bildschirm öffnen: dort wird die Einladung benutzt, und nur so kommen Mitteilungen an.",
+      iosStep1: "Teilen → „Zum Home-Bildschirm“. Teilen ist das Quadrat mit dem Pfeil nach oben: in Safari unten in der Leiste, in Chrome in der Adressleiste.",
+      iosStep2: "Family Hub über das Symbol auf dem Home-Bildschirm öffnen: dort wird die Einladung benutzt, und nur so kommen Mitteilungen an.",
+      iosNote: "Safari oder Chrome, mit iOS 16.4 oder neuer. Hier im Browser wird die Einladung nicht benutzt.",
+      pasteButton: "Einladungslink einfügen",
+      pasteLabel: "Oder den Einladungslink hier einfügen",
+      pasteUse: "Diesen Link verwenden",
+      pasteBad: "Das ist kein Einladungslink von Family Hub.",
+      pasteDenied: "Die Zwischenablage ist nicht lesbar: im Feld unten lange drücken und „Einsetzen“ wählen.",
+      haYes: "Ja, auf diesem Telefon verwenden",
+      haNo: "Nein, zurück",
       androidStep1: "Oben rechts auf das Menü ⋮ tippen.",
       androidStep2: "Auf „App installieren“ (oder „Zum Startbildschirm hinzufügen“) tippen.",
       installButton: "App installieren",
-      continueBrowser: "Im Browser weiter",
       continueApp: "Weiter",
       pushOn: "🔔 Mitteilungen einschalten",
       pushOff: "Mitteilungen ausschalten",
@@ -487,6 +502,8 @@
 
   function message(icon, title, text, retry) {
     stopTimers();
+    $("paste-box").hidden = true;
+    $("message-cancel").hidden = true;
     $("message-icon").textContent = icon;
     $("message-title").textContent = title;
     $("message-text").textContent = text;
@@ -501,12 +518,12 @@
 
   function accessOff() {
     wipe("off");
-    message("🔒", t("offTitle"), t("offText"));
+    withoutInvite("🔒", t("offTitle"), t("offText"));
   }
 
   function inviteInvalid() {
     wipe("invalid");
-    message("✉️", t("invalidTitle"), t("invalidText"));
+    withoutInvite("✉️", t("invalidTitle"), t("invalidText"));
   }
 
   function homeAssistantWarning() {
@@ -516,10 +533,48 @@
     button.textContent = t("haAnyway");
     button.className = "btn";
     button.onclick = function () {
-      if (!window.confirm(t("haConfirm"))) return;
-      state.forceHere = true;
-      begin();
+      $("message-text").textContent = t("haConfirm");
+      button.textContent = t("haYes");
+      button.className = "btn btn-primary";
+      var cancel = $("message-cancel");
+      cancel.textContent = t("haNo");
+      cancel.hidden = false;
+      cancel.onclick = homeAssistantWarning;
+      button.onclick = function () {
+        state.forceHere = true;
+        begin();
+      };
     };
+  }
+
+  // Without an invite in the address: the invite link can be pasted (the plan B on iPhone, when
+  // the Home Screen icon did not bring it). The same rules follow as for a link that is opened.
+  function withoutInvite(icon, title, text) {
+    message(icon, title, text);
+    $("paste-button").textContent = t("pasteButton");
+    $("paste-label").textContent = t("pasteLabel");
+    $("paste-use").textContent = t("pasteUse");
+    $("paste-error").hidden = true;
+    $("paste-box").hidden = false;
+  }
+
+  function inviteFromText(text) {
+    var value = String(text || "").trim();
+    var inLink = /[#?&]i=([A-Za-z0-9_-]{20,128})(?![A-Za-z0-9_-])/.exec(value);
+    if (inLink) return inLink[1];
+    return /^[A-Za-z0-9_-]{20,128}$/.test(value) ? value : null;
+  }
+
+  function usePasted(text) {
+    var invite = inviteFromText(text);
+    if (!invite) {
+      $("paste-error").textContent = t("pasteBad");
+      $("paste-error").hidden = false;
+      return;
+    }
+    state.invite = invite;
+    state.forceHere = false;
+    begin();
   }
 
   function waiting() {
@@ -535,33 +590,58 @@
   function installScreen(onContinue) {
     $("install-title").textContent = t("installTitle");
     $("install-intro").textContent = t("installIntro");
-    ["iosStep1", "iosStep2", "iosStep3", "iosStep4", "androidStep1", "androidStep2"].forEach(function (key) {
+    ["iosStep1", "iosStep2", "androidStep1", "androidStep2"].forEach(function (key) {
       $(key.replace(/Step/, "-step")).textContent = t(key);
     });
+    $("ios-note").textContent = t("iosNote");
     var ios = isIOS();
     $("install-ios").hidden = !ios;
     $("install-android").hidden = ios;
     $("install-button").textContent = t("installButton");
     $("install-button").hidden = !state.installPrompt;
-    $("install-continue").textContent = ios && !standalone() ? t("continueBrowser") : t("continueApp");
+    // On iPhone in the browser there is nothing to continue: the app on the Home Screen does it.
+    $("install-continue").hidden = !onContinue;
+    $("install-continue").textContent = t("continueApp");
     $("install-continue").onclick = onContinue;
     show("screen-install");
   }
 
   // ----- start --------------------------------------------------------------------
 
+  // The invite comes after # in the link; when the iPhone's Home Screen icon opens the app it
+  // comes as ?i= (the address iOS saved). Either is taken out of the address as soon as it is used.
   function readInvite() {
-    var match = /[#&]i=([A-Za-z0-9_-]{20,128})/.exec(window.location.hash || "");
+    var match = /[#&]i=([A-Za-z0-9_-]{20,128})/.exec(window.location.hash || "") ||
+      /[?&]i=([A-Za-z0-9_-]{20,128})(?:&|$)/.exec(window.location.search || "");
     return match ? match[1] : null;
   }
 
   function forgetInviteInUrl() {
-    if (window.location.hash && window.history && window.history.replaceState) {
+    if ((window.location.hash || window.location.search) && window.history && window.history.replaceState) {
       window.history.replaceState(null, "", BASE);
     }
   }
 
+  // iPhone, in the browser: the address becomes .../guest/?i=<invite>, so the icon that
+  // "Aggiungi alla schermata Home" makes opens the app with the invite (a # can be lost there).
+  function keepInviteForHomeScreen() {
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, "", BASE + "?i=" + encodeURIComponent(state.invite));
+    }
+  }
+
+  // The manifest only off iPhone: on iPhone the icon must open the address above, not the
+  // manifest's start_url (which has no invite).
+  function addManifest() {
+    if (isIOS() || document.querySelector('link[rel="manifest"]')) return;
+    var link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = BASE + "manifest.json";
+    document.head.appendChild(link);
+  }
+
   function start() {
+    addManifest();
     applyStaticTexts();
     registerWorker();
     state.invite = readInvite();
@@ -583,9 +663,9 @@
     // From here on a saved reason ("Accesso disattivato", "Invito non valido") counts only
     // when the app opens without an invite: a link with a new one follows the invite.
     if (!state.invite) {
-      if (state.ended === "off") message("🔒", t("offTitle"), t("offText"));
-      else if (state.ended === "invalid") message("✉️", t("invalidTitle"), t("invalidText"));
-      else message("✉️", t("noInviteTitle"), t("noInviteText"));
+      if (state.ended === "off") withoutInvite("🔒", t("offTitle"), t("offText"));
+      else if (state.ended === "invalid") withoutInvite("✉️", t("invalidTitle"), t("invalidText"));
+      else withoutInvite("✉️", t("noInviteTitle"), t("noInviteText"));
       return;
     }
     if (hasHomeAssistantLogin() && !state.forceHere) {
@@ -594,12 +674,10 @@
       return;
     }
     if (isIOS() && !standalone()) {
-      // On iPhone the app on the Home Screen keeps its own storage: the invite must be used
-      // there, not in Safari. Without the manifest, Safari keeps this whole link (with the
-      // invite) for the Home Screen icon.
-      var link = $("manifest-link");
-      if (link) link.parentNode.removeChild(link);
-      installScreen(activate);
+      // On iPhone the app on the Home Screen keeps its own storage: the invite is never used in
+      // the browser. It goes into the address the icon will open; the app uses it there.
+      keepInviteForHomeScreen();
+      installScreen(null);
       return;
     }
     activate();
@@ -1125,6 +1203,24 @@
     if (document.visibilityState === "visible" && state.token && !$("screen-main").hidden) loadMe();
   });
   window.addEventListener("online", function () { if (state.token) loadMe(); });
+  $("paste-button").addEventListener("click", function () {
+    // Read only now, after the tap (iOS asks before it lets the page read).
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      $("paste-error").textContent = t("pasteDenied");
+      $("paste-error").hidden = false;
+      $("paste-input").focus();
+      return;
+    }
+    navigator.clipboard.readText().then(function (text) {
+      $("paste-input").value = text;
+      usePasted(text);
+    }).catch(function () {
+      $("paste-error").textContent = t("pasteDenied");
+      $("paste-error").hidden = false;
+      $("paste-input").focus();
+    });
+  });
+  $("paste-use").addEventListener("click", function () { usePasted($("paste-input").value); });
   // A new link opened in the tab that is already open changes only the part after #: the page
   // does not load again, so the new invite is taken from here.
   window.addEventListener("hashchange", function () {

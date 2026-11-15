@@ -899,7 +899,14 @@ async def test_the_web_app_is_installable_and_locked_down(
     assert "unsafe-inline" not in csp
     assert "Access-Control-Allow-Origin" not in page.headers
     html = await page.text()
-    assert "<script>" not in html and 'rel="manifest"' in html
+    assert "<script>" not in html and 'rel="apple-touch-icon"' in html
+    # The manifest is added by the page's script, except on iPhone (see app.js).
+    script = await (await client.get("/api/family_hub/guest/app.js")).text()
+    assert 'link.rel = "manifest"' in script
+    # Opened from the iPhone's Home Screen icon: ?i= in the address. Served, never stored.
+    with_invite = await client.get("/api/family_hub/guest/?i=" + "x" * 43)
+    assert with_invite.status == 200
+    assert with_invite.headers["Cache-Control"] == "no-store"
     manifest = await (await client.get("/api/family_hub/guest/manifest.json")).json()
     assert manifest["name"] == "Family Hub" and manifest["display"] == "standalone"
     assert manifest["scope"] == "/api/family_hub/guest/"
@@ -960,6 +967,24 @@ async def test_push_subscriptions_must_be_real_push_services(
     assert await answer.json() == {"push": True}
     assert family.runtime_data.guests.devices[device_id]["push"] == GOOD_SUBSCRIPTION
     assert await (await client.delete(f"{API}push", headers=_auth(token))).json() == {"push": False}
+
+
+async def test_the_access_log_never_shows_an_invite(
+    hass: HomeAssistant,
+    client: TestClient,
+    hass_ws_client: Any,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Home Assistant keeps aiohttp's access log off; if someone turns it on, the invite in a
+    guest address (?i=, from the iPhone icon) is still hidden."""
+    _, token = await _invite(hass, hass_ws_client)
+    access = logging.getLogger("aiohttp.access")
+    caplog.set_level(logging.INFO, logger="aiohttp.access")
+    access.info(f'127.0.0.1 "GET /api/family_hub/guest/?i={token} HTTP/1.1" 200 1234')
+    access.info('127.0.0.1 "GET /api/states?i=keepme HTTP/1.1" 200 12')
+    text = " | ".join(r.getMessage() for r in caplog.records if r.name == "aiohttp.access")
+    assert token not in text and "/api/family_hub/guest/?i=***" in text
+    assert "keepme" in text  # other addresses are left alone
 
 
 def test_subscriptions_of_the_browsers_are_accepted() -> None:

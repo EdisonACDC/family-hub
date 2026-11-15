@@ -86,7 +86,7 @@ From Family Hub 0.9 (beta), people **without a Home Assistant account** (the gra
 
 1. As an adult, open **☰ → Sharing → Invites** and create an invite: a name (“Grandma”), the persons and calendars it shows (for example Sofia: School, Nursery, Doctor), permissions (“View only”, “View and add”, “View, add and change their own”), where added appointments go (“Need approval”, the default, or “Straight into the calendar”), notifications on or off, and when an unused invite expires (7 days).
 2. Send the link with **Copy**, **Share** or let them scan the **QR code**. The link is shown only then and is **personal and single-use**: it works for one phone.
-3. The phone opens the link: Android/Chrome offers **Install app**; on iPhone (iOS 16.4+) with **Safari** or **Chrome**: **Share** (in Safari in the bottom bar, in Chrome in the address bar) **→ Add to Home Screen**; the invite is used by opening the icon on the Home Screen.
+3. The phone opens the link: Android/Chrome offers **Install app**; on iPhone (iOS 16.4+) with **Safari** or **Chrome**: **Share** (in Safari in the bottom bar, in Chrome in the address bar) **→ Add to Home Screen**; the invite is used by opening the icon on the Home Screen (the browser never uses it). If the icon opens on “An invite is needed”, tap **Paste the invite link**.
 4. The phone **waits** until an adult confirms it: Home Assistant and the adults' phones get a notification with **Confirm / Reject**, and the phone appears under **Sharing → Devices**.
 5. Under **Devices** you can rename a phone, change its permissions or **Turn off** its access, at once. A new phone needs a new invite. The **Activity log** keeps the last 200 events.
 

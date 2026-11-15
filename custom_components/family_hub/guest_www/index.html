@@ -11,7 +11,6 @@
   <meta name="apple-mobile-web-app-title" content="Family Hub">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Family Hub</title>
-  <link rel="manifest" id="manifest-link" href="/api/family_hub/guest/manifest.json">
   <link rel="icon" href="/api/family_hub/guest/icon-192.png">
   <link rel="apple-touch-icon" href="/api/family_hub/guest/apple-touch-icon.png">
   <link rel="stylesheet" href="/api/family_hub/guest/app.css">
@@ -39,6 +38,14 @@
       <h2 id="message-title"></h2>
       <p class="big-note" id="message-text"></p>
       <button type="button" class="btn btn-primary" id="message-retry" hidden></button>
+      <button type="button" class="btn" id="message-cancel" hidden></button>
+      <section class="paste-box" id="paste-box" hidden>
+        <button type="button" class="btn btn-primary" id="paste-button"></button>
+        <label class="field" for="paste-input"><span id="paste-label"></span></label>
+        <input type="text" id="paste-input" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button type="button" class="btn" id="paste-use"></button>
+        <p class="error" id="paste-error" role="alert" hidden></p>
+      </section>
     </div>
   </main>
 
@@ -49,18 +56,12 @@
       <ol>
         <li>
           <span id="ios-step1"></span>
-        </li>
-        <li>
-          <span id="ios-step2"></span>
           <svg class="drawing" viewBox="0 0 220 90" role="img" aria-labelledby="ios-share-label">
             <title id="ios-share-label">Share</title>
             <rect x="1" y="1" width="218" height="88" rx="14" class="d-frame"/>
             <rect x="88" y="26" width="44" height="46" rx="6" class="d-line"/>
             <path d="M110 12 L110 52 M96 26 L110 12 L124 26" class="d-line"/>
           </svg>
-        </li>
-        <li>
-          <span id="ios-step3"></span>
           <svg class="drawing" viewBox="0 0 220 90" role="img" aria-labelledby="ios-add-label">
             <title id="ios-add-label">Add to Home Screen</title>
             <rect x="1" y="1" width="218" height="88" rx="14" class="d-frame"/>
@@ -69,8 +70,9 @@
             <rect x="72" y="38" width="130" height="14" rx="7" class="d-fill"/>
           </svg>
         </li>
-        <li><span id="ios-step4"></span></li>
+        <li><span id="ios-step2"></span></li>
       </ol>
+      <p class="note-box" id="ios-note"></p>
     </section>
     <section class="steps" id="install-android" hidden>
       <ol>

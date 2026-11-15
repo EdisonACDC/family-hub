@@ -138,3 +138,6 @@ textarea { min-height: 96px; resize: vertical; }
 .d-fill { fill: var(--line); }
 .d-dot { fill: var(--accent); }
 .detail p { margin: 6px 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+.paste-box { margin-top: 28px; text-align: left; }
+.paste-box .field { margin-top: 18px; }
+#message-cancel { margin-top: 0; }

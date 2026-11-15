@@ -398,7 +398,8 @@ async def test_a_new_invite_works_on_a_phone_whose_access_ended(
                 await context.add_init_script("localStorage.setItem('hassTokens', '{}')")
             page = await context.new_page()
             page.set_default_timeout(TIMEOUT)
-            page.on("dialog", lambda dialog: dialog.accept())
+            # No window of the browser may open: the confirmation is in the page.
+            page.on("dialog", lambda dialog: pytest.fail(f"browser dialog: {dialog.message}"))
 
             async def follow_invite(token: str, name: str, *, same_tab: bool) -> None:
                 if same_tab:
@@ -409,6 +410,9 @@ async def test_a_new_invite_works_on_a_phone_whose_access_ended(
                 if signed_in:
                     await page.wait_for_selector("text=Questo link è per il telefono dell'invitato")
                     await page.click("text=Usalo comunque su questo telefono")
+                    # The question is in the page, not in a window of the browser.
+                    await page.wait_for_selector("text=L'invito vale per un solo telefono")
+                    await page.click("text=Sì, usalo su questo telefono")
                 await page.wait_for_selector("#screen-install:not([hidden])")
                 await page.click("#install-continue")
                 await page.wait_for_selector("text=In attesa della conferma della famiglia")
@@ -445,5 +449,162 @@ async def test_a_new_invite_works_on_a_phone_whose_access_ended(
             await page.goto(f"{base}#i={used}")
             await page.wait_for_selector("#days >> text=Recita di Sofia")
             assert (await device_named("Prova b4 B"))["status"] == "active"
+        finally:
+            await browser.close()
+
+
+IPHONE_CHROME = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) CriOS/131.0.6778.73 Mobile/15E148 Safari/604.1"
+)
+# The app opened from the Home Screen icon on iPhone (navigator.standalone is iOS only).
+STANDALONE = "Object.defineProperty(navigator, 'standalone', { get: () => true });"
+
+
+@pytest.mark.parametrize("expected_lingering_tasks", [True])
+async def test_iphone_invite_reaches_the_home_screen_app(
+    hass: HomeAssistant, hass_client_no_auth: Any, hass_ws_client: Any, socket_enabled: Any
+) -> None:
+    """iPhone: the browser only explains and keeps the invite in the address it will save (?i=);
+    the app opened from the Home Screen (own storage, standalone) uses it, waits, is confirmed
+    and shows the calendar. Plan B: the invite link pasted in the app."""
+    assert await async_setup_component(hass, "http", {})
+    await hass.config.async_set_time_zone("Europe/Rome")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_FAMILY_NAME: "Esempio", CONF_LANGUAGE: "it", CONF_FIRST_WEEKDAY: "monday"},
+        options={
+            CONF_LANGUAGE: "it",
+            OPT_PERSONS: [{"id": "sofia", "name": "Sofia", "color": "#F97316", "role": "child"}],
+            OPT_CATEGORIES: [{"id": "scuola", "name": "Scuola", "color": "#10B981"}],
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        DOMAIN,
+        "add_event",
+        {
+            "category": "scuola",
+            "summary": "Recita di Sofia",
+            "persons": ["sofia"],
+            "start": f"{_day(1)} 10:00:00",
+            "end": f"{_day(1)} 11:00:00",
+        },
+        blocking=True,
+    )
+    ws = await hass_ws_client()
+
+    async def admin(command: str, **data: Any) -> Any:
+        await ws.send_json_auto_id({"type": f"family_hub/guest/{command}", **data})
+        answer = await ws.receive_json()
+        assert answer["success"], answer
+        return answer["result"]
+
+    async def invite(name: str) -> tuple[str, str]:
+        created = await admin(
+            "invite_create",
+            invite={"name": name, "persons": ["sofia"], "categories": ["scuola"]},
+        )
+        link = str(created["link"])
+        return link, link.split("#i=", 1)[1]
+
+    async def confirm(name: str) -> None:
+        device = next(d for d in (await admin("list"))["devices"] if d["name"] == name)
+        assert device["status"] == "pending" and device["label"] == "iPhone · Chrome"
+        await admin("device_confirm", device_id=device["id"], accept=True)
+
+    await invite("Zia")  # keeps the web app on
+    client = await hass_client_no_auth()
+    base = str(client.make_url("/")).rstrip("/") + "/api/family_hub/guest/"
+
+    async with playwright_api.async_playwright() as p:
+        try:
+            browser = await p.chromium.launch(headless=True)
+        except Exception as err:  # noqa: BLE001
+            pytest.skip(f"Chromium for Playwright is not installed: {err}")
+        try:
+            # 1. The link in Chrome on iPhone: instructions only, the invite is not used.
+            _, token = await invite("Nonna iPhone")
+            safari = await browser.new_context(
+                viewport=PHONE,
+                user_agent=IPHONE_CHROME,
+                is_mobile=True,
+                has_touch=True,
+                locale="it-IT",
+                timezone_id="Europe/Rome",
+            )
+            page = await safari.new_page()
+            page.set_default_timeout(TIMEOUT)
+            page.on("dialog", lambda dialog: pytest.fail(f"browser dialog: {dialog.message}"))
+            await page.goto(f"{base}#i={token}")
+            await page.wait_for_selector("#install-ios:not([hidden])")
+            steps = await page.inner_text("#install-ios")
+            assert "Aggiungi alla schermata Home" in steps and "Apri Family Hub dall'icona" in steps
+            assert "Chrome" in steps and "Safari" in steps and "16.4" in steps
+            assert not await page.is_visible("#install-continue")
+            # The address iOS will save for the icon carries the invite as ?i= (no #).
+            assert page.url == f"{base}?i={token}"
+            # No manifest on iPhone: its start_url would open the icon without the invite.
+            assert await page.evaluate("document.querySelector('link[rel=manifest]')") is None
+            assert [
+                d for d in (await admin("list"))["devices"] if d["name"] == "Nonna iPhone"
+            ] == []
+            saved = page.url
+            await safari.close()
+
+            # 2. The icon on the Home Screen: its own storage, standalone, the saved address.
+            home = await browser.new_context(
+                viewport=PHONE,
+                user_agent=IPHONE_CHROME,
+                is_mobile=True,
+                has_touch=True,
+                locale="it-IT",
+                timezone_id="Europe/Rome",
+            )
+            await home.add_init_script(STANDALONE)
+            app = await home.new_page()
+            app.set_default_timeout(TIMEOUT)
+            app.on("dialog", lambda dialog: pytest.fail(f"browser dialog: {dialog.message}"))
+            await app.goto(saved)
+            await app.wait_for_selector("text=In attesa della conferma della famiglia")
+            assert "?i=" not in app.url and "#" not in app.url  # taken out at once
+            await confirm("Nonna iPhone")
+            await app.wait_for_selector("#days >> text=Recita di Sofia")
+            assert "token" in await app.evaluate(IDB_KEYS)
+            # Opened again from the same icon (the saved address still has the used invite):
+            # the phone stays as it is.
+            await app.goto(saved)
+            await app.wait_for_selector("#days >> text=Recita di Sofia")
+            await home.close()
+
+            # 3. Plan B: the icon opened without the invite; the link is pasted.
+            link, _ = await invite("Nonno iPhone")
+            plain = await browser.new_context(
+                viewport=PHONE,
+                user_agent=IPHONE_CHROME,
+                is_mobile=True,
+                has_touch=True,
+                locale="it-IT",
+                timezone_id="Europe/Rome",
+            )
+            await plain.add_init_script(STANDALONE)
+            await plain.grant_permissions(["clipboard-read", "clipboard-write"], origin=base)
+            app = await plain.new_page()
+            app.set_default_timeout(TIMEOUT)
+            await app.goto(base)
+            await app.wait_for_selector("text=Serve un invito")
+            # Something that is not an invite: refused, nothing sent.
+            await app.fill("#paste-input", "https://example.org/nonèuninvito")
+            await app.click("#paste-use")
+            await app.wait_for_selector("text=Questo non è un link di invito di Family Hub.")
+            # The real link, from the clipboard, at a tap.
+            await app.evaluate("link => navigator.clipboard.writeText(link)", link)
+            await app.click("text=Incolla il link dell'invito")
+            await app.wait_for_selector("text=In attesa della conferma della famiglia")
+            await confirm("Nonno iPhone")
+            await app.wait_for_selector("#days >> text=Recita di Sofia")
+            await plain.close()
         finally:
             await browser.close()

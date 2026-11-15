@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import date
 from http import HTTPStatus
 from pathlib import Path
@@ -25,6 +26,24 @@ from homeassistant.helpers.http import HomeAssistantView
 from .guests import GuestError, GuestHub, GuestManager, guest_hub
 
 LOGGER = logging.getLogger(__name__)
+
+# An invite in the address (?i=..., used by the iPhone's Home Screen icon) must never reach a log.
+_INVITE_IN_URL = re.compile(r"([?&#]i=)[A-Za-z0-9_-]+")
+
+
+class _HideInvite(logging.Filter):
+    """For aiohttp's access log (off in Home Assistant unless raised to INFO): the invite code in
+    a guest address is replaced by ***, whatever the log level."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if "family_hub/guest" in message and "i=" in message:
+            record.msg = _INVITE_IN_URL.sub(r"\1***", message)
+            record.args = ()
+        return True
+
+
+HIDE_INVITE = _HideInvite()
 
 WWW = Path(__file__).parent / "guest_www"
 BASE = "/api/family_hub/guest"
@@ -136,7 +155,9 @@ class _GuestView(HomeAssistantView):
 
 
 class GuestPageView(_GuestView):
-    """The web app's page. It reads the invite from the fragment, never sent to the server."""
+    """The web app's page. The invite comes in the fragment (#i=, never sent to the server) or,
+    when the iPhone's Home Screen icon opens the app, in ?i=: the page alone reads it, takes it
+    out of the address at once, and this answer is never stored."""
 
     url = f"{BASE}/"
     name = "api:family_hub:guest"
@@ -147,8 +168,9 @@ class GuestPageView(_GuestView):
         text = await request.app["hass"].async_add_executor_job(
             (WWW / "index.html").read_text, "utf-8"
         )
+        cache = "no-store" if request.query_string else "no-cache"
         return web.Response(
-            text=text, content_type="text/html", charset="utf-8", headers=_headers("no-cache")
+            text=text, content_type="text/html", charset="utf-8", headers=_headers(cache)
         )
 
 
@@ -332,6 +354,9 @@ class GuestPushView(_GuestView):
 
 def register_views(hass: HomeAssistant) -> None:
     """Called once, when the first invite or device exists (see GuestHub.ensure_views)."""
+    access = logging.getLogger("aiohttp.access")
+    if HIDE_INVITE not in access.filters:
+        access.addFilter(HIDE_INVITE)
     # The API first: the file view's {name} would otherwise be tried for "api".
     for view in (
         GuestActivateView(),
