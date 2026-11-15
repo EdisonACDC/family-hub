@@ -1,5 +1,11 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.9.0b3 (in lavorazione, non pubblicata)
+
+- Integrazione: `CONFIG_SCHEMA` solo da interfaccia (`cv.config_entry_only_config_schema`), così
+  hassfest non avvisa più; una configurazione YAML `family_hub:` viene segnalata da Home Assistant.
+- Validazione GitHub: `actions/checkout@v7` (Node 24 invece di Node 20).
+
 ## 0.9.0b2
 
 Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.

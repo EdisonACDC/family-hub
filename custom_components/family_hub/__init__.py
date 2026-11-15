@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .api import async_register_commands
@@ -14,6 +15,7 @@ from .const import (
     CONF_FAMILY_NAME,
     CONF_FIRST_WEEKDAY,
     CONF_LANGUAGE,
+    DOMAIN,
 )
 from .external import ExternalManager, action_from, is_waste_uid
 from .guest_ws import async_register_guest_commands
@@ -25,6 +27,8 @@ from .services import async_register_services
 from .storage import EventStore
 
 PLATFORMS: list[Platform] = [Platform.CALENDAR]
+# Set up only from the user interface (config entries); there is no YAML configuration.
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
