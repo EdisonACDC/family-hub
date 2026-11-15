@@ -57,6 +57,7 @@
     <button type="button" class="btn" id="menu-pickups">Prossimi ritiri</button>
     <button type="button" class="btn" id="menu-shifts">Turni</button>
     <button type="button" class="btn" id="menu-notify">Avvisi</button>
+    <button type="button" class="btn" id="menu-share" hidden>Condivisione</button>
     <button type="button" class="btn" id="menu-ics" hidden>Calendari esterni</button>
     <button type="button" class="btn" id="menu-wizard">Procedura guidata</button>
     <label class="switch switch-row menu-switch">
@@ -96,6 +97,7 @@
   <button type="button" id="guide-start" class="btn guide-start" hidden></button>
   <p id="status-note" class="status-note" role="status" hidden></p>
   <p id="guest-note" class="status-note guest-note" hidden></p>
+  <button type="button" id="approval-banner" class="approval-banner" hidden></button>
 
   <!-- Event: new, or changed. The content scrolls; the buttons stay at the foot. -->
   <div class="overlay" id="event-overlay" hidden>
@@ -242,6 +244,38 @@
     </section>
   </div>
 
+  <!-- Sharing: invites for the grandparents and their phones (adults only) -->
+  <div class="overlay" id="share-overlay" hidden>
+    <section class="dialog share" role="dialog" aria-modal="true" aria-labelledby="share-title">
+      <h2 id="share-title">Condivisione</h2>
+      <div class="tabs share-tabs" role="tablist">
+        <button type="button" class="btn" role="tab" id="share-tab-invites" aria-selected="true">Inviti</button>
+        <button type="button" class="btn" role="tab" id="share-tab-devices" aria-selected="false">Dispositivi</button>
+      </div>
+      <div class="dialog-body">
+        <div id="share-body"></div>
+        <p class="error" id="share-error" role="alert" hidden></p>
+      </div>
+      <div class="dialog-foot actions">
+        <button type="button" class="btn" id="share-close">Chiudi</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Appointments added by a guest that wait for an adult -->
+  <div class="overlay" id="approvals-overlay" hidden>
+    <section class="dialog approvals" role="dialog" aria-modal="true" aria-labelledby="approvals-title">
+      <h2 id="approvals-title">Da approvare</h2>
+      <div class="dialog-body">
+        <div id="approvals-body"></div>
+        <p class="error" id="approvals-error" role="alert" hidden></p>
+      </div>
+      <div class="dialog-foot actions">
+        <button type="button" class="btn" id="approvals-close">Chiudi</button>
+      </div>
+    </section>
+  </div>
+
   <!-- Question shown when changed shift times reach events already entered, and confirmations -->
   <div class="overlay" id="confirm-overlay" hidden>
     <section class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text">
@@ -297,6 +331,7 @@
 
   <script src="static/i18n.js?v=__VERSION__"></script>
   <script src="static/mdi.js?v=__VERSION__"></script>
+  <script src="static/qr.js?v=__VERSION__"></script>
   <script src="static/app.js?v=__VERSION__"></script>
 </body>
 </html>

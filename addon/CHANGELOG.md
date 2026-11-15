@@ -1,5 +1,34 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.9.0b1
+
+Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento; chi non crea inviti ha Family
+Hub come nella 0.8.0.
+
+- **Inviti per i nonni** (nuovo, ☰ → Condivisione, solo adulti): web app installabile (PWA) per chi
+  non ha un account Home Assistant. Invito personale e monouso con link (Copia, Condividi, codice
+  QR), persone e calendari visibili, permessi («Solo vedere», «Vedere e aggiungere», «Vedere,
+  aggiungere e modificare i propri»), appuntamenti «Da approvare» (predefinito) o «Subito nel
+  calendario», notifiche sì/no, scadenza dell'invito non usato.
+- **Dispositivi**: il telefono che apre l'invito resta in attesa finché un adulto non lo conferma
+  (notifica in Home Assistant e sul telefono degli adulti con Conferma / Rifiuta). Rinomina,
+  Modifica permessi, Disattiva con effetto immediato; registro attività (ultimi 200 eventi).
+- **Approvazione**: avviso «1 appuntamento da approvare» con Approva / Modifica / Rifiuta; gli
+  appuntamenti degli ospiti portano la firma «aggiunto da …» nella scheda.
+- **Web app** servita dall'integrazione sotto `/api/family_hub/guest/` (funziona da fuori casa con
+  Nabu Casa o un URL esterno): caratteri grandi, «Prossimi giorni» e settimana, «+ Aggiungi»,
+  IT/EN/DE, tema chiaro/scuro, sola lettura offline («Non aggiornato – senza connessione»),
+  notifiche Web Push (VAPID) attivate solo dal pulsante.
+- **Sicurezza**: token da 256 bit salvati solo come SHA-256, confronto a tempo costante, token del
+  telefono nell'header Authorization e rinnovato ogni 30 giorni; filtro su persone e calendari
+  sempre lato server; validazione di ogni campo; limiti di richieste (60/min lettura, 10/min
+  scrittura) e blocco dopo 10 attivazioni sbagliate; Content-Security-Policy restrittiva, nessun
+  CORS; diagnostica senza token, chiavi o sottoscrizioni.
+- Procedura guidata: passando al passo successivo la finestra riparte dall'alto.
+- Passo 5 in italiano: «festività della regione» (in tedesco resta Land).
+- Icone dell'integrazione per il Marketplace e «Nomina e assegna»: icon, logo, @2x e dark_.
+- README: avviso su «Family Hub Card» di un altro autore nel Marketplace.
+
 ## 0.8.0b4
 
 - Lingua, tema, orario e primo giorno dopo un riavvio di Home Assistant: finché HA non risponde il

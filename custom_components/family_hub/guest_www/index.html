@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#2563EB">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Family Hub">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Family Hub</title>
+  <link rel="manifest" id="manifest-link" href="/api/family_hub/guest/manifest.json">
+  <link rel="icon" href="/api/family_hub/guest/icon-192.png">
+  <link rel="apple-touch-icon" href="/api/family_hub/guest/apple-touch-icon.png">
+  <link rel="stylesheet" href="/api/family_hub/guest/app.css">
+  <script src="/api/family_hub/guest/app.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <img class="top-icon" src="/api/family_hub/guest/icon-192.png" alt="" width="40" height="40">
+    <div class="top-text">
+      <h1>Family Hub</h1>
+      <p id="hello" hidden></p>
+    </div>
+  </header>
+
+  <p class="banner" id="offline" role="status" hidden></p>
+
+  <!-- One screen at a time; app.js shows the right one. -->
+  <main id="screen-loading" class="screen">
+    <p class="big-note" id="loading-text">…</p>
+  </main>
+
+  <main id="screen-message" class="screen" hidden>
+    <div class="message-box">
+      <p class="message-icon" id="message-icon" aria-hidden="true"></p>
+      <h2 id="message-title"></h2>
+      <p class="big-note" id="message-text"></p>
+      <button type="button" class="btn btn-primary" id="message-retry" hidden></button>
+    </div>
+  </main>
+
+  <main id="screen-install" class="screen" hidden>
+    <h2 id="install-title"></h2>
+    <p class="big-note" id="install-intro"></p>
+    <section class="steps" id="install-ios" hidden>
+      <ol>
+        <li>
+          <span id="ios-step1"></span>
+        </li>
+        <li>
+          <span id="ios-step2"></span>
+          <svg class="drawing" viewBox="0 0 220 90" role="img" aria-labelledby="ios-share-label">
+            <title id="ios-share-label">Share</title>
+            <rect x="1" y="1" width="218" height="88" rx="14" class="d-frame"/>
+            <rect x="88" y="26" width="44" height="46" rx="6" class="d-line"/>
+            <path d="M110 12 L110 52 M96 26 L110 12 L124 26" class="d-line"/>
+          </svg>
+        </li>
+        <li>
+          <span id="ios-step3"></span>
+          <svg class="drawing" viewBox="0 0 220 90" role="img" aria-labelledby="ios-add-label">
+            <title id="ios-add-label">Add to Home Screen</title>
+            <rect x="1" y="1" width="218" height="88" rx="14" class="d-frame"/>
+            <rect x="16" y="24" width="42" height="42" rx="9" class="d-line"/>
+            <path d="M37 33 L37 57 M25 45 L49 45" class="d-line"/>
+            <rect x="72" y="38" width="130" height="14" rx="7" class="d-fill"/>
+          </svg>
+        </li>
+        <li><span id="ios-step4"></span></li>
+      </ol>
+    </section>
+    <section class="steps" id="install-android" hidden>
+      <ol>
+        <li>
+          <span id="android-step1"></span>
+          <svg class="drawing" viewBox="0 0 220 90" role="img" aria-labelledby="android-menu-label">
+            <title id="android-menu-label">Menu</title>
+            <rect x="1" y="1" width="218" height="88" rx="14" class="d-frame"/>
+            <circle cx="190" cy="24" r="5" class="d-dot"/>
+            <circle cx="190" cy="45" r="5" class="d-dot"/>
+            <circle cx="190" cy="66" r="5" class="d-dot"/>
+            <rect x="18" y="38" width="130" height="14" rx="7" class="d-fill"/>
+          </svg>
+        </li>
+        <li><span id="android-step2"></span></li>
+      </ol>
+      <button type="button" class="btn btn-primary" id="install-button" hidden></button>
+    </section>
+    <button type="button" class="btn" id="install-continue"></button>
+  </main>
+
+  <main id="screen-main" class="screen" hidden>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" role="tab" id="tab-list" aria-selected="true"></button>
+      <button type="button" class="tab" role="tab" id="tab-week" aria-selected="false"></button>
+    </div>
+    <div class="week-nav" id="week-nav" hidden>
+      <button type="button" class="btn btn-icon" id="week-prev" aria-label="‹">‹</button>
+      <p id="week-range"></p>
+      <button type="button" class="btn btn-icon" id="week-next" aria-label="›">›</button>
+    </div>
+    <div id="days" aria-live="polite"></div>
+    <section class="extras">
+      <div id="push-box"></div>
+      <button type="button" class="btn" id="install-again" hidden></button>
+    </section>
+  </main>
+
+  <button type="button" class="btn btn-primary add-button" id="add-button" hidden></button>
+
+  <div class="overlay" id="sheet" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <h2 id="sheet-title"></h2>
+      <div id="sheet-body"></div>
+      <p class="error" id="sheet-error" role="alert" hidden></p>
+      <div class="sheet-actions" id="sheet-actions"></div>
+    </section>
+  </div>
+
+  <p class="toast" id="toast" role="status" hidden></p>
+</body>
+</html>

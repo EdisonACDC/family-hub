@@ -207,6 +207,8 @@
       $("menu-shifts").hidden = limited;
       $("menu-notify").hidden = limited;
       $("menu-ics").hidden = msg.role !== "adult";
+      $("menu-share").hidden = msg.role !== "adult";
+      refreshGuestSummary();
       $("menu-btn").hidden = limited;
       if (msg.role === "adult") openGuideIfNeeded();
       // A guest is told why nothing can be changed; while waiting for Home Assistant, that.
@@ -238,6 +240,8 @@
       scheduleRefresh();
       loadWeather();
       if (!$("todo-overlay").hidden) loadTodos();
+    } else if (msg.type === "guest_changed") {
+      refreshGuestSummary();
     } else if (msg.type === "event") {
       if (msg.event_type === "family_hub_reminder") showReminder(msg.data);
       if (msg.event_type === "family_hub_reminder_closed") closeReminder(msg.data.uid);
@@ -1625,6 +1629,7 @@
     box.appendChild(el("p", { class: "hint" }, (ev.calendar || "") + " · " + cardWhen(ev)));
     if (ev.location) box.appendChild(el("p", {}, ev.location));
     if (ev.description) box.appendChild(el("p", { class: "card-text" }, ev.description));
+    if (ev.added_by) box.appendChild(el("p", { class: "hint added-by" }, I.f("addedBy").replace("{name}", ev.added_by)));
     var names = (ev.person_ids || []).map(personName);
     if (names.length) box.appendChild(el("p", {}, I.f("evPersons") + ": " + names.join(", ")));
     if (ev.notify) box.appendChild(el("p", { class: "card-notify" }, I.f("notifyOn") + ": " + notifySummary(ev.notify)));
@@ -1911,6 +1916,9 @@
     $("wizard-next").textContent = last ? I.f("save") : t("next");
     $("wizard-skip").textContent = t("skip");
     $("wizard-next").focus();
+    // A new step starts from the top: the guide's body keeps its scroll between steps otherwise.
+    // The buttons stay where they are (at the foot, always reachable).
+    $("wizard-overlay").querySelector(".dialog-body").scrollTop = 0;
   }
 
   function draftForSave() {
@@ -1976,6 +1984,417 @@
     } else {
       renderWizardStep(state.wizardStep + 1);
     }
+  }
+
+  // ---- sharing: invites for the grandparents (adults only) ---------------------------
+  // The integration keeps invites, devices and appointments waiting for approval; this page
+  // only shows them and sends the adult's choices. The invite link is shown once, when made.
+
+  function shareCategories() {
+    return (state.calendars || []).filter(function (c) { return !c.external && c.category_id; })
+      .map(function (c) { return { id: c.category_id, name: c.name }; });
+  }
+
+  function categoryName(id) {
+    var found = shareCategories().filter(function (c) { return c.id === id; })[0];
+    return found ? found.name : id;
+  }
+
+  function shortDateTime(iso) {
+    if (!iso) return "—";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString(I.lang, { day: "2-digit", month: "2-digit", year: "numeric" }) + " " +
+      d.toLocaleTimeString(I.lang, { hour: "2-digit", minute: "2-digit", hour12: state.timeFormat === "12h" });
+  }
+
+  function refreshGuestSummary() {
+    if (state.role !== "adult") { $("approval-banner").hidden = true; return; }
+    request({ op: "share_get" }).then(function (data) {
+      state.share = data;
+      renderApprovalBanner();
+      if (!$("share-overlay").hidden) renderShare();
+      if (!$("approvals-overlay").hidden) renderApprovals();
+    }).catch(function () { $("approval-banner").hidden = true; });
+  }
+
+  function renderApprovalBanner() {
+    var count = state.share && state.role === "adult" ? state.share.pending.length : 0;
+    var banner = $("approval-banner");
+    banner.hidden = count === 0;
+    banner.textContent = count === 1 ? I.f("shareApproveOne") : I.f("shareApproveMany").replace("{n}", String(count));
+    if (count === 0 && !$("approvals-overlay").hidden) $("approvals-overlay").hidden = true;
+  }
+
+  function openShare() {
+    state.shareTab = state.shareTab || "invites";
+    $("share-error").hidden = true;
+    $("share-overlay").hidden = false;
+    $("share-body").textContent = "";
+    request({ op: "share_get" }).then(function (data) {
+      state.share = data;
+      renderShare();
+      renderApprovalBanner();
+    }).catch(showShareError);
+  }
+
+  function closeShare() {
+    $("share-overlay").hidden = true;
+    state.newLink = null;
+  }
+
+  function showShareError(err) {
+    $("share-error").textContent = errorText(err);
+    $("share-error").hidden = false;
+  }
+
+  function shareCall(payload) {
+    $("share-error").hidden = true;
+    return request(payload).then(function (data) {
+      if (data && data.invites) state.share = data;
+      renderShare();
+      renderApprovalBanner();
+      return data;
+    }).catch(function (err) { showShareError(err); throw err; });
+  }
+
+  function renderShare() {
+    var data = state.share;
+    if (!data) return;
+    ["invites", "devices"].forEach(function (tab) {
+      $("share-tab-" + tab).setAttribute("aria-selected", state.shareTab === tab ? "true" : "false");
+    });
+    var body = $("share-body");
+    body.textContent = "";
+    if (state.shareTab === "invites") renderInvites(body, data);
+    else renderDevices(body, data);
+  }
+
+  // Persons, calendars and what the guest may do: for a new invite and for "Modifica permessi".
+  function scopeFields(draft) {
+    var box = el("div", { class: "share-scope" });
+    box.appendChild(el("p", { class: "share-label" }, I.f("sharePersons")));
+    var persons = el("div", { class: "share-checks", "data-field": "persons" });
+    personList().forEach(function (p) {
+      persons.appendChild(checkRow(p.name, draft.persons.indexOf(p.id) !== -1, function (on) {
+        draft.persons = on ? draft.persons.concat([p.id]) : draft.persons.filter(function (x) { return x !== p.id; });
+      }));
+    });
+    box.appendChild(persons);
+    box.appendChild(el("p", { class: "share-label" }, I.f("shareCalendars")));
+    var cats = el("div", { class: "share-checks", "data-field": "categories" });
+    shareCategories().forEach(function (c) {
+      cats.appendChild(checkRow(c.name, draft.categories.indexOf(c.id) !== -1, function (on) {
+        draft.categories = on ? draft.categories.concat([c.id]) : draft.categories.filter(function (x) { return x !== c.id; });
+      }));
+    });
+    box.appendChild(cats);
+    box.appendChild(fieldRow(I.f("sharePermission"), selectInput([
+      ["view", I.f("sharePermView")], ["add", I.f("sharePermAdd")], ["edit_own", I.f("sharePermEdit")]
+    ], draft.permission, function (v) { draft.permission = v; }, { "data-field": "permission" })));
+    box.appendChild(fieldRow(I.f("shareApproval"), selectInput([
+      ["approve", I.f("shareApprovalQueue")], ["direct", I.f("shareApprovalDirect")]
+    ], draft.approval, function (v) { draft.approval = v; }, { "data-field": "approval" })));
+    box.appendChild(switchRow(I.f("shareNotify"), draft.notify, function (on) { draft.notify = on; }));
+    return box;
+  }
+
+  function checkRow(text, checked, onChange) {
+    var label = el("label", { class: "check share-check" });
+    var input = el("input", { type: "checkbox" });
+    input.checked = checked;
+    input.addEventListener("change", function () { onChange(input.checked); });
+    label.appendChild(input);
+    label.appendChild(el("span", {}, text));
+    return label;
+  }
+
+  function inviteStatus(invite) {
+    if (invite.status === "open") {
+      return I.f("shareInviteOpen").replace("{date}", shortDateTime(invite.expires_at));
+    }
+    return I.f(INVITE_STATUS_KEYS[invite.status] || "shareInvite_used");
+  }
+
+  function renderInvites(body, data) {
+    if (!data.external_url) {
+      body.appendChild(el("p", { class: "share-warning" }, I.f("shareNoExternal")));
+    }
+    if (state.newLink) body.appendChild(linkBox(state.newLink));
+    var draft = state.inviteDraft = state.inviteDraft || {
+      name: "", persons: [], categories: [], permission: "add", approval: "approve", notify: true,
+      expires_days: 7
+    };
+    var form = el("div", { class: "share-card share-new", id: "share-new" });
+    form.appendChild(el("h3", {}, I.f("shareNewInvite")));
+    form.appendChild(fieldRow(I.f("shareName"), textInput(draft.name, function (v) { draft.name = v; },
+      { maxlength: "40", placeholder: I.f("shareNameHint"), "data-field": "name" })));
+    form.appendChild(scopeFields(draft));
+    form.appendChild(fieldRow(I.f("shareExpiry"), selectInput([1, 3, 7, 14, 30].map(function (n) {
+      return [String(n), I.f("shareDays").replace("{n}", String(n))];
+    }), String(draft.expires_days), function (v) { draft.expires_days = parseInt(v, 10); },
+    { "data-field": "expires_days" })));
+    form.appendChild(button(I.f("shareCreate"), "btn btn-primary", function () {
+      if (!draft.name.trim() || !draft.persons.length || !draft.categories.length) {
+        showShareError({ code: "share_incomplete" });
+        return;
+      }
+      request({ op: "share_invite_create", invite: {
+        name: draft.name.trim(), persons: draft.persons, categories: draft.categories,
+        permission: draft.permission, approval: draft.approval, notify: draft.notify,
+        expires_days: draft.expires_days
+      } }).then(function (answer) {
+        state.newLink = answer.link;
+        state.inviteDraft = null;
+        return request({ op: "share_get" });
+      }).then(function (list) {
+        state.share = list;
+        renderShare();
+        var box = $("share-link");
+        if (box) box.scrollIntoView({ block: "nearest" });
+      }).catch(showShareError);
+    }));
+    body.appendChild(form);
+    if (data.invites.length) body.appendChild(el("h3", {}, I.f("shareInvites")));
+    data.invites.forEach(function (invite) {
+      var card = el("div", { class: "share-card share-invite" });
+      card.appendChild(el("strong", {}, invite.name));
+      card.appendChild(el("p", { class: "hint" }, inviteStatus(invite)));
+      card.appendChild(el("p", { class: "hint" }, scopeText(invite)));
+      if (invite.status === "open") {
+        card.appendChild(button(I.f("shareRevoke"), "btn", function () {
+          shareCall({ op: "share_invite_revoke", invite_id: invite.id }).catch(function () {});
+        }));
+      }
+      body.appendChild(card);
+    });
+  }
+
+  function scopeText(item) {
+    var persons = (item.persons || []).map(personName).join(", ");
+    var cats = (item.categories || []).map(categoryName).join(", ");
+    var perm = I.f({ view: "sharePermView", add: "sharePermAdd", edit_own: "sharePermEdit" }[item.permission] || "sharePermView");
+    return persons + " · " + cats + " · " + perm;
+  }
+
+  function linkBox(link) {
+    var box = el("div", { class: "share-card share-link", id: "share-link" });
+    box.appendChild(el("h3", {}, I.f("shareLinkTitle")));
+    box.appendChild(el("p", { class: "hint" }, I.f("shareLinkOnce")));
+    var input = el("input", { type: "text", readonly: "readonly", id: "share-link-text" });
+    input.value = link;
+    box.appendChild(input);
+    var actions = el("div", { class: "actions share-link-actions" });
+    actions.appendChild(button(I.f("shareCopy"), "btn btn-primary", function () {
+      var done = function () { showStatusNote(I.f("shareCopied")); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(done).catch(function () {
+          input.select(); document.execCommand("copy"); done();
+        });
+      } else {
+        input.select(); document.execCommand("copy"); done();
+      }
+    }));
+    if (navigator.share) {
+      actions.appendChild(button(I.f("shareShare"), "btn", function () {
+        navigator.share({ title: "Family Hub", text: I.f("shareShareText"), url: link }).catch(function () {});
+      }));
+    }
+    actions.appendChild(button(I.f("shareDone"), "btn", function () {
+      state.newLink = null;
+      renderShare();
+    }));
+    box.appendChild(actions);
+    var qr = el("div", { class: "share-qr", id: "share-qr" });
+    try {
+      var picture = window.FH_QR.svg(link);
+      picture.setAttribute("aria-label", I.f("shareQr"));
+      qr.appendChild(picture);
+    } catch (e) { qr.hidden = true; }
+    box.appendChild(qr);
+    return box;
+  }
+
+  var INVITE_STATUS_KEYS = {
+    used: "shareInvite_used", expired: "shareInvite_expired", revoked: "shareInvite_revoked"
+  };
+  var DEVICE_STATUS_KEYS = {
+    pending: "shareDevice_pending", active: "shareDevice_active",
+    rejected: "shareDevice_rejected", disabled: "shareDevice_disabled"
+  };
+  var LOG_KEYS = {
+    invite_created: "shareLog_invite_created", invite_revoked: "shareLog_invite_revoked",
+    activated: "shareLog_activated", confirmed: "shareLog_confirmed",
+    rejected: "shareLog_rejected", renamed: "shareLog_renamed",
+    permissions: "shareLog_permissions", disabled: "shareLog_disabled",
+    event_pending: "shareLog_event_pending", event_added: "shareLog_event_added",
+    event_changed: "shareLog_event_changed", event_deleted: "shareLog_event_deleted",
+    approved: "shareLog_approved", declined: "shareLog_declined"
+  };
+
+  function deviceStatus(device) {
+    return I.f(DEVICE_STATUS_KEYS[device.status] || "shareDevice_disabled");
+  }
+
+  function renderDevices(body, data) {
+    if (!data.devices.length) body.appendChild(el("p", { class: "hint" }, I.f("shareNoDevices")));
+    data.devices.forEach(function (device) {
+      var card = el("div", { class: "share-card share-device share-" + device.status, "data-device": device.id });
+      card.appendChild(el("strong", {}, device.name));
+      card.appendChild(el("p", { class: "hint" }, device.label + " · " + deviceStatus(device)));
+      card.appendChild(el("p", { class: "hint" }, I.f("shareActivated") + ": " + shortDateTime(device.activated_at)
+        + " · " + I.f("shareLastSeen") + ": " + shortDateTime(device.last_seen)));
+      card.appendChild(el("p", { class: "hint" }, scopeText(device)));
+      var actions = el("div", { class: "actions" });
+      if (device.status === "pending") {
+        actions.appendChild(button(I.f("shareConfirm"), "btn btn-primary", function () {
+          shareCall({ op: "share_device_confirm", device_id: device.id, accept: true }).catch(function () {});
+        }));
+        actions.appendChild(button(I.f("shareReject"), "btn", function () {
+          shareCall({ op: "share_device_confirm", device_id: device.id, accept: false }).catch(function () {});
+        }));
+      } else if (device.status === "active") {
+        actions.appendChild(button(I.f("shareRename"), "btn", function () { editDevice(card, device, "name"); }));
+        actions.appendChild(button(I.f("sharePermissions"), "btn", function () { editDevice(card, device, "scope"); }));
+        actions.appendChild(button(I.f("shareDisable"), "btn", function () {
+          askConfirm(I.f("shareDisableAsk").replace("{name}", device.name), I.f("shareDisable")).then(function (yes) {
+            if (yes) shareCall({ op: "share_device_disable", device_id: device.id }).catch(function () {});
+          });
+        }));
+      } else {
+        actions.appendChild(button(I.f("shareRemove"), "btn", function () {
+          shareCall({ op: "share_device_remove", device_id: device.id }).catch(function () {});
+        }));
+      }
+      card.appendChild(actions);
+      body.appendChild(card);
+    });
+    var log = el("details", { class: "share-log" });
+    log.appendChild(el("summary", {}, I.f("shareLog")));
+    if (!data.log.length) log.appendChild(el("p", { class: "hint" }, I.f("shareLogEmpty")));
+    data.log.forEach(function (entry) {
+      var kind = LOG_KEYS[entry.kind] ? I.f(LOG_KEYS[entry.kind]) : entry.kind;
+      var text = shortDateTime(entry.at) + " · " + kind + " · " + entry.name
+        + (entry.detail ? " · " + entry.detail : "");
+      log.appendChild(el("p", { class: "share-log-row" }, text));
+    });
+    body.appendChild(log);
+  }
+
+  function editDevice(card, device, what) {
+    var form = el("div", { class: "share-edit" });
+    var draft = {
+      name: device.name, persons: device.persons.slice(), categories: device.categories.slice(),
+      permission: device.permission, approval: device.approval, notify: device.notify
+    };
+    if (what === "name") {
+      form.appendChild(fieldRow(I.f("shareName"), textInput(draft.name, function (v) { draft.name = v; },
+        { maxlength: "40", "data-field": "rename" })));
+    } else {
+      form.appendChild(scopeFields(draft));
+    }
+    var actions = el("div", { class: "actions" });
+    actions.appendChild(button(I.f("save"), "btn btn-primary", function () {
+      var changes = what === "name" ? { name: draft.name.trim() } : {
+        persons: draft.persons, categories: draft.categories, permission: draft.permission,
+        approval: draft.approval, notify: draft.notify
+      };
+      shareCall({ op: "share_device_update", device_id: device.id, changes: changes }).catch(function () {});
+    }));
+    actions.appendChild(button(t("cancel"), "btn", renderShare));
+    form.appendChild(actions);
+    card.appendChild(form);
+    var first = form.querySelector("input, select");
+    if (first) first.focus();
+  }
+
+  // ---- appointments waiting for approval ----
+
+  function openApprovals() {
+    $("approvals-error").hidden = true;
+    $("approvals-overlay").hidden = false;
+    renderApprovals();
+  }
+
+  function approvalWhen(item) {
+    if (item.all_day) return showDate(item.start.slice(0, 10)) + " · " + I.f("allDayLabel");
+    return showDate(dayKey(item.start)) + " · " + timeOf(item.start) + " – " + timeOf(item.end);
+  }
+
+  function renderApprovals() {
+    var body = $("approvals-body");
+    body.textContent = "";
+    var items = state.share ? state.share.pending : [];
+    if (!items.length) body.appendChild(el("p", { class: "hint" }, I.f("shareNothingToApprove")));
+    items.forEach(function (item) {
+      var card = el("div", { class: "share-card share-pending", "data-pending": item.id });
+      card.appendChild(el("strong", {}, item.title));
+      card.appendChild(el("p", {}, approvalWhen(item)));
+      card.appendChild(el("p", { class: "hint" }, item.persons.map(personName).join(", ") + " · " + categoryName(item.category)));
+      if (item.location) card.appendChild(el("p", { class: "hint" }, item.location));
+      if (item.note) card.appendChild(el("p", { class: "card-text" }, item.note));
+      card.appendChild(el("p", { class: "hint added-by" }, I.f("addedBy").replace("{name}", item.device)));
+      var actions = el("div", { class: "actions" });
+      actions.appendChild(button(I.f("shareApprove"), "btn btn-primary", function () { decide(item, true); }));
+      actions.appendChild(button(I.f("shareEdit"), "btn", function () { editPending(card, item); }));
+      actions.appendChild(button(I.f("shareDecline"), "btn", function () { decide(item, false); }));
+      card.appendChild(actions);
+      body.appendChild(card);
+    });
+  }
+
+  function decide(item, accept, changes) {
+    var payload = { op: "share_pending_decide", pending_id: item.id, accept: accept };
+    if (changes) payload.changes = changes;
+    request(payload).then(function (data) {
+      state.share = data;
+      renderApprovalBanner();
+      renderApprovals();
+      showStatusNote(accept ? I.f("shareApproved") : I.f("shareDeclined"));
+      refreshEvents();
+    }).catch(function (err) {
+      $("approvals-error").textContent = errorText(err);
+      $("approvals-error").hidden = false;
+    });
+  }
+
+  function editPending(card, item) {
+    var day = item.start.slice(0, 10);
+    var draft = {
+      title: item.title, date: day, all_day: item.all_day,
+      start: item.all_day ? "09:00" : timeOfHHMM(item.start), end: item.all_day ? "10:00" : timeOfHHMM(item.end),
+      person: item.persons[0], category: item.category, location: item.location || "", note: item.note || ""
+    };
+    var form = el("div", { class: "share-edit" });
+    form.appendChild(fieldRow(I.f("shareTitle"), textInput(draft.title, function (v) { draft.title = v; }, { maxlength: "80", "data-field": "title" })));
+    var date = el("input", { type: "date", "data-field": "date" });
+    date.value = draft.date;
+    date.addEventListener("input", function () { draft.date = date.value; });
+    form.appendChild(fieldRow(I.f("shareDate"), date));
+    form.appendChild(switchRow(I.f("allDayLabel"), draft.all_day, function (on) { draft.all_day = on; }));
+    ["start", "end"].forEach(function (key) {
+      var input = el("input", { type: "time", "data-field": key });
+      input.value = draft[key];
+      input.addEventListener("input", function () { draft[key] = input.value; });
+      var label = key === "start" ? I.f("shareStart") : I.f("shareEnd");
+      form.appendChild(fieldRow(label, input));
+    });
+    form.appendChild(fieldRow(I.f("sharePerson"), selectInput(personList().map(function (p) { return [p.id, p.name]; }),
+      draft.person, function (v) { draft.person = v; })));
+    form.appendChild(fieldRow(I.f("shareCalendar"), selectInput(shareCategories().map(function (c) { return [c.id, c.name]; }),
+      draft.category, function (v) { draft.category = v; })));
+    var actions = el("div", { class: "actions" });
+    actions.appendChild(button(I.f("shareApprove"), "btn btn-primary", function () {
+      var changes = {
+        title: draft.title.trim(), person: draft.person, category: draft.category, date: draft.date,
+        all_day: draft.all_day, location: draft.location, note: draft.note
+      };
+      if (!draft.all_day) { changes.start = draft.start; changes.end = draft.end; }
+      decide(item, true, changes);
+    }));
+    actions.appendChild(button(t("cancel"), "btn", renderApprovals));
+    form.appendChild(actions);
+    card.appendChild(form);
   }
 
   // ---- to-do lists and external sources ---------------------------------------
@@ -4245,6 +4664,14 @@
     $("notify-title").textContent = I.f("menuNotify");
     $("notify-close").textContent = I.f("closeLists");
     $("menu-ics").textContent = I.f("menuIcs");
+    $("menu-share").textContent = I.f("menuShare");
+    $("share-title").textContent = I.f("shareHeader");
+    $("share-tab-invites").textContent = I.f("shareTabInvites");
+    $("share-tab-devices").textContent = I.f("shareTabDevices");
+    $("share-close").textContent = I.f("shareClose");
+    $("approvals-title").textContent = I.f("approvalsTitle");
+    $("approvals-close").textContent = I.f("shareClose");
+    if (state.share) renderApprovalBanner();
     $("ics-title").textContent = I.f("icsTitle");
     $("ics-close").textContent = I.f("closeLists");
     $("shifts-title").textContent = I.f("shiftsTitle");
@@ -4400,6 +4827,15 @@
       openNotify();
     });
     $("notify-close").addEventListener("click", closeNotify);
+    $("menu-share").addEventListener("click", function () {
+      toggleMenu(false);
+      openShare();
+    });
+    $("share-close").addEventListener("click", closeShare);
+    $("share-tab-invites").addEventListener("click", function () { state.shareTab = "invites"; renderShare(); });
+    $("share-tab-devices").addEventListener("click", function () { state.shareTab = "devices"; renderShare(); });
+    $("approval-banner").addEventListener("click", openApprovals);
+    $("approvals-close").addEventListener("click", function () { $("approvals-overlay").hidden = true; });
     $("event-repeat").addEventListener("change", function () {
       repeatTouched = true;
       ensureRepeatDay();

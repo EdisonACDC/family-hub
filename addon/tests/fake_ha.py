@@ -188,7 +188,7 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.8.0"
+    integration_version = "0.9.0b1"
     ha_language = "it"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
@@ -237,6 +237,16 @@ class FakeHA:
         # subscription id -> (socket, kind, filter)
         self._subs: dict[int, tuple[web.WebSocketResponse, str, Any]] = {}
         self._sockets: set[web.WebSocketResponse] = set()
+        # Invites for the grandparents ("Condivisione"), as the integration describes them.
+        self.guest: dict[str, Any] = {
+            "invites": [],
+            "devices": [],
+            "pending": [],
+            "log": [],
+            "external_url": True,
+            "has_url": True,
+        }
+        self.guest_calls: list[dict[str, Any]] = []
         self.app = web.Application()
         self.app.router.add_get("/api/websocket", self._handle)
 
@@ -259,6 +269,89 @@ class FakeHA:
         """Add an event as if another device had created it, then announce the change."""
         self.events[entity_id].append(stored_event(summary, start, end, person_ids))
         await self.push_entity_change(entity_id)
+
+    async def guest_changed(self) -> None:
+        await self.push_event("family_hub_guest_changed", {"entry_id": "fake"})
+
+    async def _guest(self, ws: web.WebSocketResponse, msg: dict[str, Any]) -> None:
+        """family_hub/guest/*: a small model of invites, devices and the approval queue."""
+        command = msg["type"].rsplit("/", 1)[1]
+        self.guest_calls.append(copy.deepcopy(msg))
+        guest = self.guest
+        if command == "invite_create":
+            invite = msg["invite"]
+            if not invite.get("persons") or not invite.get("categories"):
+                await self._reply(ws, msg["id"], False, None, "invalid_persons", "invalid_persons")
+                return
+            item = {
+                "id": uuid.uuid4().hex,
+                "status": "open",
+                "device_id": None,
+                "created_at": "2026-11-15T09:00:00+00:00",
+                "expires_at": "2026-11-22T09:00:00+00:00",
+                "permission": "view",
+                "approval": "approve",
+                "notify": True,
+                **invite,
+            }
+            guest["invites"].insert(0, item)
+            guest["log"].insert(
+                0,
+                {
+                    "at": item["created_at"],
+                    "kind": "invite_created",
+                    "name": item["name"],
+                    "detail": "",
+                },
+            )
+            await self._reply(
+                ws,
+                msg["id"],
+                True,
+                {
+                    "id": item["id"],
+                    "link": "https://casa.example.org/api/family_hub/guest/#i=" + "T" * 43,
+                    "external_url": guest["external_url"],
+                },
+            )
+            await self.guest_changed()
+            return
+        if command == "invite_revoke":
+            for invite in guest["invites"]:
+                if invite["id"] == msg["invite_id"]:
+                    invite["status"] = "revoked"
+        elif command == "device_confirm":
+            for device in guest["devices"]:
+                if device["id"] == msg["device_id"]:
+                    device["status"] = "active" if msg["accept"] else "rejected"
+        elif command == "device_update":
+            for device in guest["devices"]:
+                if device["id"] == msg["device_id"]:
+                    device.update(msg["changes"])
+        elif command == "device_disable":
+            for device in guest["devices"]:
+                if device["id"] == msg["device_id"]:
+                    device["status"] = "disabled"
+        elif command == "device_remove":
+            guest["devices"] = [d for d in guest["devices"] if d["id"] != msg["device_id"]]
+        elif command == "pending_decide":
+            item = next((p for p in guest["pending"] if p["id"] == msg["pending_id"]), None)
+            guest["pending"] = [p for p in guest["pending"] if p["id"] != msg["pending_id"]]
+            if item is not None and msg["accept"]:
+                changes = msg.get("changes") or {}
+                day = changes.get("date", item["start"][:10])
+                start = f"{day}T{changes.get('start', '16:00')}:00+01:00"
+                end = f"{day}T{changes.get('end', '17:00')}:00+01:00"
+                event = stored_event(changes.get("title", item["title"]), start, end, "sofia")
+                event["added_by"] = item["device"]
+                self.events[SCHOOL].append(event)
+                await self.push_entity_change(SCHOOL)
+        elif command != "list":
+            await self._reply(ws, msg["id"], False, None, "unknown command")
+            return
+        await self._reply(ws, msg["id"], True, copy.deepcopy(guest))
+        if command != "list":
+            await self.guest_changed()
 
     async def drop_connections(self) -> None:
         for ws in list(self._sockets):
@@ -423,6 +516,8 @@ class FakeHA:
             await self._reply(ws, msg_id, True, copy.deepcopy(self.states))
         elif kind == "call_service":
             await self._call_service(ws, msg)
+        elif kind.startswith("family_hub/guest/"):
+            await self._guest(ws, msg)
         else:
             await self._reply(ws, msg_id, False, None, "unknown command")
 

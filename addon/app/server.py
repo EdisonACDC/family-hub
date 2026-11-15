@@ -67,6 +67,19 @@ EVENT_SERVICES = frozenset(
     {"update_event", "delete_event", "move_event", "snooze_reminder", "stop_reminder"}
 )
 REMINDER_EVENTS = ("family_hub_reminder", "family_hub_reminder_closed")
+# Fired by the integration when invites, devices or appointments waiting for approval change.
+GUEST_EVENT = "family_hub_guest_changed"
+# "Condivisione" (adults only): page op -> (integration command, fields and their types).
+SHARE_OPS: dict[str, tuple[str, dict[str, type]]] = {
+    "share_get": ("list", {}),
+    "share_invite_create": ("invite_create", {"invite": dict}),
+    "share_invite_revoke": ("invite_revoke", {"invite_id": str}),
+    "share_device_confirm": ("device_confirm", {"device_id": str, "accept": bool}),
+    "share_device_update": ("device_update", {"device_id": str, "changes": dict}),
+    "share_device_disable": ("device_disable", {"device_id": str}),
+    "share_device_remove": ("device_remove", {"device_id": str}),
+    "share_pending_decide": ("pending_decide", {"pending_id": str, "accept": bool}),
+}
 SYNC_SECONDS = 30
 LOOKUP_YEARS = 3
 
@@ -83,6 +96,10 @@ class Hub:
         self._entity_sub: int | None = None
         self._entity_ids: frozenset[str] = frozenset()
         self._tasks: set[asyncio.Task[None]] = set()
+        # Invites for the grandparents: their event is followed only once a family uses them,
+        # so without invites the add-on talks to Home Assistant exactly as before.
+        self._guest_sub: int | None = None
+        self._guests_in_use = False
         ha.on_connection = self.on_ha_connection
 
     # ---- connection and subscriptions ----
@@ -93,6 +110,9 @@ class Hub:
         if connected:
             for event_type in REMINDER_EVENTS:
                 await self.ha.subscribe("subscribe_events", self.on_reminder, event_type=event_type)
+            self._guest_sub = None
+            if self._guests_in_use:
+                await self.follow_guests()
             await self.sync_entities()
         await self.broadcast({"type": "connection", "connected": connected})
         if connected:
@@ -148,6 +168,45 @@ class Hub:
             elif identity.role not in ("adult", "shared"):
                 continue  # guests get no popups: they cannot act on them
             await self._send(ws, message)
+
+    async def on_guest_change(self, event: dict[str, Any]) -> None:
+        """Invites, devices or waiting appointments changed: adults' pages read them again."""
+        if event.get("event_type") != GUEST_EVENT:
+            return
+        for ws, user in list(self.browsers.items()):
+            if (await self.identity_for(user)).role == ADULT:
+                await self._send(ws, {"type": "guest_changed"})
+
+    async def follow_guests(self) -> None:
+        """Follow the integration's guest event (once per connection)."""
+        self._guests_in_use = True
+        if self._guest_sub is None and self.ha.connected:
+            self._guest_sub = await self.ha.subscribe(
+                "subscribe_events", self.on_guest_change, event_type=GUEST_EVENT
+            )
+
+    async def share_op(self, identity: Identity, op: str, request: dict[str, Any]) -> Any:
+        """Invites for the grandparents. Adults only; the integration checks everything again."""
+        if identity.role != ADULT:
+            raise PermissionError(op)
+        command, fields = SHARE_OPS[op]
+        payload: dict[str, Any] = {}
+        for name, kind in fields.items():
+            value = request.get(name)
+            # A missing field is a bad request (not "not found"); bool is not taken for int.
+            if not isinstance(value, kind):
+                raise TypeError(name)
+            payload[name] = value
+        if op == "share_pending_decide" and request.get("changes") is not None:
+            if not isinstance(request["changes"], dict):
+                raise TypeError("changes")
+            payload["changes"] = request["changes"]
+        result = await self.ha.call(f"family_hub/guest/{command}", **payload)
+        if op != "share_get" or (
+            isinstance(result, dict) and (result.get("invites") or result.get("devices"))
+        ):
+            await self.follow_guests()
+        return result
 
     async def broadcast(self, message: dict[str, Any]) -> None:
         for ws in list(self.browsers):
@@ -782,6 +841,8 @@ class Hub:
                     "rrule": raw.get("rrule") or "",
                     "category_id": calendar.get("category_id", ""),
                     "calendar": calendar.get("name", ""),
+                    # The guest who added it from the web app ("Nonna"), or "".
+                    "added_by": raw.get("added_by") or "",
                 }
             )
         return visible
@@ -860,6 +921,8 @@ class Hub:
                 return {"ok": True, "result": await self.ics_op(identity, op, request)}
             if op in ("notify_get", "notify_save", "notify_test", "shared_save", "summary_save"):
                 return {"ok": True, "result": await self.notify_op(identity, op, request)}
+            if op in SHARE_OPS:
+                return {"ok": True, "result": await self.share_op(identity, op, request)}
             if op == "weather":
                 # Read only, for everyone: the screen shows the weather to guests too.
                 return {"ok": True, "result": await self.weather()}

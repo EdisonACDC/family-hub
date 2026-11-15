@@ -16,6 +16,9 @@ from .const import (
     CONF_LANGUAGE,
 )
 from .external import ExternalManager, action_from, is_waste_uid
+from .guest_ws import async_register_guest_commands
+from .guests import ACTION_PREFIX as GUEST_ACTION_PREFIX
+from .guests import GuestManager, guest_hub
 from .models import FamilyHubConfigEntry, FamilyHubData
 from .reminders import ReminderManager
 from .services import async_register_services
@@ -28,6 +31,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register actions and websocket commands. Runs once, even without a config entry."""
     async_register_services(hass)
     async_register_commands(hass)
+    async_register_guest_commands(hass)
     return True
 
 
@@ -49,7 +53,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: FamilyHubConfigEntry) ->
     await store.async_load()
     reminders = ReminderManager(hass, entry, store)
     external = ExternalManager(hass, entry)
-    entry.runtime_data = FamilyHubData(store=store, reminders=reminders, external=external)
+    guests = GuestManager(hass, entry, store)
+    entry.runtime_data = FamilyHubData(
+        store=store, reminders=reminders, external=external, guests=guests
+    )
+    # Invites for the grandparents: nothing runs for them until an invite exists.
+    await guests.async_load()
+    hub = guest_hub(hass)
+    hub.managers[entry.entry_id] = guests
+
+    @callback
+    def _forget_guests() -> None:
+        hub.managers.pop(entry.entry_id, None)
+
+    entry.async_on_unload(_forget_guests)
+    entry.async_on_unload(guests.async_stop)
+    reminders.after_fire = guests.async_on_reminder
+    entry.async_on_unload(store.add_listener(guests.async_store_changed))
     entry.async_on_unload(reminders.async_stop)
     await reminders.async_start()
     await external.async_load()
@@ -59,6 +79,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: FamilyHubConfigEntry) ->
     @callback
     def _on_notification_action(event: Event) -> None:
         action = event.data.get("action")
+        if isinstance(action, str) and action.startswith(GUEST_ACTION_PREFIX):
+            hass.async_create_task(guests.async_handle_action(action))
+            return
         if isinstance(action, str) and action.startswith(ACTION_PREFIX):
             parts = action.split("_")
             if len(parts) >= 3 and is_waste_uid(parts[-1] if parts[1] != "SNOOZE" else parts[3]):

@@ -64,6 +64,8 @@
 
 The add-on needs the integration to be set up first.
 
+> **Mind the name in the Marketplace.** Searching for “Family Hub” also shows **Family Hub Card**, by another author: it is not this project. Choose **Family Hub** of type **Integration**, by **EdisonACDC**.
+
 ## Configuration
 
 Everything is set from the guide, or later from **Settings → Devices & services → Family Hub → Configure**:
@@ -77,6 +79,24 @@ Everything is set from the guide, or later from **Settings → Devices & service
 - **External calendars** (adults only): an ICS file from a link or a file. Refreshed every 12 hours.
 - **Alerts**: per person, the phone and Echo speaker chosen from those Home Assistant knows, channels,
   announcement volume, quiet time, and a test.
+
+## Invites for the grandparents
+
+From Family Hub 0.9 (beta), people **without a Home Assistant account** (the grandparents, for example) can have Family Hub on their phone as an app, see only the appointments you choose, add their own and get notifications.
+
+1. As an adult, open **☰ → Sharing → Invites** and create an invite: a name (“Grandma”), the persons and calendars it shows (for example Sofia: School, Nursery, Doctor), permissions (“View only”, “View and add”, “View, add and change their own”), where added appointments go (“Need approval”, the default, or “Straight into the calendar”), notifications on or off, and when an unused invite expires (7 days).
+2. Send the link with **Copy**, **Share** or let them scan the **QR code**. The link is shown only then and is **personal and single-use**: it works for one phone.
+3. The phone opens the link: Android/Chrome offers **Install app**; on iPhone, open it in **Safari → Share → Add to Home Screen**, and the invite is used from the app on the Home Screen.
+4. The phone **waits** until an adult confirms it: Home Assistant and the adults' phones get a notification with **Confirm / Reject**, and the phone appears under **Sharing → Devices**.
+5. Under **Devices** you can rename a phone, change its permissions or **Turn off** its access, at once. A new phone needs a new invite. The **Activity log** keeps the last 200 events.
+
+Appointments that need approval show in Family Hub as **“1 appointment to approve”** (Approve / Change / Reject); approved ones are signed “added by Grandma”.
+
+**An external address is needed.** The web app is served by the integration (not by the add-on, because Ingress needs a login) at `/api/family_hub/guest/`. To work away from home, Home Assistant needs an **external URL**: Home Assistant Cloud (Nabu Casa) or your own domain with HTTPS, set under **Settings → System → Network**. Without one the link works only on the home network, and the Sharing page says so.
+
+**Security.** Invite and phone tokens are random (256 bits), kept only as a hash (SHA-256) and never logged; the invite token sits after the `#` of the link, so it never reaches the server's logs. The filter on persons and calendars always runs in Home Assistant: a guest never receives other appointments, other persons, entities or configuration. Requests are limited per phone and per address, an address is blocked after 10 wrong activations, and the phone token is renewed every 30 days. A family that makes no invite has no new reachable address.
+
+**Notifications on the grandparents' phone.** They are turned on with the **🔔 Turn on notifications** button in the app (never by themselves): reminders of the appointments they see (same minutes before and same quiet hours as the family), changes and cancellations, and the outcome of their requests. iPhone needs **iOS 16.4 or later**, with the app added to the Home Screen from Safari.
 
 ## FAQ
 

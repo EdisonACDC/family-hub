@@ -12,6 +12,7 @@ from .storage import EventStore
 if TYPE_CHECKING:
     from .calendar import FamilyHubCalendar
     from .external import ExternalManager
+    from .guests import GuestManager
     from .reminders import ReminderManager
 
 
@@ -23,6 +24,7 @@ class FamilyHubData:
     reminders: ReminderManager
     calendars: dict[str, FamilyHubCalendar] = field(default_factory=dict)
     external: ExternalManager | None = None
+    guests: GuestManager | None = None
 
 
 FamilyHubConfigEntry = ConfigEntry[FamilyHubData]

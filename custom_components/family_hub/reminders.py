@@ -108,6 +108,9 @@ class ReminderManager:
         # (kind, uid, mark) -> cancel function. kind is "event" or "snooze".
         self._timers: dict[tuple[str, str, str], CALLBACK_TYPE] = {}
         self._unsubs: list[CALLBACK_TYPE] = []
+        # Told after each reminder that goes out (the guest web app sends it on); None without
+        # guests.
+        self.after_fire: Callable[[dict[str, Any], str], Coroutine[Any, Any, None]] | None = None
 
     @property
     def settings(self) -> dict[str, Any]:
@@ -321,6 +324,8 @@ class ReminderManager:
         if mark_sent:
             record["sent"] = [*record.get("sent", []), mark]
             await self._store.async_save()
+        if self.after_fire is not None:
+            await self.after_fire(record, message)
 
     async def _summary_message(self, kind: str, lines: list[str]) -> str:
         """The summary text: one line per item. The morning one starts with today's weather, if a

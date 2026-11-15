@@ -19,7 +19,7 @@ async def async_get_config_entry_diagnostics(
     per_category = Counter(event["category"] for event in events)
     categories = entry.options.get(OPT_CATEGORIES, [])
     persons = entry.options.get(OPT_PERSONS, [])
-    return {
+    result: dict[str, Any] = {
         "language": entry.options.get("language"),
         "first_weekday": entry.options.get("first_weekday"),
         "person_count": len(persons),
@@ -27,3 +27,8 @@ async def async_get_config_entry_diagnostics(
         "categories": [{"id": c["id"], "events": per_category.get(c["id"], 0)} for c in categories],
         "event_count": len(events),
     }
+    guests = entry.runtime_data.guests
+    if guests is not None and (guests.invites or guests.devices):
+        # Counts only: tokens, keys and push subscriptions are never included.
+        result["guests"] = guests.diagnostics()
+    return result

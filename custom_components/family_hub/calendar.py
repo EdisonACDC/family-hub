@@ -66,6 +66,8 @@ class FamilyHubEvent(CalendarEvent):
     # The event's own notification channels, as text: "phone,alexa|media_player.x|80";
     # "" when the persons' own settings apply.
     notify: str = ""
+    # Who added it from the guest web app ("Nonna"); "" for the family's own appointments.
+    added_by: str = ""
 
 
 SUPPORTED_FEATURES = (
@@ -244,6 +246,7 @@ class FamilyHubCalendar(CalendarEntity):
             shift_id=record.get("shift_id", ""),
             reminder_offsets=_offsets_text(record.get("reminder_offsets")),
             notify=notify_text(record.get("notify")),
+            added_by=_added_by(record),
             uid=record["uid"],
             summary=record["summary"],
             start=deserialize_time(record["start"], all_day),
@@ -500,8 +503,10 @@ class FamilyHubCalendar(CalendarEntity):
         shift_id: str | None = None,
         notify: dict[str, Any] | None = None,
         rrule: str | None = None,
+        added_by: dict[str, Any] | None = None,
     ) -> str:
-        """Store a new event (or every occurrence of a repeat rule) and return the first uid."""
+        """Store a new event (or every occurrence of a repeat rule) and return the first uid.
+        ``added_by`` is set for an appointment from the guest web app (see guests.py)."""
         start = localize(start)
         end = localize(end)
         validate_range(start, end)
@@ -516,6 +521,11 @@ class FamilyHubCalendar(CalendarEntity):
             "shift_id": shift_id or "",
             "notify": notify,
         }
+        if added_by:
+            values["added_by"] = {
+                "device": str(added_by.get("device") or ""),
+                "name": str(added_by.get("name") or ""),
+            }
         uid = self._insert_series(values, rule, start, end)
         await self._async_save_and_refresh()
         return uid
@@ -535,7 +545,16 @@ _FIELDS = (
 
 
 def _values(record: dict[str, Any]) -> dict[str, Any]:
-    return {key: record.get(key) for key in _FIELDS}
+    values = {key: record.get(key) for key in _FIELDS}
+    if record.get("added_by"):
+        values["added_by"] = record["added_by"]
+    return values
+
+
+def _added_by(record: dict[str, Any]) -> str:
+    """The name of the guest who added the appointment, or ""."""
+    added = record.get("added_by")
+    return str(added.get("name") or "") if isinstance(added, dict) else ""
 
 
 def _apply_fields(item: dict[str, Any], event: dict[str, Any]) -> None:
