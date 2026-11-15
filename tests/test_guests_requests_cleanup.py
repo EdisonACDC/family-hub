@@ -146,8 +146,39 @@ async def test_closed_invites_can_be_deleted_and_go_after_30_days(
     assert used_id in manager.invites and expired_id in manager.invites
     # "Elimina tutti quelli non attivi": only the open one stays.
     listed = (await _ws(hass, hass_ws_client, "invite_cleanup"))["result"]
-    assert [i["id"] for i in listed["invites"]] == [open_id]
-    assert {used_id, expired_id} & set(manager.invites) == set()
+    # The open one stays, and so does the one a phone is using (here: waiting for an adult).
+    assert sorted(i["id"] for i in listed["invites"]) == sorted([open_id, used_id])
+    assert expired_id not in manager.invites
+
+
+async def test_an_invite_in_use_by_an_active_phone_is_never_deleted(
+    hass: HomeAssistant,
+    client: TestClient,  # noqa: F811
+    hass_ws_client: Any,
+    family: MockConfigEntry,  # noqa: F811
+) -> None:
+    manager = _manager(family)
+    await _invite(hass, hass_ws_client, name="Zia")  # keeps the web app on
+    device_id, _ = await _device(hass, client, hass_ws_client)
+    invite_id = manager.devices[device_id]["invite_id"]
+    listed = (await _ws(hass, hass_ws_client, "list"))["result"]
+    shown = next(i for i in listed["invites"] if i["id"] == invite_id)
+    assert shown["status"] == "used" and shown["in_use"] is True
+    answer = await _ws(hass, hass_ws_client, "invite_delete", invite_id=invite_id)
+    assert not answer["success"] and answer["error"]["code"] == "in_use"
+    await _ws(hass, hass_ws_client, "invite_cleanup")
+    assert invite_id in manager.invites
+    # Not even after 30 days.
+    manager.invites[invite_id]["closed_at"] = (dt_util.utcnow() - timedelta(days=60)).isoformat()
+    assert not manager._cleanup_invites()
+    assert invite_id in manager.invites
+    # "Nuovo telefono" finds the permissions to copy.
+    result = (await _ws(hass, hass_ws_client, "device_replace", device_id=device_id))["result"]
+    assert manager.invites[result["id"]]["persons"] == manager.devices[device_id]["persons"]
+    # Once the phone is off, its invite can go.
+    listed = (await _ws(hass, hass_ws_client, "list"))["result"]
+    assert next(i for i in listed["invites"] if i["id"] == invite_id)["in_use"] is False
+    assert (await _ws(hass, hass_ws_client, "invite_delete", invite_id=invite_id))["success"]
 
 
 async def test_deleting_a_device_deletes_its_used_invite(

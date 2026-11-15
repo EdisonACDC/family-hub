@@ -1,5 +1,12 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.9.0b7 (in lavorazione, non pubblicata)
+
+- «L'invito non usato scade dopo»: «1 giorno» (1 day, 1 Tag), non più «1 giorni».
+- Un invito usato da un telefono attivo (o in attesa di conferma) non si elimina: la scheda dice
+  «In uso da un telefono attivo», «Elimina tutti quelli non attivi» e la pulizia dopo 30 giorni lo
+  saltano. Così il telefono tiene i permessi con cui è entrato.
+
 ## 0.9.0b6
 
 Beta. Chi resta sulla 0.8.0 stabile non riceve questo aggiornamento.

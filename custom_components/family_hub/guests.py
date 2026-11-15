@@ -705,6 +705,12 @@ class GuestManager:
             return expires
         return _parse(invite.get("created_at")) or now
 
+    def _in_use(self, invite: dict[str, Any]) -> bool:
+        """Used by a phone that is active (or waiting for an adult): its invite stays, so the
+        phone keeps the permissions it came with ("Nuovo telefono" copies them)."""
+        device = self.devices.get(str(invite.get("device_id") or ""))
+        return device is not None and device["status"] in (ACTIVE, PENDING)
+
     def _cleanup_invites(self) -> bool:
         """Remove invites closed more than 30 days ago. True if something was removed. The
         activity log keeps what happened."""
@@ -712,7 +718,9 @@ class GuestManager:
         old = [
             invite_id
             for invite_id, invite in self.invites.items()
-            if (closed := self._closed_at(invite, now)) is not None and now - closed >= INVITE_KEEP
+            if (closed := self._closed_at(invite, now)) is not None
+            and now - closed >= INVITE_KEEP
+            and not self._in_use(invite)
         ]
         for invite_id in old:
             del self.invites[invite_id]
@@ -725,13 +733,19 @@ class GuestManager:
             raise GuestError("not_found", 404)
         if self._invite_open(invite, _now()):
             raise GuestError("still_open", 409)
+        if self._in_use(invite):
+            raise GuestError("in_use", 409)
         del self.invites[invite_id]
         await self.async_save()
 
     async def async_delete_inactive_invites(self) -> int:
         """Delete every invite that is no longer usable. Returns how many."""
         now = _now()
-        gone = [i for i, invite in self.invites.items() if not self._invite_open(invite, now)]
+        gone = [
+            i
+            for i, invite in self.invites.items()
+            if not self._invite_open(invite, now) and not self._in_use(invite)
+        ]
         for invite_id in gone:
             del self.invites[invite_id]
         if gone:
@@ -1686,7 +1700,7 @@ class GuestManager:
                         "replaces",
                     )
                 }
-                | {"status": status}
+                | {"status": status, "in_use": self._in_use(invite)}
             )
         devices = [
             {

@@ -2220,7 +2220,7 @@
       { maxlength: "40", placeholder: I.f("shareNameHint"), "data-field": "name" })));
     form.appendChild(scopeFields(draft));
     form.appendChild(fieldRow(I.f("shareExpiry"), selectInput([1, 3, 7, 14, 30].map(function (n) {
-      return [String(n), I.f("shareDays").replace("{n}", String(n))];
+      return [String(n), n === 1 ? I.f("shareDay") : I.f("shareDays").replace("{n}", String(n))];
     }), String(draft.expires_days), function (v) { draft.expires_days = parseInt(v, 10); },
     { "data-field": "expires_days" })));
     form.appendChild(button(I.f("shareCreate"), "btn btn-primary", function () {
@@ -2245,7 +2245,10 @@
     }));
     body.appendChild(form);
     if (data.invites.length) body.appendChild(el("h3", {}, I.f("shareInvites")));
-    var closed = data.invites.filter(function (invite) { return invite.status !== "open"; });
+    // An invite in use by an active phone is never deleted: it keeps that phone's permissions.
+    var closed = data.invites.filter(function (invite) {
+      return invite.status !== "open" && !invite.in_use;
+    });
     if (closed.length) {
       body.appendChild(button(I.f("shareCleanup"), "btn share-cleanup", function () {
         shareCall({ op: "share_invite_cleanup" }).catch(function () {});
@@ -2256,7 +2259,9 @@
       card.appendChild(el("strong", {}, invite.name));
       if (invite.replaces) card.appendChild(el("p", { class: "hint" }, I.f("shareReplaceFor").replace("{name}", invite.name)));
       card.appendChild(el("p", { class: "hint" }, inviteStatus(invite)));
-      if (invite.status !== "open") {
+      if (invite.in_use) {
+        card.appendChild(el("p", { class: "hint share-in-use" }, I.f("shareInUse")));
+      } else if (invite.status !== "open") {
         card.appendChild(button(I.f("shareDelete"), "btn", function () {
           shareCall({ op: "share_invite_delete", invite_id: invite.id }).catch(function () {});
         }));

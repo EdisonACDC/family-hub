@@ -341,7 +341,9 @@ class FakeHA:
         elif command == "invite_delete":
             guest["invites"] = [i for i in guest["invites"] if i["id"] != msg["invite_id"]]
         elif command == "invite_cleanup":
-            guest["invites"] = [i for i in guest["invites"] if i["status"] == "open"]
+            guest["invites"] = [
+                i for i in guest["invites"] if i["status"] == "open" or i.get("in_use")
+            ]
         elif command == "device_test_push":
             pass  # recorded in guest_calls
         elif command == "recipients_save":

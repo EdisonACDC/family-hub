@@ -276,3 +276,52 @@ def test_who_gets_the_requests_is_saved(stack_full: Stack, browser: Browser) -> 
         expect(page.locator("#status-note")).to_have_text("Salvato.")
         (call,) = [c for c in stack_full.fake.guest_calls if c["type"].endswith("recipients_save")]
         assert call["recipients"] == {"mode": "persons", "persons": ["mamma"]}
+
+
+def test_an_invite_in_use_is_kept_and_one_day_is_singular(
+    stack_full: Stack, browser: Browser
+) -> None:
+    _reset(stack_full)
+    base = {
+        "persons": ["sofia"],
+        "categories": ["scuola"],
+        "permission": "view",
+        "approval": "approve",
+        "notify": True,
+        "created_at": "2026-11-10T09:00:00+00:00",
+        "expires_at": "2026-11-17T09:00:00+00:00",
+    }
+    stack_full.fake.guest["devices"] = [{**DEVICE, "status": "active"}]
+    stack_full.fake.guest["invites"] = [
+        {
+            **base,
+            "id": "1" * 32,
+            "name": "Nonna",
+            "status": "used",
+            "in_use": True,
+            "device_id": DEVICE["id"],
+        },
+        {
+            **base,
+            "id": "2" * 32,
+            "name": "Vecchio",
+            "status": "used",
+            "in_use": False,
+            "device_id": None,
+        },
+    ]
+    with tablet_as(browser, ADULT_USER) as page:
+        _open(page, stack_full)
+        page.click("#menu-btn")
+        page.click("#menu-share")
+        in_use = page.locator(f"[data-invite='{'1' * 32}']")
+        expect(in_use).to_contain_text("In uso da un telefono attivo")
+        expect(in_use.get_by_role("button", name="Elimina")).to_have_count(0)
+        page.get_by_role("button", name="Elimina tutti quelli non attivi").click()
+        expect(page.locator(".share-invite")).to_have_count(1)
+        expect(page.locator(".share-invite")).to_contain_text("Nonna")
+        # No more inactive ones: the button goes.
+        expect(page.get_by_role("button", name="Elimina tutti quelli non attivi")).to_have_count(0)
+        # The expiry choice says "1 giorno", not "1 giorni".
+        options = page.locator("[data-field='expires_days'] option").all_inner_texts()
+        assert options[0] == "1 giorno" and options[1] == "3 giorni"
