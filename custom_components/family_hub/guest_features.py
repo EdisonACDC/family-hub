@@ -47,9 +47,10 @@ CUSTOM = "custom"
 TEMPLATES = (GRANDPARENTS, BABYSITTER, RELATIVE, CUSTOM)
 
 # The fields of an invite or a device that this module adds.
-KEYS = ("mode", "template", "features", "lists", "lists_edit")
+KEYS = ("mode", "template", "features", "lists", "lists_edit", "externals")
 
 MAX_LISTS = 20
+MAX_EXTERNALS = 30
 MAX_ITEM = 100
 MAX_ITEMS = 300
 
@@ -71,18 +72,22 @@ def base_scope() -> dict[str, Any]:
         "has_shifts": False,
         "lists": [],
         "lists_edit": False,
+        # The external calendars (school, Google, ICS...) the guest may see: none by default.
+        "externals": [],
     }
 
 
 # What each template turns on. The adult can change all of it afterwards.
 PRESETS: dict[str, dict[str, Any]] = {
-    # Simple; the chosen children's calendar; may add appointments; their own work shifts.
+    # Simple; the chosen children's calendar; may add appointments; their own work shifts;
+    # reminders of the appointments and notifications.
     GRANDPARENTS: {
         "mode": MODE_SIMPLE,
         "permission": "add",
         "approval": "approve",
+        "notify": True,
         "has_shifts": True,
-        "features": _features(calendar=True),
+        "features": _features(calendar=True, reminders=True),
     },
     # Simple; the chosen children's calendar, read only; no lists.
     BABYSITTER: {
@@ -114,7 +119,9 @@ def defaults_for(raw: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     return legacy, True
 
 
-def clean(raw: dict[str, Any], known_lists: list[str]) -> dict[str, Any] | None:
+def clean(
+    raw: dict[str, Any], known_lists: list[str], known_externals: list[str] | None = None
+) -> dict[str, Any] | None:
     """Mode, template, features and lists, checked; None for a value that is not allowed."""
     defaults, legacy = defaults_for(raw)
     mode = raw.get("mode", defaults["mode"])
@@ -141,12 +148,20 @@ def clean(raw: dict[str, Any], known_lists: list[str]) -> dict[str, Any] | None:
         or not isinstance(lists_edit, bool)
     ):
         return None
+    externals = raw.get("externals", defaults["externals"])
+    if (
+        not isinstance(externals, list)
+        or len(externals) > MAX_EXTERNALS
+        or not all(isinstance(e, str) and e in (known_externals or []) for e in externals)
+    ):
+        return None
     return {
         "mode": mode,
         "template": template,
         "features": features,
         "lists": list(dict.fromkeys(lists)),
         "lists_edit": lists_edit,
+        "externals": list(dict.fromkeys(externals)),
     }
 
 
@@ -160,10 +175,21 @@ def upgrade(item: dict[str, Any]) -> bool:
     item["features"] = _features(calendar=True, reminders=bool(item.get("notify", True)))
     item["lists"] = []
     item["lists_edit"] = False
+    item["externals"] = []
     return True
 
 
 def has(item: dict[str, Any], feature: str) -> bool:
+    if feature == LISTS and not item.get("lists"):
+        # Nothing chosen: nothing to open, so no "Liste" button and 403 on the API.
+        return False
+    features = item.get("features")
+    if not isinstance(features, dict):
+        return feature == CALENDAR
+    return bool(features.get(feature, False))
+
+
+def _switch(item: dict[str, Any], feature: str) -> bool:
     features = item.get("features")
     if not isinstance(features, dict):
         return feature == CALENDAR
@@ -175,9 +201,11 @@ def describe(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "mode": item.get("mode") or MODE_SIMPLE,
         "template": item.get("template") or CUSTOM,
-        "features": {name: has(item, name) for name in FEATURES},
+        # What the adult turned on (the panel shows the switch as it was set).
+        "features": {name: _switch(item, name) for name in FEATURES},
         "lists": list(item.get("lists") or []),
         "lists_edit": bool(item.get("lists_edit", False)),
+        "externals": list(item.get("externals") or []),
     }
 
 
@@ -194,6 +222,32 @@ def family_lists(options: Any) -> list[str]:
 def list_id(entry_id: str, entity_id: str) -> str:
     """The name of a list in the web app: never the entity id of Home Assistant."""
     return hashlib.sha256(f"{entry_id}:{entity_id}".encode()).hexdigest()[:16]
+
+
+def external_id(entry_id: str, entity_id: str) -> str:
+    """The name of an external calendar in the web app: never Home Assistant's entity id."""
+    return "x" + hashlib.sha256(f"{entry_id}:ext:{entity_id}".encode()).hexdigest()[:16]
+
+
+def ics_events(calendar: Any, start: Any, end: Any) -> list[dict[str, Any]]:
+    """The events of an ICS calendar in a window (recurrences expanded), as raw fields. An
+    event its owner marked private or confidential (CLASS) is never given."""
+    from homeassistant.util import dt as dt_util  # noqa: PLC0415
+
+    found: list[dict[str, Any]] = []
+    for event in calendar.timeline_tz(dt_util.get_default_time_zone()).overlapping(start, end):
+        secrecy = str(getattr(event, "classification", "") or "").upper()
+        if secrecy.endswith(("PRIVATE", "CONFIDENTIAL")):
+            continue
+        found.append(
+            {
+                "summary": str(event.summary or ""),
+                "start": event.start,
+                "end": event.end,
+                "location": str(getattr(event, "location", "") or ""),
+            }
+        )
+    return found
 
 
 def list_name(hass: HomeAssistant, entity_id: str) -> str:

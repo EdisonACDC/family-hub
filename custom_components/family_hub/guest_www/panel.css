@@ -1,0 +1,1734 @@
+/* Family Hub tablet UI. Light and dark follow the system or Home Assistant's theme. */
+
+:root {
+  --bg: #F5F6F8;
+  --surface: #FFFFFF;
+  --text: #111827;
+  --muted: #4B5563;
+  --line: #D1D5DB;
+  --accent: #1D4ED8;
+  --accent-text: #FFFFFF;
+  --today: #DBEAFE;
+  --ok: #047857;
+  --bad: #B91C1C;
+  --focus: #F59E0B;
+  --radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F172A;
+    --surface: #1E293B;
+    --text: #F8FAFC;
+    --muted: #CBD5E1;
+    --line: #475569;
+    --accent: #60A5FA;
+    --accent-text: #0B1220;
+    --today: #1E3A5F;
+    --ok: #34D399;
+    --bad: #F87171;
+    --focus: #FBBF24;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0F172A;
+  --surface: #1E293B;
+  --text: #F8FAFC;
+  --muted: #CBD5E1;
+  --line: #475569;
+  --accent: #60A5FA;
+  --accent-text: #0B1220;
+  --today: #1E3A5F;
+  --ok: #34D399;
+  --bad: #F87171;
+  --focus: #FBBF24;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 18px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* The page fills the tablet screen: the week takes all the height left under the top bar. */
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+button, input, select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+[hidden] { display: none !important; }
+
+/* ---- top bar ---- */
+
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.clock { display: flex; flex-direction: column; min-width: 150px; }
+#clock-time { font-size: 40px; font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; }
+#clock-date { color: var(--muted); text-transform: capitalize; }
+
+.weeknav { display: flex; gap: 8px; margin-left: auto; }
+
+.status { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.dot { width: 14px; height: 14px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.dot.ok { background: var(--ok); }
+.dot.bad { background: var(--bad); }
+
+/* ---- buttons ---- */
+
+.btn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 8px 18px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.btn:hover { border-color: var(--accent); }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-icon { font-size: 22px; padding: 8px 14px; }
+
+.fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 44px;
+  line-height: 1;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* ---- filters ---- */
+
+.filters {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px 0;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 2px solid var(--chip, var(--line));
+  background: var(--surface);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.chip.on { background: var(--chip); color: #FFFFFF; }
+.chip:not(.on) { color: var(--muted); }
+.swatch { width: 14px; height: 14px; border-radius: 50%; background: var(--chip); }
+.chip.on .swatch { background: #FFFFFF; }
+
+/* ---- week ---- */
+
+.week {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px 16px 16px;
+}
+
+.day {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.day.today { background: var(--today); border-color: var(--accent); }
+
+.day-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.day-name { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 15px; }
+.day-num { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.event {
+  border-left: 6px solid var(--ev);
+  background: color-mix(in srgb, var(--ev) 12%, transparent);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.ev-time { display: block; font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ev-title { display: block; font-weight: 600; }
+
+.empty-note {
+  margin: 0;
+  padding: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  body { height: auto; min-height: 100vh; }
+  .week { grid-template-columns: 1fr; grid-template-rows: auto; }
+  .day { height: auto; }
+  .weeknav { margin-left: 0; }
+}
+
+/* ---- dialogs ---- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 10;
+}
+
+.dialog {
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 18px;
+  padding: 24px;
+  width: min(640px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.dialog h2 { margin: 0 0 12px; font-size: 26px; }
+
+.dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+.dialog label.check { flex-direction: row; align-items: center; gap: 12px; min-height: 48px; }
+
+.dialog input[type="text"],
+.dialog input:not([type]),
+.dialog input[type="date"],
+.dialog input[type="time"],
+.dialog select {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.dialog input[type="checkbox"] { width: 26px; height: 26px; }
+
+.dialog .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.error { color: var(--bad); font-weight: 600; }
+
+.actions, .reminder-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.reminder { width: min(560px, 100%); text-align: center; }
+.reminder-message { font-size: 24px; margin: 8px 0 20px; }
+.reminder-buttons .btn { flex: 1 1 200px; min-height: 64px; font-size: 20px; }
+
+.wizard-progress { color: var(--muted); margin: 0 0 4px; font-weight: 600; }
+.example { background: var(--bg); border-radius: 10px; padding: 12px; color: var(--muted); }
+.wizard a.btn { display: inline-flex; align-items: center; margin-top: 8px; text-decoration: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dialog { animation: rise 180ms ease-out; }
+}
+
+@keyframes rise {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* setup guide fields */
+.card { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; }
+.card legend { font-weight: 700; padding: 0 6px; }
+.hint { color: var(--muted); margin: 6px 0 10px; }
+#wizard-body { display: flex; flex-direction: column; gap: 4px; }
+#wizard-body select, #wizard-body input[type="color"] { min-height: 48px; }
+#wizard-body input[type="color"] { width: min(64px, 100%); padding: 4px; }
+.dialog label.check { flex-direction: row; }
+
+/* ---- layouts ---- */
+
+.main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.main .week { flex: 1 1 auto; min-width: 0; }
+
+.upcoming { display: none; }
+
+/* PC: the next fourteen days beside the week */
+@media (min-width: 1200px) {
+  .upcoming {
+    display: block;
+    flex: 0 0 320px;
+    overflow-y: auto;
+    border-left: 1px solid var(--line);
+    background: var(--surface);
+    padding: 12px 16px;
+  }
+  .upcoming h2 { font-size: 22px; margin: 4px 0 12px; }
+  .upcoming h3 { font-size: 17px; margin: 14px 0 6px; text-transform: capitalize; }
+  .upcoming-day .event { margin-bottom: 6px; }
+}
+
+/* Phone: today and tomorrow as one list */
+@media (max-width: 599px) {
+  .topbar { padding: 8px 12px; gap: 8px 12px; }
+  #clock-time { font-size: 30px; }
+  #clock-date { font-size: 15px; }
+  #wizard-start { display: none; }
+  #menu-btn { display: inline-flex; }
+  .status #conn-text { display: none; }
+  .filters { flex-wrap: nowrap; overflow-x: auto; padding: 10px 12px 0; }
+  .chip { flex: 0 0 auto; }
+  .week.agenda {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    overflow-y: auto;
+  }
+  .week.agenda .day { height: auto; min-height: 0; }
+  .fab { width: 72px; height: 72px; right: 16px; bottom: 16px; }
+  .dialog .row { grid-template-columns: 1fr; }
+}
+
+/* ---- lists, menu, external calendars ---- */
+
+
+
+.menu {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.event.external { border-left-style: dashed; }
+
+.todos { width: min(640px, 100%); }
+.todo-list { margin-bottom: 18px; }
+.todo-list h3 { margin: 0 0 6px; font-size: 20px; }
+.todo-row { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+.todo-row input[type="checkbox"] { width: 28px; height: 28px; flex: 0 0 auto; }
+.todo-row span { flex: 1 1 auto; overflow-wrap: break-word; }
+.todo-row span.done { text-decoration: line-through; color: var(--muted); }
+/* The entry line: the input takes the free width (and may shrink); Aggiungi stays beside it when it
+   fits, and goes below it at full width on a phone. Nothing leaves the window. */
+.todo-add { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; min-width: 0; }
+.todo-add input { flex: 1 1 160px; min-width: 0; width: 1%; min-height: 48px; padding: 8px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); }
+.todo-add .btn { flex: 0 0 auto; max-width: 100%; }
+@media (max-width: 599px) { .todo-add .btn { flex: 1 1 100%; } }
+
+/* ---- shifts ---- */
+
+.shifts { width: min(760px, 100%); }
+.tabs { display: flex; gap: 8px; margin: 6px 0 12px; }
+.tabs [aria-selected="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.month-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.month-title { font-weight: 700; text-transform: capitalize; }
+.month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.month-grid .wd { text-align: center; color: var(--muted); font-weight: 600; font-size: 14px; }
+.day-cell {
+  min-height: 56px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 4px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.day-cell[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
+.dshift { font-size: 12px; overflow-wrap: break-word; hyphens: auto; max-width: 100%; }
+.shift-pick { margin-bottom: 10px; }
+
+/* One compact row per shift model. On a phone the row wraps: name, then times, then calendar. */
+.shift-list { display: flex; flex-direction: column; gap: 6px; }
+.shift-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.shift-row input, .shift-row select { min-width: 0; width: 100%; box-sizing: border-box; }
+.shift-row input[aria-invalid="true"] { border-color: #DC2626; }
+.shift-head span { font-size: 13px; color: var(--muted); font-weight: 600; }
+@media (max-width: 599px) {
+  .shift-head { display: none; }
+  .shift-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .shift-row > :first-child { grid-column: 1 / -1; }
+}
+
+:root {
+  --glass: rgba(255,255,255,.16);
+  --glass-strong: rgba(255,255,255,.24);
+  --glass-line: rgba(255,255,255,.35);
+  --ink: #FFFFFF;
+  --ink-soft: rgba(255,255,255,.72);
+  --accent: #34C759;
+  --radius: 30px;
+  --text: var(--ink); --muted: var(--ink-soft); --surface: var(--glass); --line: var(--glass-line);
+}
+
+/* Glass tokens. Light (the default) is the warm glass; dark is the night glass (below). */
+:root {
+  --body-bg: radial-gradient(60% 70% at 85% 10%, #F3E3CF 0%, transparent 60%),
+    radial-gradient(50% 60% at 10% 90%, #B8A48C 0%, transparent 65%),
+    radial-gradient(40% 50% at 60% 70%, #D9C2A7 0%, transparent 70%),
+    linear-gradient(135deg, #CDB89E 0%, #A99179 55%, #8E7B69 100%);
+  --btn-bg: rgba(70,50,30,.22);
+  --day-bg: linear-gradient(180deg, rgba(86,116,160,.62), rgba(66,96,140,.55));
+  --day-today-bg: linear-gradient(180deg, rgba(96,128,176,.72), rgba(72,104,150,.62));
+  --panel-soft: rgba(120,100,80,.28);
+  --veil: rgba(60,45,30,.18);
+  --dialog-bg: rgba(120,102,84,.92);
+  --field-bg: rgba(40,30,20,.28);
+  --card-bg: rgba(40,30,20,.18);
+  --menu-bg: rgba(70,50,30,.55);
+  --solid: #6E5C4D;
+  --bar-ink: #2b1d12;
+  --bar-shadow: rgba(255, 255, 255, 0.5);
+  --band: linear-gradient(180deg, rgba(120,102,84,.92), rgba(120,102,84,.75));
+}
+
+/* The night glass: the same tokens for the system's dark setting, and for "Scuro". */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --body-bg: radial-gradient(60% 70% at 85% 10%, #334155 0%, transparent 60%),
+    radial-gradient(50% 60% at 10% 90%, #1E293B 0%, transparent 65%),
+    radial-gradient(40% 50% at 60% 70%, #273449 0%, transparent 70%),
+    linear-gradient(135deg, #0B1220 0%, #111A2E 55%, #1E293B 100%);
+  --glass: rgba(255,255,255,.10);
+  --glass-strong: rgba(255,255,255,.18);
+  --glass-line: rgba(255,255,255,.22);
+  --ink-soft: rgba(255,255,255,.78);
+  --btn-bg: rgba(15,23,42,.50);
+  --day-bg: linear-gradient(180deg, rgba(30,41,59,.82), rgba(15,23,42,.78));
+  --day-today-bg: linear-gradient(180deg, rgba(51,65,85,.90), rgba(30,41,59,.86));
+  --panel-soft: rgba(15,23,42,.55);
+  --veil: rgba(2,6,23,.50);
+  --dialog-bg: rgba(15,23,42,.92);
+  --field-bg: rgba(2,6,23,.45);
+  --card-bg: rgba(2,6,23,.30);
+  --menu-bg: rgba(15,23,42,.90);
+  --solid: #1E293B;
+  --bar-ink: #FFFFFF;
+  --bar-shadow: rgba(0, 0, 0, 0.35);
+  --band: linear-gradient(180deg, rgba(15,23,42,.92), rgba(15,23,42,.78));
+  }
+}
+:root[data-theme="dark"] {
+  --body-bg: radial-gradient(60% 70% at 85% 10%, #334155 0%, transparent 60%),
+    radial-gradient(50% 60% at 10% 90%, #1E293B 0%, transparent 65%),
+    radial-gradient(40% 50% at 60% 70%, #273449 0%, transparent 70%),
+    linear-gradient(135deg, #0B1220 0%, #111A2E 55%, #1E293B 100%);
+  --glass: rgba(255,255,255,.10);
+  --glass-strong: rgba(255,255,255,.18);
+  --glass-line: rgba(255,255,255,.22);
+  --ink-soft: rgba(255,255,255,.78);
+  --btn-bg: rgba(15,23,42,.50);
+  --day-bg: linear-gradient(180deg, rgba(30,41,59,.82), rgba(15,23,42,.78));
+  --day-today-bg: linear-gradient(180deg, rgba(51,65,85,.90), rgba(30,41,59,.86));
+  --panel-soft: rgba(15,23,42,.55);
+  --veil: rgba(2,6,23,.50);
+  --dialog-bg: rgba(15,23,42,.92);
+  --field-bg: rgba(2,6,23,.45);
+  --card-bg: rgba(2,6,23,.30);
+  --menu-bg: rgba(15,23,42,.90);
+  --solid: #1E293B;
+  --bar-ink: #FFFFFF;
+  --bar-shadow: rgba(0, 0, 0, 0.35);
+  --band: linear-gradient(180deg, rgba(15,23,42,.92), rgba(15,23,42,.78));
+}
+html, body { color: var(--ink); }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", Inter, system-ui, sans-serif;
+  letter-spacing: -0.01em; -webkit-font-smoothing: antialiased;
+  background: var(--body-bg);
+  background-attachment: fixed;
+}
+.topbar, .day, .chip, .btn, .fab, .dialog, .upcoming, .todo-row {
+  backdrop-filter: blur(28px) saturate(160%); -webkit-backdrop-filter: blur(28px) saturate(160%);
+}
+.topbar { background: transparent; border-bottom: none; padding: 18px 26px; }
+#clock-time { font-size: 50px; font-weight: 700; letter-spacing: -0.035em; text-shadow: 0 2px 12px rgba(0,0,0,.18); }
+#clock-date { color: var(--ink-soft); font-weight: 600; }
+.btn { border: 1px solid var(--glass-line); background: var(--btn-bg); color: var(--ink); border-radius: 999px;
+  min-height: 46px; padding: 8px 20px; font-weight: 600; text-shadow: 0 1px 4px rgba(40,25,10,.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 6px 20px rgba(60,40,20,.12); }
+.btn:hover { background: var(--glass-strong); }
+.btn-icon { width: 46px; padding: 0; }
+.btn-primary { background: rgba(255,255,255,.85); color: #3B4A5E; text-shadow: none; }
+.status { color: #fff; }
+.chip { border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); min-height: 42px;
+  padding: 6px 16px; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,.3); }
+.chip.on { background: color-mix(in srgb, var(--chip) 55%, rgba(255,255,255,.15)); color: #fff; }
+.chip:not(.on) { color: var(--ink-soft); opacity: .7; }
+.chip.on .swatch { background: #fff; }
+.week { gap: 10px; padding: 18px 26px 26px; }
+.day {
+  background: var(--day-bg);
+  border: 1px solid rgba(255,255,255,.22); border-radius: var(--radius); padding: 12px 7px;
+  box-shadow: inset 0 10px 24px rgba(20,30,50,.35), inset 0 -2px 0 rgba(255,255,255,.12),
+              0 0 0 6px rgba(255,255,255,.10), 0 18px 40px rgba(50,35,20,.22);
+}
+.day.today { background: var(--day-today-bg); border-color: rgba(255,255,255,.45); }
+.day-head { border-bottom: none; justify-content: center; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 10px; }
+.day-name { color: var(--ink-soft); font-size: 14px; letter-spacing: .08em; }
+.day-num { font-size: 28px; font-weight: 600; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; color: #fff; }
+.day.today .day-num { background: rgba(255,255,255,.75); color: #3B4A5E; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+.event { border-left: none; position: relative; padding: 7px 8px 7px 21px; border-radius: 14px;
+  background: rgba(255,255,255,.16); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); margin-bottom: 8px; }
+.event::before { content: ""; position: absolute; left: 8px; top: 12px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ev); box-shadow: 0 0 0 2px rgba(255,255,255,.55); }
+.ev-time { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+.ev-title { color: #fff; font-size: 15px; line-height: 1.25; font-weight: 600; }
+.upcoming { background: var(--panel-soft); border: 1px solid var(--glass-line); border-radius: var(--radius);
+  margin: 18px 26px 26px 0; padding: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 18px 40px rgba(50,35,20,.2); }
+.upcoming h2, .upcoming h3 { color: #fff; }
+.upcoming .event { background: rgba(255,255,255,.14); }
+.fab { background: rgba(255,255,255,.8); color: #3B4A5E; border: 1px solid rgba(255,255,255,.9);
+  box-shadow: 0 12px 30px rgba(50,35,20,.3); font-weight: 300; }
+.overlay { background: var(--veil); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.dialog { background: var(--dialog-bg); border: 1px solid var(--glass-line); border-radius: 34px; color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 30px 80px rgba(40,25,10,.35); padding: 26px; }
+.dialog h2 { color: #fff; font-size: 28px; }
+.dialog label { color: rgba(255,255,255,.9); font-weight: 600; }
+.dialog input[type="text"], .dialog input:not([type]), .dialog input[type="date"], .dialog input[type="time"], .dialog select {
+  border: none; background: var(--field-bg); color: #fff; border-radius: 18px; min-height: 50px; padding: 10px 16px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.18); color-scheme: dark; }
+.dialog .card, .dialog fieldset { background: var(--card-bg); border: none; border-radius: 22px; }
+@media (max-width: 600px) {
+  .day-head { flex-direction: row; justify-content: space-between; }
+  .day-num, .day.today .day-num { width: auto; height: auto; padding: 2px 12px; border-radius: 999px; font-size: 20px; white-space: nowrap; }
+  .topbar { padding: 12px 14px; } #clock-time { font-size: 38px; }
+  .week { padding: 12px 14px 90px; }
+}
+/* Added to the reference: the tokens the Avvisi page uses, a menu in the same glass, words
+   that never break in the middle, and "Riduci trasparenza" (body.reduce-transparency) and the
+   system setting prefers-reduced-transparency, which make every glass surface solid. */
+:root {
+  --field: rgba(40,30,20,.28);
+  --dialog: rgba(120,102,84,.92);
+  --solid: #6E5C4D;
+}
+.menu {
+  background: var(--menu-bg);
+  backdrop-filter: blur(28px) saturate(160%); -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid var(--glass-line); border-radius: var(--radius);
+  box-shadow: 0 18px 40px rgba(40,25,10,.35);
+}
+.event, .ev-title, .ev-time, .day-name, .day-num, .chip, .btn {
+  overflow-wrap: normal; word-break: normal; hyphens: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .topbar, .day, .chip, .btn, .fab, .dialog, .upcoming, .todo-row, .menu {
+    backdrop-filter: none; -webkit-backdrop-filter: none; background-color: var(--solid);
+  }
+  .dialog { background: var(--solid); }
+}
+body.reduce-transparency .topbar, body.reduce-transparency .day, body.reduce-transparency .chip,
+body.reduce-transparency .btn, body.reduce-transparency .fab, body.reduce-transparency .dialog,
+body.reduce-transparency .upcoming, body.reduce-transparency .todo-row, body.reduce-transparency .menu {
+  backdrop-filter: none; -webkit-backdrop-filter: none; background-color: var(--solid);
+}
+body.reduce-transparency { background: var(--solid); }
+
+/* iOS-style switches: every checkbox in a .switch row (and the "Tutto il giorno" check).
+   Off: a translucent grey track; on: green; the white knob slides. */
+.switch input[type="checkbox"],
+.check input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 51px;
+  height: 31px;
+  margin: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.switch input[type="checkbox"]::after,
+.check input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+}
+.switch input[type="checkbox"]:checked,
+.check input[type="checkbox"]:checked { background: #34C759; }
+.switch input[type="checkbox"]:checked::after,
+.check input[type="checkbox"]:checked::after { transform: translateX(20px); }
+.switch input[type="checkbox"]:focus-visible,
+.check input[type="checkbox"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.switch-row span, .check span { white-space: nowrap; }
+.check.switch-row,
+#event-form .check {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Weather: the top bar, the day columns, and the phone's Today and Tomorrow. */
+.weather-now { display: flex; align-items: center; gap: 10px; font-size: 20px; color: #fff; }
+.weather-now[hidden] { display: none; }
+/* The next three days, beside the current weather in the top bar. */
+.weather-days { display: flex; align-items: center; gap: 14px; color: #fff; font-size: 16px; }
+.weather-days[hidden] { display: none; }
+.wx-day { display: flex; align-items: center; gap: 6px; }
+.wx-day-name { font-weight: 600; text-transform: capitalize; }
+.wx-temps { display: inline-flex; gap: 4px; font-variant-numeric: tabular-nums; }
+.wx-temps .wx-min { opacity: 0.7; }
+.weather-now strong { font-size: 26px; font-weight: 700; }
+.wx-icon { display: inline-flex; width: 30px; height: 30px; flex: 0 0 auto; }
+.wx-icon svg { width: 100%; height: 100%; }
+.day-weather {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  color: #fff;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.day-weather .wx-icon { width: 22px; height: 22px; }
+.day-weather .wx-min { opacity: 0.7; }
+
+/* Touch targets stay at least 48 px high, as the reference's 42 px chips would drop below. */
+.chip, .btn { min-height: 48px; }
+
+/* Event pills: a word that is too wide for the pill is hyphenated (lang is set on the page);
+   only as a last resort is it broken, so no text leaves the pill. */
+.event {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+.ev-title, .ev-time { hyphens: auto; overflow-wrap: break-word; min-width: 0; }
+
+/* Switch rows as in iOS Settings: text on the left, switch on the right, full width. */
+label.switch.switch-row,
+.dialog label.switch-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  font-weight: 500;
+}
+
+/* Volume: a slider as wide as the row, the value in % beside it. */
+.volume { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.volume-slider { display: flex; align-items: center; gap: 12px; width: 100%; }
+.volume-slider input[type="range"] { flex: 1 1 auto; min-width: 0; width: 100%; accent-color: #34C759; }
+.volume-value { flex: 0 0 64px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Event form: Start and End side by side, both inside the dialog, also on a phone. */
+#event-form .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+#event-form .row > label { min-width: 0; }
+#event-form input, #event-form select { width: 100%; min-width: 0; box-sizing: border-box; }
+#event-form input[type="checkbox"] { width: 51px; height: 31px; flex: 0 0 auto; }
+
+/* Menu: under the Menu button, over the page, big entries. */
+.menu {
+  position: fixed;
+  right: 16px;
+  left: auto;
+  top: 96px;
+  z-index: 20;
+  width: min(360px, calc(100% - 32px));
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 24px;
+}
+.menu .btn { min-height: 48px; width: 100%; font-size: 18px; text-align: left; }
+.menu .switch-row { min-height: 48px; }
+
+/* ---- notifications page and switches ---- */
+
+.notify { width: min(760px, 100%); }
+.notify-card {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 14px 14px;
+  margin: 0 0 14px;
+  background: var(--field);
+}
+.notify-card h3 { margin: 0 0 8px; font-size: 19px; }
+.notify-card .fieldrow + .fieldrow { margin-top: 8px; }
+.switch-list { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.notify-tests { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.notify-tests .btn { min-height: 44px; }
+.menu .switch { min-height: 48px; padding: 4px 6px; }
+.menu-switch { display: flex; }
+.hint { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+
+.status-note { margin: 0; padding: 10px 16px; text-align: center; color: var(--ok); font-weight: 600; }
+
+/* External calendar links can be long: they wrap anywhere, so they never leave the dialog. */
+.ics-url { overflow-wrap: anywhere; word-break: break-all; }
+
+/* All-day events: one compact row, icon and name, on one line (tablet and PC). */
+.event.allday {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  hyphens: none;
+  overflow-wrap: normal;
+  background: color-mix(in srgb, var(--ev) 45%, rgba(255, 255, 255, 0.2));
+}
+.event.allday::before { display: none; }
+.allday-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.event.allday .waste-icon { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; }
+/* On the phone there is room: the whole name, wrapped at spaces. */
+.event.allday.allday-wrap { white-space: normal; }
+.allday-wrap .allday-name { white-space: normal; overflow: visible; text-overflow: clip; }
+
+/* The chips of external calendars carry their type's icon. */
+.chip .waste-icon { width: 18px; height: 18px; margin: 0 6px 0 0; vertical-align: -3px; }
+
+/* The segmented control "Da link | Da file", iOS style. */
+.segmented {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  margin: 8px 0 12px;
+  border-radius: 12px;
+  background: rgba(40, 30, 20, 0.28);
+}
+.segment {
+  flex: 1 1 0;
+  min-height: 44px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 600;
+  cursor: pointer;
+}
+.segment[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.85);
+  color: #3b4a5e;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* A file chooser: a glass button and the chosen file's name, not the browser's own button. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.file-choice { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
+.file-button { background: rgba(255, 255, 255, 0.22) !important; color: #fff !important; }
+.file-name { color: var(--ink-soft); font-size: 15px; overflow-wrap: anywhere; }
+
+/* Calendars and rubbish: the icon in a pill, the colour bar, and the colour pickers. */
+.ics-head { display: flex; align-items: center; gap: 10px; }
+.ics-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ev);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+.waste-icon { display: inline-flex; width: 18px; height: 18px; margin-right: 6px; vertical-align: -3px; }
+.waste-icon svg { width: 100%; height: 100%; }
+.waste-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+.waste-row .waste-icon { width: 26px; height: 26px; color: #fff; margin: 0; }
+.waste-label { flex: 1 1 auto; }
+.waste-row input[type="color"] { width: 52px; height: 36px; border: none; background: transparent; }
+
+/* ---- scrollbars: thin, translucent, rounded, like iOS. ----
+   Only where content scrolls: every scroll area uses overflow: auto (never "scroll"), so a
+   bar appears only when there is something to scroll. "Riduci trasparenza" makes the thumb a
+   solid grey. */
+html,
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+html::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background: transparent;
+}
+html::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+html::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  border: none;
+}
+html::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+body.reduce-transparency,
+body.reduce-transparency * {
+  scrollbar-color: #8e8e93 transparent;
+}
+body.reduce-transparency *::-webkit-scrollbar-thumb,
+body.reduce-transparency html::-webkit-scrollbar-thumb {
+  background: #8e8e93;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html,
+  * {
+    scrollbar-color: #8e8e93 transparent;
+  }
+  *::-webkit-scrollbar-thumb,
+  html::-webkit-scrollbar-thumb {
+    background: #8e8e93;
+  }
+}
+
+/* ---- v0.6.0: windows keep their buttons at the foot; the content scrolls. ---- */
+.dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+.dialog > h2,
+.dialog > .wizard-progress { flex: 0 0 auto; }
+.dialog-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.dialog-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+/* The wizard's example: readable on the dark glass, not white on white. */
+.dialog .example,
+.example {
+  background: rgba(40, 30, 20, 0.45);
+  color: #fff;
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin: 8px 0;
+  font-size: 15px;
+}
+
+/* The top bar sits on a light background: dark ink keeps it readable (contrast over 4.5:1). */
+.topbar .clock,
+#clock-date,
+.status,
+#conn-text,
+.weather-now {
+  color: var(--bar-ink);
+  text-shadow: 0 1px 0 var(--bar-shadow);
+}
+#clock-time { color: var(--bar-ink); text-shadow: 0 1px 0 var(--bar-shadow); }
+.weather-now strong { color: var(--bar-ink); }
+.weather-days { color: var(--bar-ink); text-shadow: 0 1px 0 var(--bar-shadow); }
+
+/* The event form: Start and End side by side inside the window. */
+.persons-fieldset { margin: 8px 0; }
+.persons-fieldset legend { font-weight: 600; }
+
+/* ---- v0.6.0: the touch time picker, the date picker and the day's notes ---- */
+.timepick-overlay { align-items: center; }
+.timepick {
+  width: min(420px, 100%);
+  max-height: min(560px, calc(100dvh - 32px));
+  padding: 18px;
+}
+.timepick > h2 { font-size: 22px; margin: 0 0 12px; }
+/* The columns take the room left between the title and the foot, and scroll inside. */
+.timepick-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: min(340px, 46dvh);
+}
+.timepick-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+.timepick-foot { flex: 0 0 auto; padding-top: 14px; }
+.timepick-cell {
+  min-height: 46px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(40, 30, 20, 0.28);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.timepick-cell.on { background: rgba(255, 255, 255, 0.85); color: #3b4a5e; }
+
+/* The date picker is the same glass, with a dot per calendar on the days that have events. */
+.datepick .month-grid { gap: 4px; }
+.datepick .day-cell { min-height: 52px; color: #fff; background: rgba(40, 30, 20, 0.28); border: none; }
+.datepick .day-cell.today { box-shadow: inset 0 0 0 2px #fff; }
+.datepick .day-cell[aria-pressed="true"] { background: rgba(255, 255, 255, 0.85); color: #3b4a5e; }
+.day-dots { display: flex; gap: 3px; min-height: 6px; margin-top: 2px; }
+.day-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dot); }
+.day-info { margin: 6px 0 10px; color: #fff; font-size: 15px; }
+.day-info p { margin: 2px 0; }
+.day-warning { color: #ffd1c9; font-weight: 600; }
+.field-error {
+  display: block;
+  margin-top: 4px;
+  color: #ffd1c9;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* v0.6.0: calendars beyond the family's own sit behind one button, and each source calendar
+   has its own name, type and colour in the Fonti step. */
+.more-toggle { align-self: flex-start; }
+/* Not a calendar chip, so it is not faded: solid light pill, dark text (over 4.5:1). */
+.chip.more-toggle {
+  opacity: 1;
+  color: #3B4A5E;
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.9);
+  text-shadow: none;
+  font-weight: 600;
+}
+.more-calendars { flex-basis: 100%; display: grid; gap: 6px; padding: 8px 0; }
+.cal-style { display: grid; gap: 8px; padding: 4px 0 10px 28px; }
+/* Home Assistant's own reason under "Non salvato": the field and why. */
+.error-detail { display: block; margin-top: 4px; font-size: 14px; font-weight: 400; opacity: 0.9; }
+
+/* ---- 0.6.1: rubbish types with Material Design icons, and the next pickups row ---- */
+.waste-icon.mdi svg { fill: currentColor; stroke: none; }
+.pickups { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pickups[hidden] { display: none; }
+.pickups-title { font-weight: 700; color: #2b1d12; margin-right: 4px; }
+.pickup-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 14px 4px 8px;
+  border-radius: 999px; background: rgba(255, 255, 255, 0.85); color: #2b1d12; font-weight: 600;
+  border: 2px solid var(--ev);
+}
+.pickup-chip .waste-icon { width: 24px; height: 24px; color: var(--ev); }
+.pickup-chip .pickup-when { font-weight: 400; color: #3B4A5E; }
+.pickup-chip.soon { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ev) 45%, transparent); }
+.event .waste-icon.mdi, .allday .waste-icon.mdi { color: #fff; }
+.waste-type-list { display: grid; gap: 10px; }
+.waste-type {
+  display: grid; grid-template-columns: 40px repeat(4, minmax(0, 1fr)) auto; gap: 8px; align-items: end; min-width: 0;
+  padding: 8px; border-radius: 14px; border-left: 6px solid var(--ev); background: rgba(40, 30, 20, 0.18);
+}
+.waste-type .waste-preview { width: 32px; height: 32px; color: var(--ev); align-self: center; }
+@media (max-width: 760px) {
+  .waste-type { grid-template-columns: 40px 1fr; }
+  .waste-type > :not(.waste-preview) { grid-column: 2; }
+}
+
+/* ---- 0.6.1: month view (free time), day view with free slots ---- */
+.view-switch { margin: 0; }
+/* Touch targets stay at least 48 px high. */
+.view-switch .segment { min-height: 48px; padding: 0 16px; }
+.week.month { display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.month-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.month-title { margin: 0; color: #fff; font-size: 26px; text-transform: capitalize; text-shadow: 0 1px 6px rgba(0,0,0,.25); }
+.month-head > label { display: flex; align-items: center; gap: 8px; color: #fff; font-weight: 600; }
+.month-head select {
+  min-width: 160px; min-height: 40px; padding: 4px 12px; border: none; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9); color: #2b1d12; font: inherit; font-weight: 600;
+}
+.month-view { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.month-dow { text-align: center; font-weight: 700; color: #fff; font-size: 14px; text-transform: uppercase; }
+.month-day {
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-height: 108px; min-width: 0;
+  padding: 6px; border-radius: 14px; border: 1px solid rgba(255,255,255,.22); text-align: left;
+  background: linear-gradient(180deg, rgba(86,116,160,.62), rgba(66,96,140,.55)); color: #fff; cursor: pointer;
+  font: inherit;
+}
+.month-day.other { opacity: .55; }
+.month-day.today { box-shadow: 0 0 0 3px #fff inset; }
+.month-num { font-weight: 700; font-size: 18px; }
+.occ { display: block; height: 6px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; }
+.occ-fill { display: block; height: 100%; background: #fff; }
+/* The same glass pill as the week: a translucent background, a coloured bar, white text. */
+.month-ev {
+  display: block; font-size: 13px; line-height: 1.25; padding: 1px 6px 1px 8px; border-radius: 6px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; color: #fff; background: rgba(255,255,255,.16);
+  box-shadow: inset 3px 0 0 var(--ev);
+}
+.month-ev.external { background: rgba(255,255,255,.08); box-shadow: inset 3px 0 0 var(--ev), inset 0 0 0 1px var(--ev); }
+/* Holidays: a light band on every day, without a colour bar, so they do not fill the cell. */
+.month-ev.holiday { background: rgba(255,255,255,.1); box-shadow: none; font-size: 12px; opacity: .92; }
+.month-more { font-size: 12px; opacity: .9; }
+.week.month.compact .month-day { min-height: 56px; padding: 4px; }
+.week.month.compact .month-num { font-size: 15px; }
+.month-dots { display: flex; gap: 3px; flex-wrap: wrap; }
+.month-dot { width: 7px; height: 7px; border-radius: 50%; }
+.dayview { width: min(560px, 100%); }
+.dayview-body { overflow: auto; display: grid; gap: 8px; }
+.day-note { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px; border-left: 4px solid var(--ev); background: rgba(255,255,255,.16); }
+.day-note .waste-icon { color: var(--ev); width: 22px; height: 22px; }
+.timeline { display: grid; gap: 6px; }
+.busy-block { display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; border-radius: 12px; background: rgba(40,30,20,.45); color: #fff; }
+.busy-name { padding-left: 8px; border-left: 4px solid var(--ev); }
+.slot-time { font-weight: 700; font-variant-numeric: tabular-nums; }
+.free-slot {
+  display: flex; align-items: center; padding: 8px 12px; border-radius: 12px; font: inherit; font-weight: 600;
+  border: 2px dashed rgba(255,255,255,.85); background: rgba(139,195,74,.35); color: #fff; cursor: pointer; text-align: left;
+}
+.free-slot:disabled { cursor: default; opacity: .8; }
+
+/* ---- 0.6.3: next pickups on one line that scrolls; rubbish pills that only show the icon ---- */
+.pickups {
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; min-width: 0; max-width: 100%;
+  scrollbar-width: thin; -webkit-overflow-scrolling: touch; padding-bottom: 2px;
+}
+.pickups-title, .pickup-chip { flex: 0 0 auto; white-space: nowrap; }
+.event.waste-pill.icon-only { justify-content: center; padding-left: 4px; padding-right: 4px; }
+.event.waste-pill.icon-only .allday-name { display: none; }
+.event.waste-pill.icon-only .ev-title { font-size: 0; }
+.event.waste-pill.icon-only .waste-icon { width: 28px; height: 28px; }
+.event.waste-pill.icon-only .ev-title .waste-icon { font-size: initial; }
+
+/* ---- 0.6.3: one entry for an event in several calendars, with a dot per extra calendar ---- */
+.cal-dots { display: inline-flex; gap: 3px; margin-left: 6px; flex: 0 0 auto; vertical-align: middle; }
+.cal-dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.85); }
+.cal-persons { grid-column: 1 / -1; }
+
+/* ---- 0.6.4: the phone's top bar, which never leaves the screen ----
+   Row 1: time, date, weather now, menu. Row 2: the next three days, narrower.
+   Row 3: Settimana | Mese and <- Oggi ->, always within the width. Then the pickups (scrolling).
+   Liste is in the menu. The calendar chips scroll sideways. At most about a third of the screen. */
+#menu-lists { display: none; }
+@media (max-width: 599px) {
+  .topbar {
+    display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto; align-items: center;
+    gap: 6px 10px; padding: 8px 12px; max-height: 34vh; overflow: hidden;
+  }
+  .topbar > * { min-width: 0; }
+  .topbar .clock { grid-column: 1; grid-row: 1; }
+  #clock-time { font-size: 30px; }
+  #clock-date { font-size: 13px; white-space: nowrap; }
+  #weather-now { grid-column: 2; grid-row: 1; justify-self: end; gap: 6px; font-size: 15px; white-space: nowrap; }
+  #weather-now strong { font-size: 20px; }
+  #weather-now .wx-icon { width: 24px; height: 24px; }
+  .status { grid-column: 3; grid-row: 1; display: flex; align-items: center; gap: 6px; }
+  #todo-btn { display: none; }
+  #menu-btn { font-size: 0; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; }
+  #menu-btn::before { content: "\2630"; font-size: 22px; line-height: 1; }
+  #weather-days { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; gap: 6px; font-size: 13px; }
+  #weather-days .wx-day { gap: 3px; }
+  #weather-days .wx-icon { width: 20px; height: 20px; }
+  .weeknav { grid-column: 1 / -1; grid-row: 3; display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; }
+  .weeknav .view-switch { flex: 1 1 auto; min-width: 0; display: flex; }
+  .weeknav .view-switch .segment { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 0 8px; font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
+  #prev-week, #next-week { flex: 0 0 auto; width: 44px; min-width: 44px; min-height: 44px; padding: 0; }
+  #this-week { flex: 0 0 auto; min-height: 44px; padding: 0 12px; }
+  .pickups { grid-column: 1 / -1; grid-row: 4; }
+  .filters { max-width: 100vw; box-sizing: border-box; }
+  .menu #menu-lists { display: block; }
+}
+@media (max-width: 380px) {
+  #weather-now .wx-cond { display: none; }
+  #clock-date { font-size: 12px; }
+  .weeknav .view-switch .segment { font-size: 13px; padding: 0 5px; }
+  #this-week { padding: 0 10px; }
+}
+
+/* ---- 0.6.4: "Avvisa su" in the event form; the Alexa volume is never greyed out to touch ---- */
+.event-notify { display: grid; gap: 8px; margin-top: 10px; }
+.event-notify[hidden] { display: none; }
+.event-notify .notify-title { margin: 0; font-size: 18px; }
+.volume.is-default input[type="range"] { filter: grayscale(1); opacity: 0.55; }
+.volume.is-default .volume-value { opacity: 0.55; }
+.volume-value { min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* ---- 0.6.5: months one under the other (title stays at the top), list view ---- */
+.week.month, .week.list-view { display: flex; flex-direction: column; gap: 8px; overflow: hidden; min-height: 0; }
+.month-scroll, .list-scroll {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch; padding-bottom: 80px;
+}
+.month-scroll:focus-visible, .list-scroll:focus-visible { outline: 3px solid rgba(255,255,255,.8); outline-offset: 2px; }
+.month-block { padding-bottom: 14px; }
+.month-block .month-title {
+  position: sticky; top: 0; z-index: 2; margin: 0 0 6px; padding: 6px 4px;
+  background: var(--band);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: 12px;
+}
+.month-pad { min-height: 1px; }
+.list-month {
+  position: sticky; top: 0; z-index: 2; margin: 10px 0 4px; padding: 6px 8px; color: #fff; text-transform: capitalize;
+  background: var(--band); border-radius: 12px;
+}
+.list-day { display: grid; gap: 4px; margin: 6px 0 10px; }
+.list-date { margin: 4px 4px 2px; color: #fff; font-size: 16px; text-transform: capitalize; }
+.list-date.today { text-decoration: underline; }
+.list-row {
+  display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 48px;
+  padding: 6px 12px; border: none; border-left: 6px solid var(--ev); border-radius: 12px; text-align: left;
+  background: rgba(255,255,255,.16); color: #fff; font: inherit; cursor: pointer;
+}
+.list-time { font-variant-numeric: tabular-nums; font-weight: 600; }
+.list-title { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-title .waste-icon { color: var(--ev); width: 22px; height: 22px; flex: 0 0 auto; }
+.list-persons { opacity: .85; font-size: 14px; white-space: nowrap; }
+@media (max-width: 599px) {
+  .list-row { grid-template-columns: 58px minmax(0, 1fr); }
+  .list-persons { grid-column: 2; }
+  .month-head { gap: 6px; }
+}
+
+.view-switch .label-short { display: none; }
+.list-row { grid-template-columns: 104px minmax(0, 1fr) auto; }
+@media (max-width: 599px) {
+  .view-switch .label-full { display: none; }
+  .view-switch .label-short { display: inline; }
+  .list-row { grid-template-columns: 72px minmax(0, 1fr); }
+}
+
+/* ---- 0.6.5 fixes ---- */
+/* The hidden panel stays hidden on the PC too (its display rule would show it). */
+.upcoming[hidden] { display: none !important; }
+/* Months stop at their start: the title and the first row of days are both in view. */
+.month-scroll { overflow-anchor: none; }
+/* Phone: "Settimana | Mese | Elenco" on its own row across the width, then <- Oggi ->.
+   Each segment is as wide as its text needs; the row has room for wider fonts too. */
+@media (max-width: 599px) {
+  .weeknav { flex-wrap: wrap; justify-content: center; row-gap: 6px; }
+  .weeknav .view-switch { flex: 1 0 100%; }
+  .weeknav .view-switch .segment { flex: 1 1 auto; min-width: max-content; padding: 0 10px; text-overflow: clip; }
+  .pickups { grid-row: 4; }
+}
+
+/* ==== 0.7.0: the layout. Tablet and PC: one top bar of 64 px and a second row of 40 px, so
+   the calendar has at least 80% of the height. Phone: a short bar, tabs at the bottom. ==== */
+#menu-calendars, #menu-pickups, .weather-days-sub { display: none; }
+#tabbar { display: contents; }
+.tab { display: none; }
+.subbar { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; box-sizing: border-box; min-width: 0; }
+.subbar-btn { min-height: 36px; height: 36px; padding: 0 14px; font-size: 15px; flex: 0 0 auto; }
+.filters.calendars-panel {
+  position: fixed; left: 12px; z-index: 40; display: grid; gap: 8px; flex-wrap: nowrap;
+  width: min(380px, calc(100vw - 24px)); max-height: 70vh; overflow: auto; padding: 14px; box-sizing: border-box;
+  border-radius: 22px; background: rgba(110, 92, 77, 0.97); border: 1px solid var(--glass-line);
+  box-shadow: 0 18px 40px rgba(40, 25, 10, 0.35);
+}
+.filters.calendars-panel[hidden] { display: none; }
+.calendars-panel .panel-title { margin: 0; color: #fff; }
+.cal-switch .cal-mark { flex: 0 0 auto; margin-right: 8px; }
+.cal-switch .swatch { width: 14px; height: 14px; border-radius: 50%; background: var(--chip); }
+.cal-switch .waste-icon { width: 20px; height: 20px; color: var(--chip); }
+.cal-switch > span:not(.cal-mark) { flex: 1 1 auto; }
+.period-title {
+  background: none; border: none; color: var(--bar-ink); font: inherit; font-size: 18px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; cursor: pointer;
+  text-transform: capitalize; min-height: 44px; padding: 0 6px;
+}
+.month-view[style*="--cell-h"] .month-day { min-height: var(--cell-h); height: var(--cell-h); overflow: hidden; }
+.month-ev[role="button"] { cursor: pointer; }
+.day-note, .busy-name { font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.busy-name { background: rgba(255,255,255,.16); border: none; border-left: 4px solid var(--ev); border-radius: 10px; padding: 4px 8px; min-height: 36px; }
+.day-note { border: none; width: 100%; }
+@media (max-width: 1399px) { .upcoming { display: none !important; } }
+
+@media (min-width: 600px) {
+  .topbar {
+    display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; height: 64px; min-height: 64px;
+    max-height: 64px; padding: 0 132px 0 14px; box-sizing: border-box; overflow: hidden;
+  }
+  .topbar .clock { display: flex; flex-direction: column; flex: 0 0 auto; line-height: 1.1; }
+  #clock-time { font-size: 26px; }
+  #clock-date { font-size: 12px; white-space: nowrap; }
+  .tb-center { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .topbar .weeknav { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; flex: 0 0 auto; }
+  .topbar .weeknav .btn, .topbar .view-switch .segment { min-height: 44px; height: 44px; }
+  .topbar .view-switch { margin: 0; }
+  .topbar .view-switch .segment { padding: 0 12px; white-space: nowrap; }
+  #prev-week, #next-week { width: 44px; min-width: 44px; padding: 0; }
+  #this-week { padding: 0 14px; }
+  .tb-right { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+  .topbar .weather-now { font-size: 15px; gap: 4px; }
+  .topbar .weather-now strong { font-size: 18px; }
+  .topbar .weather-now .wx-cond { display: none; }
+  .topbar .weather-now .wx-icon { width: 24px; height: 24px; }
+  .weather-days { gap: 8px; font-size: 13px; }
+  .weather-days .wx-icon { width: 20px; height: 20px; }
+  .topbar .status { display: flex; align-items: center; gap: 6px; }
+  #conn-text { display: none; }
+  #todo-btn, #menu-btn { min-height: 44px; height: 44px; padding: 0 14px; }
+  #menu-btn::before { content: "\2630"; margin-right: 6px; font-size: 18px; }
+  #add-btn {
+    position: fixed; top: 10px; right: 12px; bottom: auto; left: auto; width: auto; height: 44px; min-height: 44px;
+    border-radius: 22px; padding: 0 16px; display: inline-flex; align-items: center; gap: 6px;
+    font-size: 17px; font-weight: 700; z-index: 30;
+  }
+  #add-btn .add-plus { font-size: 22px; line-height: 1; }
+  .subbar .pickups { flex: 1 1 auto; flex-basis: auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; gap: 6px; }
+  .subbar .pickups-title { font-size: 13px; }
+  .subbar .pickup-chip { min-height: 32px; padding: 2px 10px 2px 4px; gap: 4px; font-size: 13px; }
+  .subbar .pickup-chip .pickup-label, .subbar .pickup-chip .pickup-when { display: none; }
+  .subbar .pickup-chip .waste-icon { width: 22px; height: 22px; }
+  .weather-days-sub { margin-left: auto; flex: 0 0 auto; }
+  .main .week { padding: 6px 10px 10px; }
+}
+/* Narrower screens: the next three days in the second row, short view names, ☰ alone. */
+@media (min-width: 600px) and (max-width: 1279px) {
+  .tb-right #weather-days { display: none !important; }
+  .subbar .weather-days-sub:not([hidden]) { display: flex; }
+  #menu-btn { font-size: 0; width: 44px; padding: 0; justify-content: center; }
+  #menu-btn::before { margin: 0; font-size: 20px; }
+  .period-title { max-width: 170px; font-size: 16px; }
+}
+@media (min-width: 600px) and (max-width: 1099px) {
+  .topbar .view-switch .label-full { display: none; }
+  .topbar .view-switch .label-short { display: inline; }
+  .topbar .view-switch .segment { padding: 0 9px; }
+}
+
+/* Phone: time and weather | period and ☰; tabs at the bottom; + above them. */
+@media (max-width: 599px) {
+  .topbar {
+    display: flex !important; grid-template-columns: none; flex-wrap: nowrap; align-items: center; gap: 8px;
+    height: 56px; min-height: 56px; max-height: 56px; padding: 0 10px; box-sizing: border-box; overflow: hidden;
+  }
+  .tb-center, .tb-right, .topbar .status { display: contents; }
+  .topbar .clock { order: 1; flex: 0 0 auto; }
+  #clock-time { font-size: 24px; }
+  #clock-date { display: none; }
+  .topbar .weather-now { order: 2; font-size: 14px; gap: 4px; justify-self: auto; }
+  .topbar .weather-now strong { font-size: 17px; }
+  .topbar .weather-now .wx-cond { display: none; }
+  .period-title { order: 3; margin-left: auto; flex: 0 1 auto; font-size: 17px; max-width: 46vw; }
+  #menu-btn { order: 4; }
+  #conn-dot { order: 5; }
+  .topbar .weeknav, #weather-days, #todo-btn, #conn-text, #wizard-start { display: none !important; }
+  #menu-btn { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+  .menu #menu-calendars, .menu #menu-pickups { display: block; }
+  .menu #menu-lists { display: none; }
+  #tabbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+    height: calc(60px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); box-sizing: border-box;
+    background: rgba(110, 92, 77, 0.94); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid var(--glass-line);
+  }
+  .tab {
+    flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-height: 56px; border: none; background: none; color: rgba(255, 255, 255, 0.85); font: inherit;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .tab-icon { width: 24px; height: 24px; display: inline-flex; }
+  .tab-icon svg { width: 100%; height: 100%; }
+  .tab[aria-pressed="true"] { color: #FFD27A; }
+  #add-btn {
+    position: fixed; right: 16px; left: auto; top: auto; bottom: calc(60px + env(safe-area-inset-bottom) + 14px);
+    width: 56px; height: 56px; min-height: 56px; border-radius: 50%; padding: 0; z-index: 26;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 30px;
+  }
+  #add-btn .add-label { display: none; }
+  /* Room below the last event: nothing stays under the + or the tabs. */
+  .main .week { padding-bottom: calc(60px + 56px + 48px + env(safe-area-inset-bottom)); }
+  .month-scroll, .list-scroll { padding-bottom: 20px; }
+  .week.month, .week.list-view { padding-bottom: calc(60px + 8px + env(safe-area-inset-bottom)); }
+  .month-day-panel {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 2px calc(56px + 40px);
+  }
+  .month-day-panel .panel-title { margin: 4px 4px 8px; color: #fff; text-transform: capitalize; }
+  .month-day.selected { box-shadow: 0 0 0 3px #FFD27A inset; }
+  .week.agenda .event { min-height: 48px; font-size: 16px; }
+  .week.agenda .event .ev-time { font-size: 15px; }
+  .day-pickups { display: inline-flex; gap: 4px; margin-left: 8px; }
+  .day-pickups .waste-icon { width: 22px; height: 22px; }
+  .filters.calendars-panel { left: 12px; right: 12px; width: auto; }
+  .pickups-list { display: grid; gap: 8px; }
+}
+/* A day of the month keeps its lines whole; what does not fit is cut at the bottom. */
+.month-day > * { flex: 0 0 auto; }
+
+/* ---- 0.7.0: the persons in front (as the old calendar): Tutti · Mamma · Papà … ---- */
+.persons-bar { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; min-width: 0; flex: 0 1 auto; scrollbar-width: none; }
+.persons-bar::-webkit-scrollbar { display: none; }
+.person-chip {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; min-height: 34px; padding: 0 12px;
+  border-radius: 999px; border: 2px solid var(--person, rgba(255,255,255,.7)); background: rgba(255,255,255,.18);
+  color: #fff; font: inherit; font-size: 14px; font-weight: 700; text-transform: uppercase; cursor: pointer;
+}
+.person-chip.on { background: var(--person, rgba(255,255,255,.88)); color: #fff; }
+.person-chip[data-person=""].on { background: rgba(255,255,255,.9); color: #2b1d12; }
+.person-chip .person-dot { background: var(--person); border: 1px solid rgba(255,255,255,.85); }
+.person-chip.on .person-dot { background: #fff; }
+.person-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+.person-dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; flex: 0 0 auto; }
+.event .person-dots { align-self: center; }
+@media (max-width: 599px) {
+  .subbar { height: 52px; padding: 4px 10px; }
+  .subbar > :not(.persons-bar) { display: none !important; }
+  .persons-bar { flex: 1 1 auto; }
+  .person-chip { min-height: 44px; padding: 0 14px; }
+}
+/* Second row: the persons on the left; "Calendari ▾" and the next pickups on the right. */
+@media (min-width: 600px) { .subbar #calendars-btn { margin-left: auto; } }
+/* Tablet and PC: the second row is 48 px, its buttons at least 40 px (touched with a finger). */
+@media (min-width: 600px) {
+  .subbar { height: 48px; flex: 0 0 auto; }  /* never squeezed by a long calendar */
+  .subbar .subbar-btn, .subbar .person-chip { min-height: 40px; height: 40px; }
+  .subbar .pickup-chip { min-height: 40px; }
+}
+
+/* ---- 0.7.0 review: the second row, the top bar's three days, the month's lines, the + in the bar ---- */
+@media (min-width: 600px) {
+  .subbar .persons-bar { flex: 0 0 auto; max-width: 62%; min-width: 0; overflow-x: auto; }
+  .subbar .person-chip { font-size: 13px; padding: 0 10px; gap: 5px; }
+  .subbar .person-dot { width: 8px; height: 8px; }
+  .subbar #calendars-btn { flex: 0 0 auto; margin-left: auto; width: 40px; min-width: 40px; padding: 0; justify-content: center; }
+  .subbar #calendars-btn .wx-icon { width: 22px; height: 22px; }
+  .subbar .pickups { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .subbar .pickups-title { display: none; }
+  .subbar .pickup-chip .pickup-day { font-size: 13px; font-weight: 700; text-transform: capitalize; }
+  .weather-days-sub { display: none !important; }
+  .topbar .weather-days .wx-day-name { display: none; }
+}
+@media (min-width: 600px) and (max-width: 1279px) { .tb-right #weather-days { display: none !important; } }
+@media (min-width: 1280px) { .tb-right #weather-days:not([hidden]) { display: flex; } }
+.month-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.month-top .occ { flex: 1 1 auto; height: 5px; margin: 0; }
+.month-top .month-num { font-size: 15px; line-height: 1.2; }
+.month-day { padding: 4px 5px; }
+.month-ev[hidden], .month-more[hidden] { display: none !important; }
+.month-more { font-size: 12px; line-height: 14px; }
+@media (max-width: 599px) {
+  #tabbar {
+    display: grid; grid-template-columns: 1fr 1fr 64px 1fr 1fr; align-items: center;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 25;
+    height: calc(64px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+    box-sizing: border-box;
+  }
+  .tab { display: flex; }
+  #add-btn {
+    position: static !important; grid-column: 3; grid-row: 1; justify-self: center; align-self: center;
+    width: 56px; height: 56px; min-height: 56px; margin: 0; padding: 0; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 30px;
+    top: auto; right: auto; bottom: auto; left: auto; z-index: auto;
+  }
+  .main .week { padding-bottom: calc(64px + 12px + env(safe-area-inset-bottom)); }
+}
+/* Month cells: two appointments and "+N altri" fit in a cell of about 75 px (893 x 727). */
+.month-day { gap: 1px; padding: 3px 5px; }
+.month-ev { line-height: 16px; padding: 0 6px; }
+.month-more { line-height: 13px; }
+
+/* ==== 0.7.1: the layout on every screen (320 to 1024 px wide, phones with notch and home bar) ==== */
+/* Windows always sit above the bottom bar, the + and the top bar; while one is open, the bar and
+   the + are not there at all. */
+.overlay { z-index: 60; padding: 12px; box-sizing: border-box; }
+body:has(.overlay:not([hidden])) #tabbar,
+body:has(.overlay:not([hidden])) #add-btn { visibility: hidden; }
+.dialog {
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.dialog-foot { padding-bottom: env(safe-area-inset-bottom); }
+.dialog-foot > * { min-height: 44px; }
+@media (max-width: 599px) {
+  .overlay { padding: 8px; }
+  .dialog { width: 100%; max-width: 100%; padding: 16px; border-radius: 22px; }
+}
+.dialog-body { overscroll-behavior: contain; }
+
+/* The period: a size that fits, and two lines when the words need them. */
+.period-title {
+  font-size: clamp(14px, 2.1vw, 18px);
+  white-space: normal;
+  line-height: 1.15;
+  text-align: center;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 599px) {
+  .period-title { font-size: clamp(13px, 4vw, 17px); max-width: 44vw; }
+}
+
+/* Tablets and small PCs (600 to 1099 px): the top bar in two rows; the views and the period below
+   the clock and the buttons; nothing overlaps. */
+@media (min-width: 600px) and (max-width: 1099px) {
+  .topbar {
+    flex-wrap: wrap; height: auto; min-height: 64px; max-height: none; row-gap: 6px;
+    padding: 8px 132px 8px 14px;
+  }
+  .topbar .tb-left { order: 1; }
+  .topbar .tb-right { order: 2; margin-left: auto; }
+  .topbar .tb-center { order: 3; flex: 0 0 100%; flex-wrap: wrap; justify-content: center; }
+  .topbar .weeknav { flex-wrap: wrap; justify-content: center; }
+  /* Seven days side by side with a minimum width; the week scrolls sideways inside itself. */
+  .main .week:not(.agenda):not(.month):not(.list-view) {
+    grid-template-columns: repeat(7, minmax(150px, 1fr)); overflow-x: auto;
+  }
+}
+
+/* Titles of appointments: they wrap (up to three lines) instead of being cut. */
+.list-title, .event .ev-title, .allday-name, .busy-name, .card-title {
+  white-space: normal; overflow-wrap: anywhere; hyphens: none;
+}
+.list-title { overflow: visible; text-overflow: clip; }
+.list-row { align-items: start; }
+.event .ev-title { display: block; }
+/* The month's cells keep one line each, with an ellipsis (the rest is in the day). */
+.month-ev { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Upcoming pickups: the labels wrap inside the row, never past its edge. */
+.pickup-chip { max-width: 100%; flex-wrap: wrap; }
+.pickup-chip .pickup-label { overflow-wrap: anywhere; min-width: 0; }
+.pickups { max-width: 100%; }
+
+/* Shifts: on narrow screens the row is in three lines (name / times / category and remove). */
+@media (max-width: 599px) {
+  .shift-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .shift-row > :nth-child(4) { grid-column: 1 / -1; }
+  .shift-row > :last-child { justify-self: end; }
+}
+#shifts-calendar .month-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); width: 100%; }
+#shifts-calendar .month-grid > * { min-width: 0; min-height: 40px; }
+
+/* Touch targets: at least 40 px. */
+.btn, .segment, .tab, .person-chip, .chip, .segment, .period-title { min-height: 40px; }
+.dialog .btn { min-height: 44px; }
+
+/* Nothing wider than the screen. */
+html, body { overflow-x: hidden; max-width: 100%; }
+@media (min-width: 600px) and (max-width: 1099px) {
+  .topbar { padding: 6px 132px 6px 12px; row-gap: 4px; }
+  .topbar .weeknav { gap: 6px; }
+  .topbar .view-switch .segment, .topbar .weeknav .btn { min-height: 40px; height: 40px; }
+  .topbar .period-title { min-height: 40px; }
+}
+.month-top .month-more { font-size: 11px; line-height: 13px; white-space: nowrap; flex: 0 0 auto; }
+.month-ev { line-height: 15px; }
+/* The shift calendar: seven days of at least 40 px; on a 320 px phone the body scrolls sideways. */
+/* Seven equal columns that always fit the window, even at 320 px; the days scroll up and down. */
+#shifts-calendar .month-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; width: 100%; max-width: 100%; }
+#shifts-calendar .day-cell { min-width: 0; overflow: hidden; padding: 4px 2px; }
+#shifts-calendar .dshift { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.dialog-body { overflow-x: auto; }
+/* 0.7.3: a field inside a window never gets wider than the window: it shrinks instead. */
+.dialog input, .dialog select, .dialog textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
+/* A fieldset's default min-width is its content's: here it must shrink with the window. */
+.dialog fieldset { min-width: 0; max-width: 100%; }
+.dialog label { min-width: 0; }
+/* A field row of the guide: its text and its field wrap, so a field never runs past the window. */
+#wizard-body label:has(> input) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.waste-type > * { min-width: 0; }
+
+/* 0.7.5: the calendars window fits the screen, long names wrap, every switch stays visible. */
+#filters.calendars-panel {
+  width: min(420px, calc(100vw - 24px)); max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px); overflow-y: auto; overflow-x: hidden; box-sizing: border-box;
+}
+#filters .panel-title { overflow-wrap: anywhere; margin-top: 0; }
+#filters .switch-list { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; min-width: 0; }
+#filters .cal-switch { display: flex; align-items: center; gap: 10px; min-width: 0; width: 100%; box-sizing: border-box; white-space: normal; }
+#filters .cal-switch * { max-width: 100%; }
+#filters .cal-switch > span:not(.swatch):not(.cal-mark) { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+#filters .cal-switch input, #filters .cal-switch .switch { flex: none; }
+@media (max-width: 599px) {
+  #filters.calendars-panel {
+    position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+    top: auto; width: auto; max-width: none; max-height: calc(100dvh - 24px);
+  }
+}
+
+/* 0.7.5: the guide's footer is one row: Indietro, Salta (a small link), Avanti. */
+.wizard .dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.wizard .dialog-foot {
+  display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom)); max-height: calc(64px + env(safe-area-inset-bottom));
+}
+.wizard .dialog-foot .btn { min-height: 40px; padding: 6px 12px; min-width: 0; }
+#wizard-skip {
+  background: none; border: none; box-shadow: none; font-size: 14px; font-weight: 600;
+  text-decoration: underline; color: inherit; white-space: nowrap; flex: 0 1 auto;
+}
+@media (max-width: 599px) {
+  .wizard h2 { font-size: 24px; margin: 0 0 6px; }
+}
+@media (max-width: 359px) {
+  .wizard .dialog-foot { flex-wrap: wrap; }
+  #wizard-skip { order: -1; flex: 1 1 100%; text-align: center; }
+  #wizard-back, #wizard-next { flex: 1 1 0; }
+}
+
+/* 0.7.5: the notify page's save bar and the unsaved marker, and the summary card. */
+.notify-savebar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.unsaved { color: #fde68a; font-weight: 600; overflow-wrap: anywhere; }
+.summary-kind { margin: 10px 0 4px; font-size: 16px; }
+.summary-channels-title { font-weight: 600; margin: 10px 0 4px; }
+
+/* 0.7.6: the calendars window is a panel like the others: its own surface, a veil behind it, the
+   bottom bar and the + hidden while it is open, and only as tall as its content (it scrolls only
+   when the screen is too short). On a phone it sits at the bottom. */
+#filters.calendars-panel {
+  background: #1E293B; color: #F8FAFC; border: 0; /* opaque: the glass surface is see-through */
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  height: auto; align-content: start; grid-auto-rows: max-content;
+}
+#filters.calendars-panel .panel-title { color: #F8FAFC; }
+@media (max-width: 599px) {
+  #filters.calendars-panel { top: auto !important; bottom: calc(12px + env(safe-area-inset-bottom)); left: 12px; right: 12px; }
+  body:has(#filters.calendars-panel:not([hidden]))::after {
+    content: ""; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 39;
+  }
+  body:has(#filters.calendars-panel:not([hidden])) #tabbar,
+  body:has(#filters.calendars-panel:not([hidden])) #add-btn { visibility: hidden; }
+}
+
+/* 0.7.6-beta.2: the wizard's text fields take the full width, as the other fields do. */
+#wizard-body label:has(> input[type="text"]) { flex-direction: column; align-items: stretch; }
+#wizard-body label > input[type="text"] { width: 100%; box-sizing: border-box; }
+/* The setup link is shown only when it has a job (a `hidden` link must not show through .btn). */
+#setup-link[hidden] { display: none !important; }
+#setup-link { margin: 8px 0 0; text-decoration: none; }
+
+/* 0.7.7b1: leaving the guide (X, Esc, a tap outside), its unsaved-changes question, and the
+   button on a page with no calendar. A hidden control stays hidden even when it is a .btn. */
+.wizard { position: relative; }
+.wizard h2 { padding-right: 52px; }
+.wizard-close {
+  position: absolute; top: 12px; right: 12px; width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+  padding: 0; font-size: 28px; line-height: 1; border-radius: 999px; border: 1px solid var(--glass-line);
+  background: var(--field-bg); color: #fff; cursor: pointer; display: grid; place-items: center;
+}
+.wizard-close:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.leave-confirm { margin: 12px 0 0; padding: 14px; border-radius: 18px; background: var(--field-bg); }
+.leave-confirm p { margin: 0 0 10px; font-weight: 700; }
+.leave-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+#guide-start[hidden] { display: none !important; }
+#guide-start { margin: 12px 0 0; }
+
+/* 0.7.7b2: the primary button keeps its light face on hover and focus (the glass hover made its
+   dark text unreadable on the night glass). */
+.btn-primary:hover, .btn-primary:focus-visible { background: rgba(255,255,255,.95); }
+
+/* 0.7.8b1: a discreet link at the foot of the menu. No pop-up, no reminder. */
+.support-link { display: block; margin-top: 10px; min-height: 44px; line-height: 44px;
+  text-align: center; font-size: 15px; color: var(--ink-soft); text-decoration: underline; }
+/* 0.7.7b4: rubbish pickups made by hand. Each row is one line of fields, full width on a phone. */
+.manual-title { margin: 14px 0 4px; font-size: 18px; }
+.manual-row { display: grid; gap: 8px; margin: 8px 0 12px; }
+.manual-row label { min-width: 0; }
+.manual-row input, .manual-row select { width: 100%; min-width: 0; box-sizing: border-box; }
+.manual .dialog-body { max-height: calc(100dvh - 180px); overflow-y: auto; }
+
+/* 0.8.0b1: repeating events. The days wrap to a new line on a phone; the scope buttons fill the width. */
+.repeat-days { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.repeat-day { min-height: 44px; display: inline-flex; align-items: center; }
+.repeat-fieldset label, .scope-fieldset label { min-width: 0; }
+.repeat-fieldset select, .repeat-fieldset input { min-width: 0; }
+.scope-choices { display: grid; gap: 10px; }
+.scope-choices .btn { width: 100%; min-height: 48px; }
+
+/* 0.8.0b1: a word is never broken in the middle of a narrow week column. A word too long for
+   its place is cut with an ellipsis (see fitWastePills in app.js). */
+.event.waste-pill, .event.waste-pill .allday-name, .event.waste-pill .ev-title {
+  hyphens: none; overflow-wrap: normal; word-break: normal;
+}
+
+/* 0.8.0b2: the repeat and scope controls read like the rest of the app: light text on the glass field, the day choices as pills, the scope choice with its marker on the left. */
+#event-form input[type='number'], #event-form input[type='text'], #event-form input[type='date'], #event-form select {
+  color: #fff; background: var(--field-bg); border: none; border-radius: 18px; min-height: 50px; padding: 10px 16px; box-sizing: border-box; color-scheme: dark;
+}
+#event-form .repeat-fieldset select option { color: #111827; }
+#event-form .repeat-day {
+  display: inline-flex; flex-direction: row; align-items: center; min-height: 44px;
+  padding: 6px 14px; margin: 0; border-radius: 999px; border: 2px solid var(--glass-line);
+  background: var(--field-bg); color: #fff; font-weight: 600; position: relative; cursor: pointer;
+}
+#event-form .repeat-day input {
+  position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none;
+}
+#event-form .repeat-day:has(input:checked) { background: rgba(255, 255, 255, 0.85); color: #3b4a5e; }
+#event-form .repeat-day:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+#event-form .scope-option {
+  display: flex; flex-direction: row; align-items: center; gap: 12px; min-height: 48px;
+  margin: 4px 0; font-weight: 600;
+}
+#event-form .scope-option input[type='radio'] {
+  flex: 0 0 22px; width: 22px; height: 22px; margin: 0;
+}
+
+/* 0.8.0b3: the windows opened from the guide (pickups, external calendars, the delete choice) stay on top of it; the card's repeat line is a hint. */
+#ics-overlay, #manual-overlay { z-index: 70; }
+#scope-overlay { z-index: 80; }
+#confirm-overlay { z-index: 90; }
+.card-repeat { margin-top: 2px; }
+
+/* ---- Sharing: invites for the grandparents (0.9) ---- */
+.approval-banner {
+  display: block; margin: 8px auto; padding: 12px 20px; border-radius: 999px; border: 0;
+  background: #F59E0B; color: #111827; font: inherit; font-weight: 700; cursor: pointer;
+}
+.approval-banner:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.share-card {
+  border: 1px solid var(--line, rgba(127, 127, 127, .35)); border-radius: 16px; padding: 12px 14px;
+  margin: 10px 0; overflow-wrap: anywhere;
+}
+.share-card h3 { margin: 0 0 8px; }
+.share-label { font-weight: 700; margin: 10px 0 4px; }
+.share-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.share-missing { outline: 2px solid #DC2626; outline-offset: 4px; border-radius: 6px; }
+.share-check { display: inline-flex; align-items: center; gap: 6px; }
+.share-warning { background: #FEF3C7; color: #78350F; border-radius: 12px; padding: 10px 12px; font-weight: 600; }
+.share-link input { width: 100%; font: inherit; padding: 8px; border-radius: 10px; }
+.share-link-actions { flex-wrap: wrap; }
+.share-qr { background: #FFFFFF; padding: 8px; border-radius: 12px; width: min(260px, 100%); margin: 10px auto 0; }
+.share-qr svg { display: block; width: 100%; height: auto; }
+.share-log summary { cursor: pointer; font-weight: 700; margin: 12px 0 6px; }
+.share-log-row { margin: 4px 0; font-size: .9em; }
+.share-edit { margin-top: 10px; border-top: 1px dashed var(--line, rgba(127, 127, 127, .35)); padding-top: 10px; }
+.share-pending .actions, .share-device .actions { flex-wrap: wrap; }
+.added-by { font-style: italic; }
+.no-person-warning { background: #FEF3C7; color: #78350F; border-radius: 14px; padding: 10px 14px; margin: 10px 0; }
+.no-person-warning p { margin: 0 0 8px; font-weight: 600; }
+.share-highlight { outline: 3px solid #F59E0B; outline-offset: 2px; }
+.share-push-blocked { color: #B91C1C; font-weight: 700; }
+.share-push-off { font-weight: 700; }
+
+/* "Prossimi 12 mesi" as written: only dates and months take a capital letter (0.9.0b3). */
+.period-title.as-written { text-transform: none; }
+
+/* 0.10: templates and functions of a guest */
+.share-templates { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+.share-template[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.share-features { margin-top: 8px; }
+.share-lists { margin-left: 12px; }

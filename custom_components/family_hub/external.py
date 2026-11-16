@@ -418,7 +418,15 @@ class ExternalManager:
                     kind = type_of(name, types)
                     label = kind["label"] if kind else name
                     color = kind["color"] if kind else str(source.get("color") or "#64748B")
-                    items.setdefault(label, {"label": label[:60], "color": color})
+                    items.setdefault(
+                        label,
+                        {
+                            "label": label[:60],
+                            "color": color,
+                            "type": str(kind["id"])[:40] if kind else "",
+                            "icon": str(kind.get("icon") or "")[:60] if kind else "",
+                        },
+                    )
             if items:
                 found.append({"date": day.isoformat(), "items": list(items.values())})
         return found

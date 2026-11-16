@@ -1,5 +1,40 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.10.0b2
+
+Beta. Chi usa solo il pannello in Home Assistant non vede differenze; la 0.9.0 stabile non cambia.
+
+- **«Completa» è il pannello di Family Hub**: stessa pagina, stesso script e stesso stile (copiati
+  senza modifiche dall'app; un test controlla che restino uguali). Barra in alto con ora e data,
+  meteo del momento, «Liste», menu ☰ e «+ Nuovo»; viste Sett., Mese, Elenco con ← Oggi →;
+  pillole delle persone (Tutti e solo le persone permesse) e dei rifiuti; settimana a colonne con
+  il meteo del giorno e le card colorate; tema chiaro/scuro della famiglia e «Riduci
+  trasparenza»; stesso dettaglio dell'appuntamento (modifica/elimina solo i propri, con il
+  permesso); plancia «Turni» dal menu ☰ per chi ha i suoi turni. Sul telefono come il pannello su
+  schermo stretto.
+- I dati arrivano solo dall'API invitati, con i controlli e la Regola Zero sul server: nessun
+  token di Home Assistant sul telefono, nessuna persona, calendario o lista non permessi, nemmeno
+  nascosti. Il menu ☰ dell'invitato non ha mai Condivisione, Procedura guidata, Calendari esterni
+  o Avvisi; ogni altra richiesta del pannello è rifiutata.
+- «Semplice» resta com'era (caratteri grandi, poche voci). Completa senza calendario, o senza
+  rete, apre la Semplice (che ha la copia salvata sul telefono).
+- **Calendari esterni** (scuola, Google, ICS) anche per gli invitati: in «Calendari visibili»
+  (nuovo invito e «Modifica permessi») ogni calendario esterno ha il suo interruttore, spento di
+  default; Nonni e Babysitter propongono acceso quello di tipo «Vacanze scuola». Gli eventi
+  compaiono nella web app (Semplice e Completa) in sola lettura. Regola Zero: passa solo un
+  calendario permesso a quell'invitato; se il calendario è di alcune persone, almeno una deve
+  essere tra le sue; gli eventi privati o riservati di un file ICS non passano mai; un calendario
+  non permesso non viene nemmeno letto. I calendari dei rifiuti restano nella funzione «Rifiuti».
+  La pagina «Calendari esterni» (collegare, togliere, configurare) resta solo per gli adulti.
+- Modello **«Nonni»**: accende anche «Promemoria degli appuntamenti» e «Notifiche».
+- I **modelli scelgono i calendari** della famiglia (Famiglia; più Scuola per Nonni e
+  Babysitter), se esistono e se non ne è già scelto uno. Se manca qualcosa (nome, persone,
+  calendari), la sezione è evidenziata e portata in vista.
+- Scheda **Inviti**: un invito già usato mostra i permessi **attuali** del telefono collegato.
+- **«Elimina»** su un telefono disattivato chiede conferma.
+- **Liste** accese senza nessuna lista scelta: il tasto «Liste» non compare sul telefono e l'API
+  risponde 403; in Condivisione un avviso lo dice.
+
 ## 0.10.0b1
 
 Beta («web app completa»). Chi resta sulla 0.9.0 stabile non riceve questo aggiornamento; chi usa

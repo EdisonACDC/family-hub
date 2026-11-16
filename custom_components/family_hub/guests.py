@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_point_in_time, async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -41,6 +42,7 @@ from . import webpush
 from .const import (
     CONF_FIRST_WEEKDAY,
     CONF_LANGUAGE,
+    CONF_THEME,
     CONF_TIME_FORMAT,
     CONF_WEEK_FROM_TODAY,
     DEFAULT_REMINDERS,
@@ -433,6 +435,15 @@ def _day(value: Any) -> date:
         raise GuestError("invalid", 422) from err
 
 
+MAX_EXTERNAL_EVENTS = 500
+
+
+def _moment(value: Any) -> date | datetime:
+    """A day ("2026-11-17") or a moment, as Home Assistant's calendar service gives them."""
+    text = str(value)
+    return date.fromisoformat(text) if len(text) == 10 else datetime.fromisoformat(text)
+
+
 EVENT_KEYS = {"title", "person", "category", "date", "all_day", "start", "end", "location", "note"}
 
 
@@ -709,7 +720,7 @@ class GuestManager:
         if not _COLOR.match(shift_color) or shifts_category not in known_categories:
             raise GuestError("invalid", 422)
         # Mode, template, the functions it may use and the lists it may open.
-        extra = gf.clean(raw, gf.family_lists(self.entry.options))
+        extra = gf.clean(raw, gf.family_lists(self.entry.options), list(self.externals()))
         if extra is None:
             raise GuestError("invalid", 422)
         return {
@@ -1434,6 +1445,9 @@ class GuestManager:
         }
         if mine:
             item["note"] = record.get("description") or ""
+        own = device.get("person_id")
+        if record.get("shift_id") and own and own in (record.get("persons") or []):
+            item["shift_id"] = str(record["shift_id"])
         return item
 
     def me(self, device: dict[str, Any]) -> dict[str, Any]:
@@ -1453,8 +1467,15 @@ class GuestManager:
                 "vapid": self.vapid.get("public", "") if self.push_allowed(device) else "",
                 **gf.describe(device),
                 # The lists it may open: their names, never Home Assistant's entity ids.
-                "lists": self.guest_lists(device) if gf.has(device, gf.LISTS) else [],
+                "lists": (lists := self.guest_lists(device) if gf.has(device, gf.LISTS) else []),
+                "features": {
+                    name: gf.has(device, name) and (name != gf.LISTS or bool(lists))
+                    for name in gf.FEATURES
+                },
+                # The external calendars it may see: name, type and colour, never entity ids.
+                "externals": self.guest_externals(device),
                 "language": self.language,
+                "theme": str(options.get(CONF_THEME) or "auto"),
                 "first_weekday": str(options.get(CONF_FIRST_WEEKDAY) or "monday"),
                 "time_format": str(options.get(CONF_TIME_FORMAT) or "24h"),
                 # As on the wall tablet: the week shown starts today, unless the family chose
@@ -1470,6 +1491,10 @@ class GuestManager:
                     if pid and pid in persons
                 ],
                 "own_person": device.get("person_id") if device.get("person_id") in persons else "",
+                # The calendar the guest's own shifts go to (its name, for the shifts board).
+                "shifts_calendar": str(
+                    categories.get(str(device.get("shifts_category") or ""), {}).get("name", "")
+                ),
                 "has_shifts": bool(device.get("has_shifts")) and device.get("person_id") in persons,
                 "categories": [
                     {
@@ -1510,6 +1535,159 @@ class GuestManager:
             and _overlaps(item["event"], window_start, window_end)
         ]
         return sorted(items, key=lambda item: (_start_of(item), item["title"]))
+
+    # ----- external calendars (0.10.0b2) ---------------------------------------
+
+    def externals(self) -> dict[str, dict[str, Any]]:
+        """The external calendars Family Hub shows, by entity id: its own from a file or a link,
+        and the Home Assistant calendars chosen in the guide. Rubbish calendars are left out
+        (they come with "Giorni dei rifiuti")."""
+        found: dict[str, dict[str, Any]] = {}
+        manager = getattr(getattr(self.entry, "runtime_data", None), "external", None)
+        if manager is not None:
+            for source in manager.sources():
+                entity = manager.entities.get(source["id"])
+                entity_id = getattr(entity, "entity_id", None)
+                if not entity_id or source.get("type") == "rifiuti":
+                    continue
+                found[str(entity_id)] = {
+                    "name": str(source.get("name") or ""),
+                    "type": str(source.get("type") or "altro"),
+                    "color": str(source.get("color") or "#64748B"),
+                    "persons": [str(p) for p in source.get("persons") or []],
+                    "ics": entity,
+                }
+        sources = self.entry.options.get("sources") or {}
+        styles = sources.get("calendar_styles") or {}
+        registry = er.async_get(self.hass)
+        for entity_id in sources.get("calendars") or []:
+            if not isinstance(entity_id, str) or entity_id in found:
+                continue
+            registered = registry.async_get(entity_id)
+            if registered is not None and registered.platform == DOMAIN:
+                continue  # one of Family Hub's own calendars, whatever its name
+            style = styles.get(entity_id) or {}
+            if style.get("type") == "rifiuti":
+                continue
+            state = self.hass.states.get(entity_id)
+            friendly = state.attributes.get("friendly_name") if state is not None else None
+            found[entity_id] = {
+                "name": str(style.get("name") or friendly or entity_id.split(".", 1)[-1]),
+                "type": str(style.get("type") or "altro"),
+                "color": str(style.get("color") or "#64748B"),
+                "persons": [str(p) for p in style.get("persons") or []],
+                "ics": None,
+            }
+        return found
+
+    def _allowed_externals(self, device: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+        """The external calendars this phone may see: chosen for it by an adult, still shown by
+        Family Hub, and (when the calendar is for some persons) with one of its persons."""
+        if not gf.has(device, gf.CALENDAR):
+            return []
+        known = self.externals()
+        visible = {*device["persons"], *([device["person_id"]] if device.get("person_id") else [])}
+        return [
+            (entity_id, known[entity_id])
+            for entity_id in device.get("externals") or []
+            if entity_id in known
+            and (not known[entity_id]["persons"] or set(known[entity_id]["persons"]) & visible)
+        ]
+
+    def guest_externals(self, device: dict[str, Any]) -> list[dict[str, Any]]:
+        visible = {*device["persons"], *([device["person_id"]] if device.get("person_id") else [])}
+        return [
+            {
+                "id": gf.external_id(self.entry.entry_id, entity_id),
+                "name": info["name"][:60],
+                "type": info["type"],
+                "color": info["color"],
+                "persons": [p for p in info["persons"] if p in visible],
+            }
+            for entity_id, info in self._allowed_externals(device)
+        ]
+
+    async def async_external_events(
+        self, device: dict[str, Any], start: date, days: int
+    ) -> list[dict[str, Any]]:
+        """The events of the external calendars this phone may see, read only. A calendar that
+        is not allowed is never read; persons outside the phone's scope are left out."""
+        if not 1 <= days <= MAX_RANGE_DAYS:
+            raise GuestError("invalid", 422)
+        zone = dt_util.get_default_time_zone()
+        window_start = datetime.combine(start, time(0), tzinfo=zone)
+        window_end = window_start + timedelta(days=days)
+        visible = {*device["persons"], *([device["person_id"]] if device.get("person_id") else [])}
+        items: list[dict[str, Any]] = []
+        for entity_id, info in self._allowed_externals(device):
+            if info["ics"] is not None:
+                calendar = info["ics"].calendar
+                raw = gf.ics_events(calendar, window_start, window_end) if calendar else []
+            else:
+                raw = await self._ha_events(entity_id, window_start, window_end)
+            for event in raw[:MAX_EXTERNAL_EVENTS]:
+                first, last = event["start"], event["end"]
+                all_day = not isinstance(first, datetime)
+                items.append(
+                    {
+                        # An id of its own (the web app tells events apart by it); it is not
+                        # an appointment of Family Hub, so it can never be changed or deleted.
+                        "id": "ext"
+                        + hashlib.sha256(
+                            f"{entity_id}|{first.isoformat()}|{event['summary']}".encode()
+                        ).hexdigest()[:16],
+                        "title": str(event["summary"])[:MAX_TITLE],
+                        "start": first.isoformat()
+                        if all_day
+                        else dt_util.as_local(first).isoformat(),
+                        "end": last.isoformat() if all_day else dt_util.as_local(last).isoformat(),
+                        "all_day": all_day,
+                        "category": gf.external_id(self.entry.entry_id, entity_id),
+                        "external": True,
+                        "persons": [p for p in info["persons"] if p in visible],
+                        "location": str(event.get("location") or "")[:MAX_LOCATION],
+                        "added_by": "",
+                        "mine": False,
+                        "status": "ok",
+                    }
+                )
+        return items
+
+    async def _ha_events(
+        self, entity_id: str, start: datetime, end: datetime
+    ) -> list[dict[str, Any]]:
+        """The events of a Home Assistant calendar in a window; nothing if it cannot be read."""
+        try:
+            result: Any = await self.hass.services.async_call(
+                "calendar",
+                "get_events",
+                {
+                    "entity_id": entity_id,
+                    "start_date_time": start.isoformat(),
+                    "end_date_time": end.isoformat(),
+                },
+                blocking=True,
+                return_response=True,
+            )
+        except Exception as err:  # noqa: BLE001 - a calendar that is away must not empty the week
+            LOGGER.debug("External calendar %s not readable: %s", entity_id, err)
+            return []
+        found: list[dict[str, Any]] = []
+        for event in (result or {}).get(entity_id, {}).get("events", []):
+            try:
+                first = _moment(event.get("start"))
+                last = _moment(event.get("end"))
+            except (TypeError, ValueError):
+                continue
+            found.append(
+                {
+                    "summary": str(event.get("summary") or ""),
+                    "start": first,
+                    "end": last,
+                    "location": str(event.get("location") or ""),
+                }
+            )
+        return found
 
     # ----- lists, rubbish days and weather (0.10) ------------------------------
 
@@ -1587,7 +1765,46 @@ class GuestManager:
             return {"line": "", "condition": ""}
         state = self.hass.states.get(chosen[0])
         line = await summary_line(self.hass, chosen[0], self.language)
-        return {"line": line or "", "condition": state.state if state is not None else ""}
+        attributes = state.attributes if state is not None else {}
+        temperature = attributes.get("temperature")
+        return {
+            "line": line or "",
+            "condition": state.state if state is not None else "",
+            "temperature": temperature if isinstance(temperature, (int, float)) else None,
+            "unit": str(attributes.get("temperature_unit") or "°C")[:4],
+            "forecast": await self._forecast(chosen[0]),
+        }
+
+    async def _forecast(self, entity_id: str) -> list[dict[str, Any]]:
+        """The daily forecast (at most 10 days): only day, condition and temperatures."""
+        try:
+            result: Any = await self.hass.services.async_call(
+                "weather",
+                "get_forecasts",
+                {"entity_id": entity_id, "type": "daily"},
+                blocking=True,
+                return_response=True,
+            )
+        except Exception as err:  # noqa: BLE001 - the forecast is optional
+            LOGGER.debug("No forecast from %s: %s", entity_id, err)
+            return []
+        days = (result or {}).get(entity_id, {}).get("forecast", [])
+        found: list[dict[str, Any]] = []
+        for day in days[:10] if isinstance(days, list) else []:
+            if not isinstance(day, dict):
+                continue
+            found.append(
+                {
+                    "datetime": str(day.get("datetime") or "")[:25],
+                    "condition": str(day.get("condition") or "")[:40],
+                    **{
+                        key: day[key]
+                        for key in ("temperature", "templow", "precipitation_probability")
+                        if isinstance(day.get(key), (int, float))
+                    },
+                }
+            )
+        return found
 
     # ----- appointments from a guest ---------------------------------------
 

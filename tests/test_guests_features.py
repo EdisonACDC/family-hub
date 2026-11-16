@@ -6,7 +6,7 @@ of 0.9 become "Nonni" with the permissions they have. Names are invented."""
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from unittest.mock import patch
 
@@ -185,7 +185,10 @@ async def test_without_template_only_the_calendar_read_only(
 @pytest.mark.parametrize(
     ("template", "expected"),
     [
-        ("grandparents", {"mode": "simple", "permission": "add", "has_shifts": True}),
+        (
+            "grandparents",
+            {"mode": "simple", "permission": "add", "has_shifts": True, "notify": True},
+        ),
         ("babysitter", {"mode": "simple", "permission": "view", "has_shifts": False}),
         ("relative", {"mode": "full", "permission": "edit_own", "notify": True}),
     ],
@@ -213,6 +216,8 @@ async def test_templates(
     for key, value in expected.items():
         assert invite[key] == value, key
     assert invite["features"]["calendar"] is True
+    # 0.10.0b2: the grandparents get the reminders of the appointments too.
+    assert invite["features"]["reminders"] is (template in ("grandparents", "relative"))
     assert invite["features"]["lists"] is False and invite["lists"] == []
     if template == "babysitter":
         assert not any(v for k, v in invite["features"].items() if k != "calendar")
@@ -407,6 +412,228 @@ async def test_lists_turned_off_answer_403(
     assert (await (await client.get(f"{API}me", headers=headers)).json())["lists"] == []
 
 
+async def test_lists_on_but_none_chosen(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, todo: dict[str, Any]
+) -> None:
+    """Lists turned on, no list chosen: no "Liste" on the phone, 403 on the API; the panel still
+    shows the switch as the adult set it."""
+    _, headers = await _phone(client, hass_ws_client, template="custom", features={"lists": True})
+    me = await (await client.get(f"{API}me", headers=headers)).json()
+    assert me["lists"] == [] and me["features"]["lists"] is False
+    entry_id = next(iter(hass.config_entries.async_entries(DOMAIN))).entry_id
+    for entity in LISTS:
+        answer = await client.get(f"{API}lists/{gf.list_id(entry_id, entity)}", headers=headers)
+        assert answer.status == 403
+    device = (await _ws(hass_ws_client, "list"))["result"]["devices"][0]
+    assert device["features"]["lists"] is True and device["lists"] == []
+
+
+async def test_lists_gone_from_family_hub(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, todo: dict[str, Any]
+) -> None:
+    """The only chosen list is no longer one of Family Hub's: the button goes away too."""
+    _, headers = await _phone(
+        client, hass_ws_client, template="custom", features={"lists": True}, lists=[LISTS[0]]
+    )
+    entry = next(iter(hass.config_entries.async_entries(DOMAIN)))
+    options = {**entry.options, "sources": {"todo": [LISTS[1]], "calendars": [], "weather": []}}
+    hass.config_entries.async_update_entry(entry, options=options)
+    await hass.async_block_till_done()
+    me = await (await client.get(f"{API}me", headers=headers)).json()
+    assert me["lists"] == [] and me["features"]["lists"] is False
+
+
+# ----- external calendars (0.10.0b2) ---------------------------------------------------------
+
+SCHOOL = "calendar.scuola_esempio"
+WORK = "calendar.lavoro_riservato"
+MUM = "calendar.solo_mamma"
+
+
+@pytest.fixture
+def outside(hass: HomeAssistant, family: MockConfigEntry) -> date:
+    """Three calendars from outside, chosen in the guide: the school's (for everyone), a work
+    one, and one that is for Mamma only. Each has events tomorrow."""
+    tomorrow = dt_util.now().date() + timedelta(days=1)
+    events = {
+        SCHOOL: [
+            {
+                "summary": "Gita scolastica",
+                "start": f"{tomorrow.isoformat()}T09:00:00+01:00",
+                "end": f"{tomorrow.isoformat()}T12:00:00+01:00",
+                "location": "Museo",
+            },
+            {
+                "summary": "Colloqui",
+                "start": tomorrow.isoformat(),
+                "end": (tomorrow + timedelta(days=1)).isoformat(),
+            },
+        ],
+        WORK: [
+            {
+                "summary": "RIUNIONE-RISERVATA",
+                "start": f"{tomorrow.isoformat()}T10:00:00+01:00",
+                "end": f"{tomorrow.isoformat()}T11:00:00+01:00",
+            }
+        ],
+        MUM: [
+            {
+                "summary": "SOLO-MAMMA-ESTERNO",
+                "start": f"{tomorrow.isoformat()}T10:00:00+01:00",
+                "end": f"{tomorrow.isoformat()}T11:00:00+01:00",
+            }
+        ],
+    }
+    asked: list[str] = []
+
+    async def get_events(call: ServiceCall) -> dict[str, Any]:
+        ids = call.data["entity_id"]
+        ids = ids if isinstance(ids, list) else [ids]
+        asked.extend(ids)
+        return {e: {"events": events[e]} for e in ids}
+
+    hass.services.async_register(
+        "calendar", "get_events", get_events, supports_response=SupportsResponse.ONLY
+    )
+    for entity_id, name in ((SCHOOL, "Scuola Esempio"), (WORK, "Lavoro"), (MUM, "Mamma")):
+        hass.states.async_set(entity_id, "off", {"friendly_name": name})
+    hass.config_entries.async_update_entry(
+        family,
+        options={
+            **family.options,
+            "sources": {
+                "todo": LISTS,
+                "weather": [WEATHER],
+                "calendars": [SCHOOL, WORK, MUM],
+                "calendar_styles": {
+                    SCHOOL: {"type": "vacanze_scuola", "color": "#0EA5E9", "persons": []},
+                    WORK: {"type": "altro", "persons": []},
+                    MUM: {"type": "altro", "persons": ["mamma"]},
+                },
+            },
+        },
+    )
+    hass.data["asked_calendars"] = asked
+    return tomorrow
+
+
+async def test_external_calendar_allowed_is_visible(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, outside: date
+) -> None:
+    _, headers = await _phone(client, hass_ws_client, template="custom", externals=[SCHOOL])
+    answer = await client.get(f"{API}events?from={_today()}&days=7", headers=headers)
+    text = await answer.text()
+    events = (await answer.json())["events"]
+    assert sorted(e["title"] for e in events) == ["Colloqui", "Gita scolastica"]
+    trip = next(e for e in events if e["title"] == "Gita scolastica")
+    assert trip["external"] is True and trip["mine"] is False and trip["location"] == "Museo"
+    assert next(e for e in events if e["title"] == "Colloqui")["all_day"] is True
+    # Its name and colour, never the entity id; the other calendars are not even read.
+    me = await (await client.get(f"{API}me", headers=headers)).json()
+    assert [(x["name"], x["color"], x["type"]) for x in me["externals"]] == [
+        ("Scuola Esempio", "#0EA5E9", "vacanze_scuola")
+    ]
+    assert trip["category"] == me["externals"][0]["id"]
+    assert "calendar." not in text and "calendar." not in str(me)
+    assert set(hass.data["asked_calendars"]) == {SCHOOL}
+    # Read only: an external event cannot be changed or deleted.
+    change = {"title": "x", "person": "sofia", "category": "scuola", "date": _today()}
+    change |= {"start": "10:00", "end": "11:00"}
+    assert (await client.put(f"{API}events/{trip['id']}", json=change, headers=headers)).status in (
+        403,
+        404,
+    )
+    assert (await client.delete(f"{API}events/{trip['id']}", headers=headers)).status in (403, 404)
+
+
+async def test_external_calendar_not_allowed_is_absent(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, outside: date
+) -> None:
+    # Default: no external calendar at all.
+    _, headers = await _phone(client, hass_ws_client, template="grandparents")
+    answer = await client.get(f"{API}events?from={_today()}&days=7", headers=headers)
+    text = await answer.text() + await (await client.get(f"{API}me", headers=headers)).text()
+    for secret in ("Gita", "Colloqui", "RIUNIONE-RISERVATA", "SOLO-MAMMA", "Lavoro", "Scuola Es"):
+        assert secret not in text, secret
+    assert hass.data["asked_calendars"] == []
+
+
+async def test_external_event_of_a_person_not_allowed_is_absent(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, outside: date
+) -> None:
+    """The calendar is turned on for the guest, but it is Mamma's and Mamma is not among the
+    guest's persons: nothing of it passes."""
+    _, headers = await _phone(client, hass_ws_client, template="custom", externals=[SCHOOL, MUM])
+    answer = await client.get(f"{API}events?from={_today()}&days=7", headers=headers)
+    text = await answer.text()
+    assert "Gita scolastica" in text and "SOLO-MAMMA" not in text
+    me = await (await client.get(f"{API}me", headers=headers)).json()
+    assert [x["name"] for x in me["externals"]] == ["Scuola Esempio"]
+    assert MUM not in hass.data["asked_calendars"]
+
+
+async def test_external_calendar_changes_later(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, outside: date
+) -> None:
+    device_id, headers = await _phone(
+        client, hass_ws_client, template="custom", externals=[SCHOOL, WORK]
+    )
+    url = f"{API}events?from={_today()}&days=7"
+    assert "RIUNIONE-RISERVATA" in await (await client.get(url, headers=headers)).text()
+    await _ws(hass_ws_client, "device_update", device_id=device_id, changes={"externals": [SCHOOL]})
+    text = await (await client.get(url, headers=headers)).text()
+    assert "RIUNIONE-RISERVATA" not in text and "Gita" in text
+    device = (await _ws(hass_ws_client, "list"))["result"]["devices"][0]
+    assert device["externals"] == [SCHOOL]
+    # An unknown calendar, or one of Family Hub's own, is refused.
+    for bad in (["calendar.sconosciuto"], ["calendar.family_hub_scuola"], "x"):
+        answer = await _ws(
+            hass_ws_client, "device_update", device_id=device_id, changes={"externals": bad}
+        )
+        assert not answer["success"], bad
+    # With the calendar turned off for the guest, the external ones go too.
+    await _ws(
+        hass_ws_client,
+        "device_update",
+        device_id=device_id,
+        changes={"features": {"calendar": False}},
+    )
+    assert (await client.get(url, headers=headers)).status == 403
+
+
+def test_private_ics_events_never_pass() -> None:
+    from custom_components.family_hub.external import parse
+
+    text = "\r\n".join(
+        [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//test//IT",
+            "BEGIN:VEVENT",
+            "UID:1",
+            "DTSTAMP:20261101T000000Z",
+            "DTSTART;VALUE=DATE:20261117",
+            "DTEND;VALUE=DATE:20261118",
+            "SUMMARY:Recita",
+            "END:VEVENT",
+            "BEGIN:VEVENT",
+            "UID:2",
+            "DTSTAMP:20261101T000000Z",
+            "DTSTART;VALUE=DATE:20261117",
+            "DTEND;VALUE=DATE:20261118",
+            "SUMMARY:PRIVATO-ICS",
+            "CLASS:PRIVATE",
+            "END:VEVENT",
+            "END:VCALENDAR",
+            "",
+        ]
+    )
+    zone = dt_util.get_default_time_zone()
+    start = datetime(2026, 11, 16, tzinfo=zone)
+    found = gf.ics_events(parse(text), start, start + timedelta(days=7))
+    assert [e["summary"] for e in found] == ["Recita"]
+
+
 # ----- rubbish days and weather ---------------------------------------------------------------
 
 
@@ -439,6 +666,8 @@ async def test_waste_days(
     days = (await answer.json())["days"]
     assert [d["date"] for d in days] == [tomorrow.isoformat()]
     assert [i["label"] for i in days[0]["items"]] == ["Carta"]
+    # The type and icon, for the rubbish pills of "Completa".
+    assert days[0]["items"][0]["type"] and "icon" in days[0]["items"][0]
     assert "SOLO-MAMMA" not in text and "Gita" not in text
     assert (await client.get(f"{API}waste?from={_today()}&days=99", headers=headers)).status == 422
 
@@ -451,6 +680,55 @@ async def test_weather(hass: HomeAssistant, client: TestClient, hass_ws_client: 
     data = await answer.json()
     assert data["condition"] == "sunny" and "21" in data["line"]
     assert WEATHER not in await answer.text()
+    # Now and the daily forecast, for the top bar and the week columns of "Completa".
+    assert data["temperature"] == 21 and data["unit"] == "°C"
+    assert data["forecast"] == []  # no forecast service in this test
+
+
+async def test_weather_forecast(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any
+) -> None:
+    hass.states.async_set(WEATHER, "rainy", {"temperature": 9.5, "temperature_unit": "°C"})
+
+    async def forecasts(call: ServiceCall) -> dict[str, Any]:
+        return {
+            WEATHER: {
+                "forecast": [
+                    {
+                        "datetime": "2026-11-17T12:00:00+00:00",
+                        "condition": "sunny",
+                        "temperature": 14,
+                        "templow": 4,
+                        "wind_bearing": 200,
+                        "secret": "x",
+                    }
+                ]
+                * 12
+            }
+        }
+
+    hass.services.async_register(
+        "weather", "get_forecasts", forecasts, supports_response=SupportsResponse.ONLY
+    )
+    _, headers = await _phone(client, hass_ws_client, template="custom", features={"weather": True})
+    data = await (await client.get(f"{API}weather", headers=headers)).json()
+    assert len(data["forecast"]) == 10
+    assert data["forecast"][0] == {
+        "datetime": "2026-11-17T12:00:00+00:00",
+        "condition": "sunny",
+        "temperature": 14,
+        "templow": 4,
+    }
+
+
+async def test_me_has_the_family_theme(
+    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, family: MockConfigEntry
+) -> None:
+    hass.config_entries.async_update_entry(family, options={**family.options, "theme": "dark"})
+    await hass.async_block_till_done()
+    _, headers = await _phone(client, hass_ws_client, template="relative")
+    me = await (await client.get(f"{API}me", headers=headers)).json()
+    assert me["theme"] == "dark" and me["mode"] == "full"
 
 
 # ----- notifications and reminders --------------------------------------------------------------

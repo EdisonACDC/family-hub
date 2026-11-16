@@ -865,6 +865,12 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
       state.offRetries = 0;
       state.me = me;
       save("me", me);
+      // "Completa" with the calendar: the panel of Home Assistant (full.html). Only when
+      // Family Hub answered: without network this page shows the copy the phone keeps.
+      if (me.mode === "full" && me.features && me.features.calendar) {
+        window.location.replace(BASE + "full.html");
+        return;
+      }
       state.lang = pickLanguage(me.language);
       applyStaticTexts();
       state.offline = false;
@@ -999,7 +1005,8 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
     return (state.me.persons || []).filter(function (p) { return p.id === id; })[0];
   }
   function categoryOf(id) {
-    return (state.me.categories || []).filter(function (c) { return c.id === id; })[0];
+    return (state.me.categories || []).concat(state.me.externals || [])
+      .filter(function (c) { return c.id === id; })[0];
   }
   function colorOf(item) {
     var person = personOf((item.persons || [])[0]);

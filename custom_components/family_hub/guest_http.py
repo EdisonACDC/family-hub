@@ -58,6 +58,15 @@ FILES: dict[str, str] = {
     "icon-512.png": "image/png",
     "icon-maskable-512.png": "image/png",
     "apple-touch-icon.png": "image/png",
+    # "Completa" (0.10.0b2): the panel's own page, script and style, copied unchanged from the
+    # add-on by scripts/sync_guest_panel.py, and the bridge to this API.
+    "full.html": "text/html; charset=utf-8",
+    "bridge.js": "text/javascript; charset=utf-8",
+    "full.css": "text/css; charset=utf-8",
+    "panel-app.js": "text/javascript; charset=utf-8",
+    "panel-i18n.js": "text/javascript; charset=utf-8",
+    "panel-mdi.js": "text/javascript; charset=utf-8",
+    "panel.css": "text/css; charset=utf-8",
 }
 CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
@@ -272,6 +281,11 @@ class GuestEventsView(_GuestView):
             except ValueError as err:
                 raise GuestError("invalid", 422) from err
             items = manager.list_events(device, start, days)
+            # External calendars (school, Google, ICS): only those allowed to this phone.
+            items += await manager.async_external_events(device, start, days)
+            items.sort(
+                key=lambda item: (str(item["start"])[:10], str(item["start"]), item["title"])
+            )
         except GuestError as err:
             return _fail(err)
         return _json({"events": items})

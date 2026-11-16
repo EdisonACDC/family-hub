@@ -1706,6 +1706,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .share-card h3 { margin: 0 0 8px; }
 .share-label { font-weight: 700; margin: 10px 0 4px; }
 .share-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.share-missing { outline: 2px solid #DC2626; outline-offset: 4px; border-radius: 6px; }
 .share-check { display: inline-flex; align-items: center; gap: 6px; }
 .share-warning { background: #FEF3C7; color: #78350F; border-radius: 12px; padding: 10px 12px; font-weight: 600; }
 .share-link input { width: 100%; font: inherit; padding: 8px; border-radius: 10px; }

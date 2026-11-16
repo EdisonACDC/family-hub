@@ -3,7 +3,7 @@
  * last copy of the appointments). */
 "use strict";
 
-var CACHE = "family-hub-guest-v2";
+var CACHE = "family-hub-guest-v3";
 var BASE = "/api/family_hub/guest/";
 var SHELL = [
   BASE,
@@ -38,7 +38,9 @@ self.addEventListener("fetch", function (event) {
   var url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.indexOf(BASE) !== 0) return;
   if (url.pathname.indexOf(BASE + "api/") === 0) return;
-  var key = request.mode === "navigate" ? BASE : url.pathname;
+  // Pages are kept by their address without the query: the simple app (and its invite in
+  // ?i=) under BASE, "Completa" under full.html.
+  var key = request.mode === "navigate" && url.pathname !== BASE + "full.html" ? BASE : url.pathname;
   // The network first, so an update arrives at once; the saved copy when offline.
   event.respondWith(
     fetch(request).then(function (response) {
