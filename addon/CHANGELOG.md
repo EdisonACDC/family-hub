@@ -1,5 +1,14 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.10.1
+
+Stabile. Un solo ritocco, nessuna modifica incompatibile.
+
+- **Procedura guidata, lingua**: la lingua scelta al passo 1 viene salvata subito (non più solo
+  con «Salva» al passo 6), così il pannello, gli avvisi della famiglia e la web app degli invitati
+  restano sempre nella stessa lingua. Viene scritta solo la lingua: il resto della procedura
+  aspetta «Salva». In una famiglia nuova, prima del primo salvataggio, resta un'anteprima.
+
 ## 0.10.0
 
 Stabile. Raccoglie le beta 0.10.0b1–b3. Nessuna modifica incompatibile: chi usa solo il pannello

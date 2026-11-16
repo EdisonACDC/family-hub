@@ -1778,12 +1778,35 @@
     return [["adult", f("roleAdult")], ["child", f("roleChild")], ["guest", f("roleGuest")]];
   }
 
+  // The family's language is saved as soon as it is chosen (not at the last step), so the panel,
+  // the family's notifications and the guests' web app always speak the same one. Only the
+  // language is written: the rest is what Home Assistant has, not the guide's unsaved draft.
+  // Before the first save there is no family yet: the language is a preview until "Salva".
+  function saveLanguageNow(language) {
+    if (!state.draftConfigured) return;
+    request({ op: "config_get" }).then(function (config) {
+      if (!config.configured) return null;
+      var saved = {
+        family: Object.assign({}, config.family, { language: language }),
+        screen: config.screen,
+        persons: config.persons,
+        categories: config.categories,
+        reminders: config.reminders,
+        sources: sourcesForSave(config.sources || {})
+      };
+      return request({ op: "config_save", config: saved }).then(function () {
+        state.savedLanguage = language;  // leaving the guide keeps it
+      });
+    }).catch(function () { /* not saved now: it is saved with the guide's "Salva" */ });
+  }
+
   function buildFamilyFields(box) {
     var f = I.f, fam = state.draft.family;
     box.appendChild(fieldRow(f("familyName"), textInput(fam.family_name, function (v) { fam.family_name = v; }, { maxlength: 60, required: true })));
     box.appendChild(fieldRow(f("language"), selectInput([["it", "Italiano"], ["de", "Deutsch"], ["en", "English"]], fam.language, function (v) {
       fam.language = v;
-      setLanguage(v);  // a preview: it goes back if the guide is left without saving
+      setLanguage(v);
+      saveLanguageNow(v);
     })));
     box.appendChild(fieldRow(f("weekday"), selectInput([["monday", f("monday")], ["sunday", f("sunday")]], fam.first_weekday, function (v) { fam.first_weekday = v; })));
     box.appendChild(fieldRow(f("timeFormat"), selectInput([["24h", f("h24")], ["12h", f("h12")]], fam.time_format, function (v) { fam.time_format = v; })));
@@ -1897,6 +1920,7 @@
       // What is saved: leaving without saving goes back to it (the theme is previewed live).
       state.savedTheme = config.screen.theme || "auto";
       state.savedLanguage = config.family.language || I.lang;
+      state.draftConfigured = !!config.configured;
       state.draftDirty = false;
       showWizard();
     }).catch(function (err) {
