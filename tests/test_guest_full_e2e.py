@@ -300,7 +300,26 @@ async def test_full_mode_is_the_panel(
                     assert await page.locator(f"#{hidden}").is_hidden(), hidden
                 assert await page.locator("#menu-shifts").is_hidden()
                 assert await page.locator("#menu-transparency").count() == 1
+                # 0.10.0b3: the menu closes with a tap outside, Esc, a view change, an event.
+                await page.click("#clock-time")
+                await page.wait_for_selector("#menu", state="hidden")
                 await page.click("#menu-btn")
+                await page.keyboard.press("Escape")
+                await page.wait_for_selector("#menu", state="hidden")
+                await page.click("#menu-btn")
+                await page.click("#view-switch [data-view='list']")
+                await page.wait_for_selector("#menu", state="hidden")
+                await page.click("#view-switch [data-view='week']")
+                await page.click("#menu-btn")
+                await page.click("#week .event:has-text('Pediatra')")
+                await page.wait_for_selector("#card-overlay:not([hidden])")
+                assert await page.locator("#menu").is_hidden()
+                await page.click("#card-foot button")
+                await page.click("#menu-btn")
+                await page.click("#add-btn")
+                await page.wait_for_selector("#event-overlay:not([hidden])")
+                assert await page.locator("#menu").is_hidden()
+                await page.click("#event-cancel")
                 # Views: Mese and Elenco, with the arrows.
                 await page.click("#view-switch [data-view='month']")
                 await page.wait_for_selector(".month-scroll, #month-scroll")

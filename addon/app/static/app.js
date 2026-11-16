@@ -1335,6 +1335,7 @@
   }
 
   function openForm(item) {
+    toggleMenu(false);
     var form = $("event-form");
     form.reset();
     state.editing = item || null;
@@ -1673,6 +1674,7 @@
   }
 
   function openCard(item) {
+    toggleMenu(false);
     state.cardItem = item;
     var ev = item.ev;
     var box = $("card-body");
@@ -4219,6 +4221,7 @@
   }
 
   function setView(view) {
+    toggleMenu(false);
     state.view = view;
     window.scrollTo(0, 0);  // each view starts at its top (the phone's page may have scrolled)
     saveView(view);
@@ -5336,6 +5339,19 @@
     $("todo-btn").addEventListener("click", openTodos);
     $("todos-close").addEventListener("click", closeTodos);
     $("menu-btn").addEventListener("click", function () { toggleMenu($("menu").hidden); });
+    // The menu closes with a tap or click anywhere outside it (also on the view buttons, an
+    // event or "+ Nuovo", which then do their own work) and with Esc.
+    document.addEventListener("pointerdown", function (e) {
+      if ($("menu").hidden) return;
+      if (e.target.closest && (e.target.closest("#menu") || e.target.closest("#menu-btn"))) return;
+      toggleMenu(false);
+    }, true);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !$("menu").hidden) {
+        toggleMenu(false);
+        $("menu-btn").focus();
+      }
+    });
     $("menu-shifts").addEventListener("click", function () {
       toggleMenu(false);
       openShifts();

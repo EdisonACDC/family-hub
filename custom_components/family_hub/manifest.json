@@ -9,5 +9,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/EdisonACDC/family-hub/issues",
   "requirements": ["ical>=14.3.0", "pywebpush>=2.0.0"],
-  "version": "0.10.0b2"
+  "version": "0.10.0b3"
 }

@@ -1,5 +1,13 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.10.0b3
+
+Beta. Un solo ritocco.
+
+- **Menu ☰**: si chiude toccando o cliccando fuori, con Esc, cambiando vista (Settimana, Mese,
+  Elenco) e quando si apre un appuntamento o «+ Nuovo». Vale per il pannello e per la web app
+  degli invitati in «Completa» (è lo stesso menu).
+
 ## 0.10.0b2
 
 Beta. Chi usa solo il pannello in Home Assistant non vede differenze; la 0.9.0 stabile non cambia.
