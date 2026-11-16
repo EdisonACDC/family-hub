@@ -1,5 +1,37 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.10.0
+
+Stabile. Raccoglie le beta 0.10.0b1–b3. Nessuna modifica incompatibile: chi usa solo il pannello
+in Home Assistant non vede differenze (a parte il menu ☰ che ora si chiude da solo); dati e
+impostazioni restano.
+
+- **Web app completa per gli invitati**: un adulto sceglie, solo da Home Assistant (☰ →
+  Condivisione, nel nuovo invito e in «Modifica permessi»), cosa può usare ogni invitato:
+  Calendario, aggiungere/modificare appuntamenti, turni con la plancia, Liste (quali, e se può
+  aggiungere e spuntare), Promemoria, Notifiche, Giorni dei rifiuti, Meteo. Di default tutto
+  spento tranne il calendario in lettura.
+- **Modelli**: «Nonni» (Semplice, aggiungere appuntamenti, turni propri, promemoria e notifiche),
+  «Babysitter» (Semplice, solo lettura), «Familiare» (Completa), «Personalizzato». Scelgono anche
+  i calendari della famiglia; dopo resta tutto modificabile a mano.
+- **Due modalità**: «Semplice» (caratteri grandi, poche voci, per i nonni) e «Completa», che è
+  il pannello di Family Hub: stessa pagina, stesso script e stesso stile (barra in alto, viste
+  Sett./Mese/Elenco, pillole di persone e rifiuti, meteo, tema della famiglia, dettaglio
+  dell'appuntamento, plancia Turni dal menu ☰), con i dati presi solo dall'API invitati.
+- **Permessi per funzione controllati sul server**: ogni funzione spenta risponde 403; nessun
+  token di Home Assistant sul telefono; mai agli invitati Condivisione, procedura guidata,
+  pagina dei calendari esterni, avvisi e impostazioni.
+- **Calendari esterni per invitato** (scuola, Google, ICS): uno per uno, spenti di default, in
+  sola lettura; un calendario non permesso non viene nemmeno letto, e quelli assegnati a persone
+  che l'invitato non vede non passano.
+- **Regola zero invariata** per ogni funzione nuova: solo le persone scelte, mai i «Privato».
+- **Migrazione automatica**: inviti, telefoni e token della 0.9 continuano a funzionare e
+  diventano «Nonni (Semplice)» con i permessi che avevano.
+- Condivisione: un invito già usato mostra i permessi attuali del telefono; «Elimina» su un
+  telefono disattivato chiede conferma; se manca nome, persone o calendari la sezione è
+  evidenziata. Menu ☰: si chiude toccando fuori, con Esc, cambiando vista o aprendo un
+  appuntamento.
+
 ## 0.10.0b3
 
 Beta. Un solo ritocco.
