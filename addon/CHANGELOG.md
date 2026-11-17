@@ -1,8 +1,8 @@
 # Changelog: Family Hub UI (add-on)
 
-## 0.10.2b1
+## 0.10.2
 
-Beta. Due correzioni dall'installazione vera. Nessuna modifica incompatibile.
+Stabile. Due correzioni dall'installazione vera. Nessuna modifica incompatibile.
 
 - **Amministratori di Home Assistant**: un utente che è amministratore (o proprietario) di Home
   Assistant ha sempre i permessi di adulto in Family Hub (menu completo con Condivisione, Procedura
