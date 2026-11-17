@@ -146,7 +146,12 @@ class HAClient:
         if not reply.get("success"):
             self._streams.pop(msg_id, None)
             error = reply.get("error", {})
-            raise HAError(error.get("message", "unknown error"), error.get("code", "ha_error"))
+            message = str(error.get("message", "unknown error"))
+            code = str(error.get("code", "ha_error"))
+            if "event_changed" in message:
+                # The appointment was changed by someone else since it was read.
+                code = "event_changed"
+            raise HAError(message, code)
         return msg_id, reply
 
     async def call(self, msg_type: str, **payload: Any) -> Any:

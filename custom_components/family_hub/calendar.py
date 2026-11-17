@@ -24,7 +24,7 @@ from homeassistant.util import dt as dt_util
 from . import recurrence
 from .const import DOMAIN, OPT_CATEGORIES, OPT_PERSONS, OPT_SHARED_USERS
 from .models import FamilyHubConfigEntry
-from .storage import EventStore
+from .storage import EventStore, event_version
 
 
 def _offsets_text(offsets: Any) -> str:
@@ -70,6 +70,8 @@ class FamilyHubEvent(CalendarEvent):
     added_by: str = ""
     # Never shown to guests (see guests.py).
     private: bool = False
+    # What the appointment is now (see storage.event_version): sent back with a change.
+    version: str = ""
 
 
 SUPPORTED_FEATURES = (
@@ -252,6 +254,7 @@ class FamilyHubCalendar(CalendarEntity):
             notify=notify_text(record.get("notify")),
             added_by=_added_by(record),
             private=bool(record.get("private", False)),
+            version=event_version(record),
             uid=record["uid"],
             summary=record["summary"],
             start=deserialize_time(record["start"], all_day),
@@ -270,6 +273,15 @@ class FamilyHubCalendar(CalendarEntity):
         if record is None or record["category"] != self.category_id:
             raise ServiceValidationError(f"Event {uid} not found in {self.name}")
         return record
+
+    @staticmethod
+    def _check_version(record: dict[str, Any], version: str | None) -> None:
+        """The change was made on the version that was read; if the appointment is another now,
+        nothing is written. (Checked with no await before the change: nothing can slip in.)"""
+        if version and event_version(record) != version:
+            raise ServiceValidationError(
+                "event_changed: this appointment was changed by someone else, reload it"
+            )
 
     # ----- CalendarEntity API -------------------------------------------
 
@@ -314,8 +326,10 @@ class FamilyHubCalendar(CalendarEntity):
         event: dict[str, Any],
         recurrence_id: str | None = None,
         recurrence_range: str | None = None,
+        version: str | None = None,
     ) -> None:
-        """Update an event; keys missing from ``event`` keep their value.
+        """Update an event; keys missing from ``event`` keep their value. With ``version`` (the
+        one that was read) the change is refused when the event has changed since.
 
         For a repeating event, ``recurrence_range`` THISANDFUTURE changes this occurrence and the
         ones after it (they become a series of their own from here); ALL changes every occurrence;
@@ -323,6 +337,7 @@ class FamilyHubCalendar(CalendarEntity):
         occurrence that was edited.
         """
         record = self._get_own_record(uid)
+        self._check_version(record, version)
         affected = self._affected(record, recurrence_range)
         all_day = bool(record["all_day"])
         new_start = _given(event, "dtstart", "start")
@@ -360,10 +375,12 @@ class FamilyHubCalendar(CalendarEntity):
         uid: str,
         recurrence_id: str | None = None,
         recurrence_range: str | None = None,
+        version: str | None = None,
     ) -> None:
         """Delete an event. For a repeating event, the range says which occurrences: this one only
         (no range), this one and the ones after it (THISANDFUTURE), or all of them (ALL)."""
         record = self._get_own_record(uid)
+        self._check_version(record, version)
         series = record.get("series")
         for item in self._affected(record, recurrence_range):
             self._store.events.pop(item["uid"], None)

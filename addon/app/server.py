@@ -486,7 +486,8 @@ class Hub:
             found.append(
                 {
                     "entity_id": entity_id,
-                    "name": state.get("attributes", {}).get("friendly_name") or entity_id,
+                    "name": state.get("attributes", {}).get("friendly_name")
+                    or readable_name(entity_id),
                     "domain": domain,
                 }
             )
@@ -628,7 +629,7 @@ class Hub:
             for s in await self._states()
         }
         return [
-            {"entity_id": entity_id, "name": names.get(entity_id) or entity_id}
+            {"entity_id": entity_id, "name": names.get(entity_id) or readable_name(entity_id)}
             for entity_id in (await self.sources())["todo"]
         ]
 
@@ -849,6 +850,8 @@ class Hub:
                     "end": raw.get("end", ""),
                     "location": raw.get("location", ""),
                     "record_id": raw.get("record_id", ""),
+                    # What the appointment was when read: sent back with a change or a delete.
+                    "version": raw.get("version") or "",
                     "person_ids": owners,
                     "shift_id": raw.get("shift_id", ""),
                     "description": raw.get("description") or "",

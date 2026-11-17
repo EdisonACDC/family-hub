@@ -1,5 +1,30 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.10.3b1
+
+Beta. Nessuna modifica incompatibile.
+
+- **Modifiche contemporanee**: ogni appuntamento ha una versione. Modifica ed eliminazione dal
+  pannello, dalla web app degli invitati (Semplice e Completa) e dai servizi
+  (`update_event`, `delete_event`, `move_event`: campo facoltativo `version`) mandano la versione
+  che hanno letto. Se nel frattempo l'appuntamento è cambiato, non si scrive niente e compare
+  «Questo appuntamento è stato modificato da qualcun altro. Ricarica.» (it/en/de); il pannello e
+  la web app rileggono. Senza versione (un'automazione, un telefono vecchio) funziona come prima.
+  Un promemoria fermato o rimandato non conta come modifica.
+- **Barra in alto a larghezza media** (per esempio 767 px con la barra laterale di Home Assistant
+  aperta): sotto i 900 px la seconda riga è tutta per le pillole delle persone, che scorrono
+  nel loro spazio; «Calendari» e «Prossimi ritiri» sono nel menu ☰ come sul telefono. «+ Nuovo» e il
+  menu ☰ restano sempre visibili.
+- **Finestre su schermo stretto** (360, 390, 430 px, anche nella web app degli invitati):
+  Condivisione, Modifica permessi, Avvisi, Turni, Calendari esterni e Procedura guidata non hanno più
+  la barra di scorrimento orizzontale; le etichette lunghe vanno a capo e l'interruttore resta a
+  destra, dentro lo schermo. Il menu ☰ si adatta all'altezza dello schermo e scorre se non ci sta.
+- **Nomi, non codici**: calendari e liste senza nome in Home Assistant mostrano il nome
+  leggibile («Weekend festivi bw»), non «calendar.weekend_festivi_bw».
+- **Web app Completa**: modificando un proprio appuntamento il campo dei promemoria non dava più
+  errore («usa solo numeri…»): corretto.
+- La lingua della Procedura guidata che si salva subito è già nella 0.10.1.
+
 ## 0.10.2
 
 Stabile. Due correzioni dall'installazione vera. Nessuna modifica incompatibile.

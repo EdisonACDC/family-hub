@@ -6,6 +6,8 @@ so the add-on or any external calendar is never required.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -15,6 +17,33 @@ from homeassistant.helpers.storage import Store
 from .const import DOMAIN, STORAGE_VERSION
 
 Listener = Callable[[], Awaitable[None]]
+
+# What a person can change in an appointment. The reminders' own flags (stopped, snoozed) and the
+# like are not part of it: "Fatto" on a reminder must not make an open edit conflict.
+VERSION_FIELDS = (
+    "category",
+    "summary",
+    "description",
+    "location",
+    "persons",
+    "start",
+    "end",
+    "all_day",
+    "rrule",
+    "reminder_offsets",
+    "notify",
+    "private",
+    "shift_id",
+)
+
+
+def event_version(record: dict[str, Any]) -> str:
+    """The version of an appointment as it is now. A change from the panel, the guests' web app
+    or a service sends the version it read; when the appointment is different now, the change
+    is refused ("event_changed") instead of silently overwriting someone else's."""
+    data = {key: record.get(key) for key in VERSION_FIELDS}
+    text = json.dumps(data, sort_keys=True, default=str, ensure_ascii=True)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
 class EventStore:

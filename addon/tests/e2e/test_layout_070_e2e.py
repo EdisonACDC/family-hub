@@ -129,13 +129,22 @@ def test_tablet_and_pc_bars_and_calendar_height(
             expect(page.locator("#upcoming")).to_be_hidden()
         assert page.evaluate(OVERFLOW) == []
         _shot(page, f"layout_{width}_week")
-        # Calendari: a panel of switches instead of chips.
-        page.locator("#calendars-btn").click()
+        # Calendari: a panel of switches instead of chips. Under 900 px (0.10.3) it opens from the
+        # menu, as on a phone, and closes with its own button.
+        compact = width < 900
+        if compact:
+            page.locator("#menu-btn").click()
+            page.locator("#menu-calendars").click()
+        else:
+            page.locator("#calendars-btn").click()
         panel = page.locator("#filters")
         expect(panel).to_be_visible()
         expect(panel.locator(".cal-switch").first).to_be_visible()
         _shot(page, f"layout_{width}_calendars")
-        page.locator("#calendars-btn").click()
+        if compact:
+            panel.get_by_role("button", name="Chiudi").click()
+        else:
+            page.locator("#calendars-btn").click()
         expect(panel).to_be_hidden()
         # Month: the weeks of this month fill the area, then it scrolls.
         _view(page, "month")
@@ -323,8 +332,10 @@ def test_second_row_keeps_every_person_whole_at_894(stack_full: Stack, browser: 
                 bar,
             )
         assert page.locator("#persons-bar").evaluate("e => e.scrollWidth <= e.clientWidth + 1")
-        cal = page.locator("#calendars-btn").bounding_box()
-        assert cal and cal["width"] <= 44, cal
+        # Under 900 px the second row is for the persons only: Calendari is in the menu (0.10.3).
+        assert page.locator("#calendars-btn").is_hidden()
+        page.click("#menu-btn")
+        expect(page.locator("#menu-calendars")).to_be_visible()
         _shot(page, "layout_894_four_persons")
 
 

@@ -237,7 +237,10 @@ async def test_full_mode_is_the_panel(
         page.on("pageerror", lambda err: problems.append(str(err)))
         page.on(
             "console",
-            lambda msg: problems.append(msg.text) if msg.type == "error" else None,
+            # A 409 is the refusal of a change on an old version, which one step asks for.
+            lambda msg: (
+                problems.append(msg.text) if msg.type == "error" and "409" not in msg.text else None
+            ),
         )
 
         async def keep(response: Any) -> None:
@@ -346,7 +349,31 @@ async def test_full_mode_is_the_panel(
                 await page.wait_for_selector("#week .event:has-text('Merenda')")
                 await page.click("#week .event:has-text('Merenda')")
                 await page.wait_for_selector("#card-foot button:has-text('Modifica')")
-                await page.click("#card-foot button:has-text('Chiudi')")
+                # Changed from its card: the version it read goes with the change (0.10.3).
+                await page.click("#card-foot button:has-text('Modifica')")
+                await page.fill("#event-form input[name='summary']", "Merenda dai nonni")
+                await page.click("#event-form button[type='submit']")
+                await page.wait_for_selector("#event-overlay", state="hidden")
+                await page.wait_for_selector("#week .event:has-text('Merenda dai nonni')")
+                # Someone else changes it; the next change from this phone is refused and told.
+                await page.click("#week .event:has-text('Merenda dai nonni')")
+                await page.click("#card-foot button:has-text('Modifica')")
+                merenda = next(
+                    r
+                    for r in entry.runtime_data.store.events.values()
+                    if r["summary"] == "Merenda dai nonni"
+                )
+                await hass.services.async_call(
+                    DOMAIN,
+                    "update_event",
+                    {"uid": merenda["uid"], "summary": "Cambiata da un adulto"},
+                    blocking=True,
+                )
+                await page.fill("#event-form input[name='summary']", "La mia modifica")
+                await page.click("#event-form button[type='submit']")
+                await page.wait_for_selector("#event-error:has-text('modificato da qualcun altro')")
+                assert merenda["summary"] == "Cambiata da un adulto"
+                await page.click("#event-cancel")
                 # The lists: add and tick.
                 await page.click("#todo-btn")
                 await page.wait_for_selector("#todo-overlay:not([hidden])")
@@ -556,5 +583,167 @@ async def test_full_mode_shifts_board_from_the_menu(
                 f"#shifts-calendar .day-cell:has(.dnum:text-is('{tomorrow.day}')) .dshift"
             )
             assert errors == []
+        finally:
+            await browser.close()
+
+
+@pytest.mark.parametrize("expected_lingering_tasks", [True])
+async def test_guest_web_apps_fit_every_width(
+    hass: HomeAssistant, hass_client_no_auth: Any, hass_ws_client: Any, socket_enabled: Any
+) -> None:
+    """The guests' web app, Simple and Completa, at 360, 390, 430, 768 and 1024 px: nothing sticks
+    out of the screen, "+ Nuovo" and the menu are always there, and the new-appointment window
+    fits."""
+    assert await async_setup_component(hass, "http", {})
+    await hass.config.async_set_time_zone("Europe/Rome")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_FAMILY_NAME: "Esempio", CONF_LANGUAGE: "it", CONF_FIRST_WEEKDAY: "monday"},
+        options={
+            CONF_LANGUAGE: "it",
+            OPT_PERSONS: [
+                {
+                    "id": "sofia",
+                    "name": "Sofia Alessandra Maria",
+                    "color": "#F97316",
+                    "role": "child",
+                },
+                {
+                    "id": "luca",
+                    "name": "Luca Giovanni Battista",
+                    "color": "#0EA5E9",
+                    "role": "child",
+                },
+                {
+                    "id": "anna",
+                    "name": "Anna Costanza Valentina",
+                    "color": "#10B981",
+                    "role": "adult",
+                },
+            ],
+            OPT_CATEGORIES: [{"id": "famiglia", "name": "Famiglia", "color": "#10B981"}],
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    tomorrow = dt_util.now().date() + timedelta(days=1)
+    await hass.services.async_call(
+        DOMAIN,
+        "add_event",
+        {
+            "category": "famiglia",
+            "summary": "Visita dal pediatra con un titolo molto lungo da andare a capo",
+            "persons": ["sofia"],
+            "start": f"{tomorrow.isoformat()} 16:00:00",
+            "end": f"{tomorrow.isoformat()} 17:00:00",
+        },
+        blocking=True,
+    )
+    ws = await hass_ws_client()
+
+    async def admin(command: str, **data: Any) -> Any:
+        await ws.send_json_auto_id({"type": f"family_hub/guest/{command}", **data})
+        answer = await ws.receive_json()
+        assert answer["success"], answer
+        return answer["result"]
+
+    invites = {
+        "completa": await admin(
+            "invite_create",
+            invite={
+                "name": "Zia Èlia",
+                "persons": ["sofia", "luca", "anna"],
+                "categories": ["famiglia"],
+                "template": "relative",
+            },
+        ),
+        "semplice": await admin(
+            "invite_create",
+            invite={
+                "name": "Nonna",
+                "persons": ["sofia", "luca"],
+                "categories": ["famiglia"],
+                "template": "grandparents",
+            },
+        ),
+    }
+    client = await hass_client_no_auth()
+    base = str(client.make_url("/")).rstrip("/") + "/api/family_hub/guest/"
+    widths = [360, 390, 430, 768, 1024]
+    async with playwright_api.async_playwright() as p:
+        try:
+            browser = await p.chromium.launch(headless=True)
+        except Exception as err:  # noqa: BLE001
+            pytest.skip(f"Chromium for Playwright is not installed: {err}")
+        try:
+            for kind, invite in invites.items():
+                context = await browser.new_context(
+                    viewport={"width": 390, "height": 800},
+                    user_agent=ANDROID,
+                    is_mobile=True,
+                    has_touch=True,
+                    locale="it-IT",
+                    timezone_id="Europe/Rome",
+                )
+                page = await context.new_page()
+                page.set_default_timeout(TIMEOUT)
+                problems: list[str] = []
+                page.on("pageerror", lambda err, found=problems: found.append(str(err)))
+                await page.goto(f"{base}#i={invite['link'].split('#i=', 1)[1]}")
+                await page.click("#install-continue")
+                await page.wait_for_selector("text=In attesa della conferma della famiglia")
+                device = next(
+                    d for d in (await admin("list"))["devices"] if d["status"] == "pending"
+                )
+                await admin("device_confirm", device_id=device["id"], accept=True)
+                await hass.async_block_till_done()
+                for width in widths:
+                    await page.set_viewport_size({"width": width, "height": 800})
+                    await page.goto(base)
+                    if kind == "completa":
+                        await page.wait_for_url("**/full.html")
+                        await page.wait_for_selector("#week .event, #week .list-row, #week .day")
+                        add, menu = "#add-btn", "#menu-btn"
+                    else:
+                        await page.wait_for_selector("#screen-main:not([hidden])")
+                        await page.wait_for_selector(".event")
+                        add, menu = "#add-button", None
+                    for selector in (add, menu):
+                        if selector is None:
+                            continue
+                        box = await page.locator(selector).first.bounding_box()
+                        assert box is not None, (kind, width, selector)
+                        assert box["x"] >= 0 and box["x"] + box["width"] <= width + 1, (
+                            kind,
+                            width,
+                            selector,
+                        )
+                    scroll = await page.evaluate("document.documentElement.scrollWidth")
+                    assert scroll <= width, (kind, width, scroll)
+                    # The window to add an appointment fits too.
+                    await page.click(add)
+                    sheet = "#event-form" if kind == "completa" else "#sheet"
+                    await page.wait_for_selector(sheet)
+                    wide = await page.evaluate(
+                        """(sel) => {
+                          const box = document.querySelector(sel).getBoundingClientRect();
+                          const bad = [];
+                          if (box.right > window.innerWidth + 1) bad.push("outside the screen");
+                          for (const el of document.querySelectorAll(sel + " *")) {
+                            const r = el.getBoundingClientRect();
+                            if (r.width && r.right > box.right + 1 && !el.closest("[hidden]")) {
+                              const name = el.id || el.className || el.tagName;
+                              bad.push(name + " " + Math.round(r.right));
+                            }
+                          }
+                          return bad.slice(0, 5);
+                        }""",
+                        sheet,
+                    )
+                    assert wide == [], (kind, width, wide)
+                    await page.keyboard.press("Escape")
+                assert problems == [], (kind, problems)
+                await context.close()
         finally:
             await browser.close()

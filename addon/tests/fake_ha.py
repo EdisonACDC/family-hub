@@ -76,6 +76,8 @@ def stored_event(
         "location": "",
         "person_ids": person_ids,
         "record_id": record_id or uuid.uuid4().hex,
+        # What the appointment is now: a change sends back the one it read (as the integration).
+        "version": uuid.uuid4().hex[:12],
         "shift_id": "",
         "notify": "",
     }
@@ -188,7 +190,7 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.10.2"
+    integration_version = "0.10.3b1"
     ha_language = "it"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
@@ -865,10 +867,31 @@ class FakeHA:
                 | {"shift_id": shift_id, "notify": notify_text(data)}
             )
             await self.push_entity_change(entity)
+        if domain == DOMAIN and service in ("update_event", "delete_event") and "version" in data:
+            current = next(
+                (
+                    e
+                    for events in self.events.values()
+                    for e in events
+                    if e["record_id"] == data["uid"]
+                ),
+                None,
+            )
+            if current is not None and current.get("version") != data["version"]:
+                await self._reply(
+                    ws,
+                    msg["id"],
+                    False,
+                    None,
+                    "Validation error: event_changed: this appointment was changed by someone else",
+                    "service_validation_error",
+                )
+                return
         if domain == DOMAIN and service == "update_event":
             for events in self.events.values():
                 for event in events:
                     if event["record_id"] == data["uid"]:
+                        event["version"] = uuid.uuid4().hex[:12]
                         for key in ("summary", "start", "end"):
                             if key in data:
                                 event[key] = data[key]

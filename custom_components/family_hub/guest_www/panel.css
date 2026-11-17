@@ -1526,6 +1526,41 @@ body:has(.overlay:not([hidden])) #add-btn { visibility: hidden; }
 .btn, .segment, .tab, .person-chip, .chip, .segment, .period-title { min-height: 40px; }
 .dialog .btn { min-height: 44px; }
 
+/* ==== 0.10.3: narrow screens (360 to 430 px: phones, the Companion app) and the second row ====
+   Nothing in a window is wider than the window: no sideways scrollbar anywhere; long labels wrap
+   inside their row and the switch stays on the right, inside the screen. */
+.dialog, .dialog-body { max-width: 100%; min-width: 0; box-sizing: border-box; }
+.dialog-body { overflow-x: hidden; }
+.dialog-body > *, .dialog-body label, .dialog-body fieldset, .dialog-body .card,
+.share-card, .notify-card, .share-edit, .share-new, .share-scope, .share-features {
+  min-width: 0; max-width: 100%; box-sizing: border-box;
+}
+.switch-row span, .check span { white-space: normal; overflow-wrap: anywhere; min-width: 0; flex: 1 1 auto; }
+.dialog label.switch-row, label.switch.switch-row, .check.switch-row { min-width: 0; max-width: 100%; }
+.dialog input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), .dialog select, .dialog textarea {
+  max-width: 100%; min-width: 0; box-sizing: border-box;
+}
+.share-check, .share-checks .check { min-width: 0; max-width: 100%; }
+.share-check span { white-space: normal; overflow-wrap: anywhere; }
+.actions, .dialog-foot { flex-wrap: wrap; }
+.share-templates .btn, .share-card .btn { max-width: 100%; white-space: normal; }
+.tabs { flex-wrap: wrap; }
+.fieldrow, .notify-card .fieldrow { min-width: 0; flex-wrap: wrap; }
+/* The menu: inside the screen, and it scrolls when it is taller than what is left of it. */
+.menu { max-width: calc(100vw - 24px); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+.menu .btn, .menu .switch-row { max-width: 100%; }
+/* The second row on a tablet or a small PC (600 to 899 px: the family's panel with Home
+   Assistant's sidebar open): the persons' pills have all the room and scroll inside it; Calendari
+   and the next pickups, which would not fit, are in the menu, as on a phone. */
+@media (min-width: 600px) and (max-width: 899px) {
+  .subbar #calendars-btn, .subbar .pickups { display: none !important; }
+  .subbar .persons-bar { flex: 1 1 auto; max-width: 100%; }
+  .menu #menu-calendars, .menu #menu-pickups { display: block; }
+}
+/* The persons' pills never push the others out, at any width. */
+.subbar .persons-bar { min-width: 0; }
+#add-btn, #menu-btn { flex: 0 0 auto; }
+
 /* Nothing wider than the screen. */
 html, body { overflow-x: hidden; max-width: 100%; }
 @media (min-width: 600px) and (max-width: 1099px) {
@@ -1541,7 +1576,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 #shifts-calendar .month-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; width: 100%; max-width: 100%; }
 #shifts-calendar .day-cell { min-width: 0; overflow: hidden; padding: 4px 2px; }
 #shifts-calendar .dshift { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.dialog-body { overflow-x: auto; }
+.dialog-body { overflow-x: hidden; }
 /* 0.7.3: a field inside a window never gets wider than the window: it shrinks instead. */
 .dialog input, .dialog select, .dialog textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
 /* A fieldset's default min-width is its content's: here it must shrink with the window. */

@@ -133,6 +133,11 @@ def _phone(page: Page) -> bool:
     return (page.viewport_size or {}).get("width", 1024) < 600
 
 
+def _compact(page: Page) -> bool:
+    """Under 900 px Calendari and the next pickups are in the menu, not in the second row."""
+    return (page.viewport_size or {}).get("width", 1024) < 900
+
+
 def _menu(page: Page, item: str) -> None:
     page.locator("#menu-btn").click()
     page.locator(item).click()
@@ -203,14 +208,14 @@ def _screens(stack: Stack) -> list[tuple[str, Callable[[Page], None]]]:
         expect(page.locator("#ics-overlay")).to_be_visible(timeout=3000)
 
     def ritiri(page: Page) -> None:
-        if _phone(page):
+        if _compact(page):
             _menu(page, "#menu-pickups")
             expect(page.locator("#pickups-overlay")).to_be_visible(timeout=3000)
         else:
             expect(page.locator("#pickups .pickup-chip").first).to_be_visible(timeout=5000)
 
     def calendari(page: Page) -> None:
-        if _phone(page):
+        if _compact(page):
             _menu(page, "#menu-calendars")
         else:
             page.locator("#calendars-btn").click()

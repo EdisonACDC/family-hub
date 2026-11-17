@@ -560,6 +560,14 @@
   // the second row on the tablet and from the menu on the phone.
   // A calendar's name when Home Assistant gives none: from its entity id, readable
   // ("calendar.weekend_festivi" -> "Weekend festivi"). The entity id itself is never shown.
+  // The name of a calendar, list or entity to show: its name; when there is none (or it is
+  // only the entity id), the id made readable. Never "calendar.weekend_festivi_bw".
+  function shownName(name, entityId) {
+    var text = String(name || "").trim();
+    if (!text || text === entityId || /^[a-z_]+\.[a-z0-9_]+$/.test(text)) return readableName(entityId);
+    return text;
+  }
+
   function readableName(entityId) {
     var raw = String(entityId || "").split(".").slice(1).join(".").replace(/_/g, " ").trim();
     return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "";
@@ -573,7 +581,7 @@
     var ordered = state.calendars.filter(function (c) { return !c.external; })
       .concat(state.calendars.filter(function (c) { return c.external; }));
     ordered.forEach(function (cal) {
-      var row = switchRow(cal.name || readableName(cal.entity_id), !state.hidden[cal.entity_id], function (on) {
+      var row = switchRow(shownName(cal.name, cal.entity_id), !state.hidden[cal.entity_id], function (on) {
         state.hidden[cal.entity_id] = !on;
         paintCalendarsButton();
         renderWeek();
@@ -1361,7 +1369,9 @@
       ? showTime(timeOfHHMM(ev.start), state.timeFormat) : showTime("09:00", state.timeFormat);
     form.elements.end_time.value = editing && !isAllDay(ev.start)
       ? showTime(timeOfHHMM(ev.end), state.timeFormat) : showTime("10:00", state.timeFormat);
-    form.elements.reminders.value = editing && ev.reminder_offsets !== "default" ? ev.reminder_offsets : "";
+    // An appointment with no reminders of its own (the family's, or from the guests' web app
+    // that does not send them) leaves the field empty.
+    form.elements.reminders.value = editing && ev.reminder_offsets && ev.reminder_offsets !== "default" ? ev.reminder_offsets : "";
     setRepeatControls(editing ? ev : null);
     if (editing) {
       var cat = state.calendars.filter(function (c) { return c.category_id === ev.category_id; })[0];
@@ -1607,6 +1617,7 @@
       return;
     }
     if (state.editing) {
+      if (state.editing.ev.version) data.version = state.editing.ev.version;
       if (repeatTouched) data.rrule = rule;
       var scope = changeScope();
       if (state.editing.ev.rrule && scope) data.recurrence_range = scope;
@@ -1627,6 +1638,8 @@
       refreshEvents();
     }).catch(function (err) {
       showFormError(t("saveError") + errorText(err));
+      // Changed by someone else meanwhile: what is on screen is read again (nothing was written).
+      if (err && err.code === "event_changed") refreshEvents();
     });
   }
 
@@ -1712,11 +1725,18 @@
         chooseDeleteScope(ev).then(function (scope) {
           if (scope === null) return;
           var payload = { uid: ev.record_id };
+          if (ev.version) payload.version = ev.version;
           if (scope) payload.recurrence_range = scope;
           request({ op: "service", service: "delete_event", data: payload }).then(function () {
             $("card-overlay").hidden = true;
             refreshEvents();
-          }).catch(function (err) { showStatusNote(I.f("saveError") + errorText(err)); });
+          }).catch(function (err) {
+            showStatusNote(I.f("saveError") + errorText(err));
+            if (err && err.code === "event_changed") {
+              $("card-overlay").hidden = true;
+              refreshEvents();
+            }
+          });
         });
       }));
     }
@@ -2343,7 +2363,7 @@
       var ext = el("div", { class: "share-externals", "data-field": "externals" });
       ext.appendChild(el("p", { class: "hint" }, I.f("shareExternals")));
       outside.forEach(function (cal) {
-        var row = switchRow(cal.name, draft.externals.indexOf(cal.entity_id) !== -1, function (on) {
+        var row = switchRow(shownName(cal.name, cal.entity_id), draft.externals.indexOf(cal.entity_id) !== -1, function (on) {
           draft.externals = on ? draft.externals.concat([cal.entity_id])
             : draft.externals.filter(function (x) { return x !== cal.entity_id; });
         });
@@ -2422,7 +2442,7 @@
     var lists = state.shareLists || [];
     if (!lists.length) listsBox.appendChild(el("p", { class: "hint" }, I.f("shareNoLists")));
     lists.forEach(function (list) {
-      listsBox.appendChild(checkRow(list.name, draft.lists.indexOf(list.entity_id) !== -1, function (on) {
+      listsBox.appendChild(checkRow(shownName(list.name, list.entity_id), draft.lists.indexOf(list.entity_id) !== -1, function (on) {
         draft.lists = on ? draft.lists.concat([list.entity_id])
           : draft.lists.filter(function (x) { return x !== list.entity_id; });
       }));
@@ -3118,7 +3138,7 @@
               if (!input.checked && pos !== -1) list.splice(pos, 1);
             });
             label.appendChild(input);
-            label.appendChild(document.createTextNode(" " + entity.name));
+            label.appendChild(document.createTextNode(" " + shownName(entity.name, entity.entity_id)));
             card.appendChild(label);
             if (styleBox) card.appendChild(styleBox);
           });
@@ -3188,7 +3208,7 @@
         }
         choice.entity = sources[0].entity_id;
         choice.category = categories.length ? categories[0].category_id : "";
-        body.appendChild(fieldRow(f("importSource"), selectInput(sources.map(function (s) { return [s.entity_id, s.name]; }), choice.entity, function (v) { choice.entity = v; clearPreview(); })));
+        body.appendChild(fieldRow(f("importSource"), selectInput(sources.map(function (s) { return [s.entity_id, shownName(s.name, s.entity_id)]; }), choice.entity, function (v) { choice.entity = v; clearPreview(); })));
         body.appendChild(fieldRow(f("importCategory"), selectInput(categories.map(function (c) { return [c.category_id, c.name]; }), choice.category, function (v) { choice.category = v; clearPreview(); })));
         body.appendChild(fieldRow(f("importPerson"), selectInput([["", f("importNobody")]].concat(persons.map(function (p) { return [p.id, p.name]; })), "", function (v) { choice.person = v; clearPreview(); })));
         body.appendChild(button(f("importPreview"), "btn", preview));
@@ -3206,7 +3226,11 @@
     $("menu-btn").setAttribute("aria-expanded", open ? "true" : "false");
     if (open) {
       var bar = document.querySelector(".topbar").getBoundingClientRect();
-      menu.style.top = Math.round(bar.bottom + 8) + "px";
+      var top = Math.round(bar.bottom + 8);
+      menu.style.top = top + "px";
+      // Never taller than what is left of the screen: it scrolls inside itself.
+      menu.style.maxHeight = Math.max(160, window.innerHeight - top - 12) + "px";
+      menu.scrollTop = 0;
     }
   }
 

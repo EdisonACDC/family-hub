@@ -53,6 +53,7 @@ from .const import (
     OPT_SHIFTS,
 )
 from .shifts import ShiftError, clean_shifts
+from .storage import event_version
 
 if TYPE_CHECKING:
     from .calendar import FamilyHubCalendar
@@ -443,6 +444,8 @@ def _moment(value: Any) -> date | datetime:
     text = str(value)
     return date.fromisoformat(text) if len(text) == 10 else datetime.fromisoformat(text)
 
+
+_VERSION = re.compile(r"^[0-9a-f]{6,40}$")
 
 EVENT_KEYS = {"title", "person", "category", "date", "all_day", "start", "end", "location", "note"}
 
@@ -1558,6 +1561,9 @@ class GuestManager:
         }
         if mine:
             item["note"] = record.get("description") or ""
+            if status == "ok":
+                # Sent back with a change: if the appointment is another by then, it is refused.
+                item["version"] = event_version(record)
         own = device.get("person_id")
         if record.get("shift_id") and own and own in (record.get("persons") or []):
             item["shift_id"] = str(record["shift_id"])
@@ -1685,7 +1691,11 @@ class GuestManager:
             state = self.hass.states.get(entity_id)
             friendly = state.attributes.get("friendly_name") if state is not None else None
             found[entity_id] = {
-                "name": str(style.get("name") or friendly or entity_id.split(".", 1)[-1]),
+                "name": str(
+                    style.get("name")
+                    or friendly
+                    or entity_id.split(".", 1)[-1].replace("_", " ").capitalize()
+                ),
                 "type": str(style.get("type") or "altro"),
                 "color": str(style.get("color") or "#64748B"),
                 "persons": [str(p) for p in style.get("persons") or []],
@@ -1994,7 +2004,15 @@ class GuestManager:
         if device["permission"] != EDIT_OWN:
             raise GuestError("forbidden", 403)
         kind, current = self._own(device, item_id)
+        version = None
+        if isinstance(raw, dict) and "version" in raw:
+            version = raw["version"]
+            if not isinstance(version, str) or not _VERSION.match(version):
+                raise GuestError("invalid", 422)
+            raw = {k: v for k, v in raw.items() if k != "version"}
         event = clean_event(raw, device["persons"], device["categories"], self._today())
+        if kind == "event":
+            self._check_version(current, version)
         if kind == "pending":
             self.pending[item_id]["event"] = {**event, "added_by": current.get("added_by")}
             self._record("event_changed", device["name"], event["summary"])
@@ -2024,7 +2042,7 @@ class GuestManager:
                 change["dtend"] = datetime.fromisoformat(event["end"])
             self._changing = device["id"]
             try:
-                await calendar.async_update_event(uid, change)
+                await calendar.async_update_event(uid, change, version=version)
             finally:
                 self._changing = None
         self._record("event_changed", device["name"], event["summary"])
@@ -2039,11 +2057,23 @@ class GuestManager:
         finally:
             self._changing = None
 
-    async def async_guest_delete(self, device: dict[str, Any], item_id: str) -> None:
+    @staticmethod
+    def _check_version(record: dict[str, Any], version: str | None) -> None:
+        """The change was made on the version the phone read: 409 when it is another now."""
+        if version and event_version(record) != version:
+            raise GuestError("event_changed", 409)
+
+    async def async_guest_delete(
+        self, device: dict[str, Any], item_id: str, version: str | None = None
+    ) -> None:
         self.check_feature(device, gf.CALENDAR)
         if device["permission"] != EDIT_OWN:
             raise GuestError("forbidden", 403)
+        if version is not None and not _VERSION.match(version):
+            raise GuestError("invalid", 422)
         kind, current = self._own(device, item_id)
+        if kind == "event":
+            self._check_version(current, version)
         if kind == "pending":
             del self.pending[item_id]
         else:

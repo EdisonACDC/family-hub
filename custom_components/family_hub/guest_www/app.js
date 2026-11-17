@@ -58,6 +58,7 @@
       errTime: "La fine deve essere dopo l'inizio.",
       errSave: "Non è stato possibile salvare. Riprova.",
       errForbidden: "Questo non è permesso.",
+      errChanged: "Questo appuntamento è stato modificato da qualcun altro. Ricarica.",
       errSlow: "Troppe richieste. Riprova tra un minuto.",
       waitingTitle: "In attesa",
       waitingText: "In attesa della conferma della famiglia.",
@@ -157,6 +158,7 @@ month: "Mese", lists: "🛒 Liste", waste: "🗑️ Rifiuti", everyone: "Tutti",
       errTime: "The end must be after the start.",
       errSave: "It could not be saved. Please try again.",
       errForbidden: "This is not allowed.",
+      errChanged: "This appointment was changed by someone else. Reload.",
       errSlow: "Too many requests. Try again in a minute.",
       waitingTitle: "Waiting",
       waitingText: "Waiting for the family to confirm.",
@@ -256,6 +258,7 @@ month: "Month", lists: "🛒 Lists", waste: "🗑️ Rubbish", everyone: "Everyo
       errTime: "Das Ende muss nach dem Beginn liegen.",
       errSave: "Speichern war nicht möglich. Bitte noch einmal versuchen.",
       errForbidden: "Das ist nicht erlaubt.",
+      errChanged: "Dieser Termin wurde von jemand anderem geändert. Bitte neu laden.",
       errSlow: "Zu viele Anfragen. In einer Minute noch einmal versuchen.",
       waitingTitle: "Warten",
       waitingText: "Warten auf die Bestätigung der Familie.",
@@ -1381,6 +1384,7 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
         note: note.value.trim()
       };
       if (!data.all_day) { data.start = startInput.value; data.end = endInput.value; }
+      if (item && item.version) data.version = item.version;
       if (!data.title) { sheetError(t("errTitle")); return; }
       if (!data.person || !data.category || !data.date) { sheetError(t("errSave")); return; }
       if (!data.all_day && !(data.start && data.end && data.end > data.start)) { sheetError(t("errTime")); return; }
@@ -1394,6 +1398,7 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
       }).catch(function (err) {
         save.disabled = false;
         if (err.status === 403 && /disabled|rejected|unknown/.test(err.code)) { closeSheet(); accessOff(); return; }
+        if (err.code === "event_changed") { sheetError(t("errChanged")); loadEvents(); return; }
         sheetError(err.status === 403 ? t("errForbidden") : err.status === 429 ? t("errSlow") : t("errSave"));
       });
     });
@@ -1405,13 +1410,15 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
 
   function removeItem(item) {
     if (!window.confirm(t("removeAsk"))) return;
-    api("DELETE", "events/" + item.id).then(function () {
-      closeSheet();
-      toast(t("removed"));
-      loadEvents();
-    }).catch(function (err) {
-      sheetError(err.status === 403 ? t("errForbidden") : t("errSave"));
-    });
+    api("DELETE", "events/" + item.id + (item.version ? "?version=" + encodeURIComponent(item.version) : ""))
+      .then(function () {
+        closeSheet();
+        toast(t("removed"));
+        loadEvents();
+      }).catch(function (err) {
+        if (err.code === "event_changed") { sheetError(t("errChanged")); loadEvents(); return; }
+        sheetError(err.status === 403 ? t("errForbidden") : t("errSave"));
+      });
   }
 
 

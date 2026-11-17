@@ -208,6 +208,7 @@
       end: item.end,
       location: item.location || "",
       record_id: item.id,
+      version: item.version || "",
       person_ids: (item.persons || []).slice(),
       shift_id: item.shift_id || "",
       description: item.note || "",
@@ -270,6 +271,8 @@
       location: current ? current.location || "" : "",
       note: current ? current.note || "" : ""
     };
+    // The version the panel read: if the appointment is another by now, the change is refused.
+    if (current && (data.version || current.version)) body.version = data.version || current.version;
     if (!allDay) {
       body.start = start.slice(11, 16);
       body.end = end.slice(11, 16);
@@ -292,7 +295,10 @@
       return api("PUT", "events/" + encodeURIComponent(data.uid), change).then(function () { forget(); return null; });
     }
     if (name === "delete_event") {
-      return api("DELETE", "events/" + encodeURIComponent(data.uid)).then(function () { forget(); return null; });
+      var read = known[data.uid];
+      var version = data.version || (read && read.version) || "";
+      return api("DELETE", "events/" + encodeURIComponent(data.uid) + (version ? "?version=" + encodeURIComponent(version) : ""))
+        .then(function () { forget(); return null; });
     }
     return refuse();
   }

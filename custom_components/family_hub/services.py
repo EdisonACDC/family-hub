@@ -36,6 +36,7 @@ from .const import (
     ATTR_START,
     ATTR_SUMMARY,
     ATTR_UID,
+    ATTR_VERSION,
     DOMAIN,
     EVENT_CHANNELS,
     OPT_PERSONS,
@@ -129,6 +130,7 @@ UPDATE_EVENT_SCHEMA = vol.Schema(
         vol.Required(ATTR_UID): cv.string,
         vol.Optional(ATTR_RRULE): cv.string,
         vol.Optional(ATTR_RECURRENCE_RANGE): vol.In(["THISANDFUTURE", "ALL"]),
+        vol.Optional(ATTR_VERSION): cv.string,
         vol.Optional(ATTR_PRIVATE): cv.boolean,
         vol.Optional(ATTR_SUMMARY): SUMMARY,
         vol.Optional(ATTR_START): TIME,
@@ -162,6 +164,7 @@ DELETE_EVENT_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ENTRY_ID): cv.string,
         vol.Required(ATTR_UID): cv.string,
         vol.Optional(ATTR_RECURRENCE_RANGE): vol.In(["THISANDFUTURE", "ALL"]),
+        vol.Optional(ATTR_VERSION): cv.string,
     }
 )
 
@@ -172,6 +175,7 @@ MOVE_EVENT_SCHEMA = vol.Schema(
         vol.Required(ATTR_START): TIME,
         # If omitted, the event keeps its duration.
         vol.Optional(ATTR_END): TIME,
+        vol.Optional(ATTR_VERSION): cv.string,
     }
 )
 
@@ -272,13 +276,16 @@ def async_register_services(hass: HomeAssistant) -> None:
             call.data[ATTR_UID],
             changes,
             recurrence_range=call.data.get(ATTR_RECURRENCE_RANGE),
+            version=call.data.get(ATTR_VERSION),
         )
 
     async def delete_event(call: ServiceCall) -> None:
         entry = _resolve_entry(hass, call.data.get(ATTR_ENTRY_ID))
         calendar, _ = _find_event(entry, call.data[ATTR_UID])
         await calendar.async_delete_event(
-            call.data[ATTR_UID], recurrence_range=call.data.get(ATTR_RECURRENCE_RANGE)
+            call.data[ATTR_UID],
+            recurrence_range=call.data.get(ATTR_RECURRENCE_RANGE),
+            version=call.data.get(ATTR_VERSION),
         )
 
     async def snooze_reminder(call: ServiceCall) -> None:
@@ -310,7 +317,9 @@ def async_register_services(hass: HomeAssistant) -> None:
             old_start = deserialize_time(record["start"], record["all_day"])
             old_end = deserialize_time(record["end"], record["all_day"])
             end = start + (old_end - old_start)
-        await calendar.async_update_event(call.data[ATTR_UID], {"start": start, "end": end})
+        await calendar.async_update_event(
+            call.data[ATTR_UID], {"start": start, "end": end}, version=call.data.get(ATTR_VERSION)
+        )
 
     hass.services.async_register(DOMAIN, SERVICE_ADD_EVENT, add_event, schema=ADD_EVENT_SCHEMA)
     hass.services.async_register(

@@ -125,6 +125,7 @@ ATTR_SHIFT_ID: Final = "shift_id"
 # A repeat rule (iCalendar RRULE text), and which occurrences a change or delete reaches.
 ATTR_RRULE: Final = "rrule"
 ATTR_RECURRENCE_RANGE: Final = "recurrence_range"
+ATTR_VERSION: Final = "version"
 # A private appointment: never shown to guests (the grandparents' web app), whoever it is for.
 ATTR_PRIVATE: Final = "private"
 # Entry options: shift models, a dict of person id -> list of models.

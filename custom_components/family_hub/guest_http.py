@@ -327,7 +327,7 @@ class GuestEventView(_GuestView):
             return _not_found()
         try:
             manager, device = self._device(hub, request, write=True)
-            await manager.async_guest_delete(device, item_id)
+            await manager.async_guest_delete(device, item_id, request.query.get("version"))
         except GuestError as err:
             return _fail(err)
         return _json({"deleted": True})
