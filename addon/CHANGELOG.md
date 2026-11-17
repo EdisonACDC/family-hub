@@ -1,8 +1,8 @@
 # Changelog: Family Hub UI (add-on)
 
-## 0.10.3b1
+## 0.10.3
 
-Beta. Nessuna modifica incompatibile.
+Stabile. Nessuna modifica incompatibile.
 
 - **Modifiche contemporanee**: ogni appuntamento ha una versione. Modifica ed eliminazione dal
   pannello, dalla web app degli invitati (Semplice e Completa) e dai servizi
