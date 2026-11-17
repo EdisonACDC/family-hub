@@ -1,5 +1,28 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.10.2b1
+
+Beta. Due correzioni dall'installazione vera. Nessuna modifica incompatibile.
+
+- **Amministratori di Home Assistant**: un utente che è amministratore (o proprietario) di Home
+  Assistant ha sempre i permessi di adulto in Family Hub (menu completo con Condivisione, Procedura
+  guidata e Calendari esterni, e le richieste di Condivisione), anche se non è collegato a una
+  persona e qualunque ruolo abbia la persona a cui è collegato. Prima poteva restare «ospite» in
+  sola lettura, con il menu ridotto e «Non hai il permesso».
+- **Turni dell'invitato di una persona di Family Hub**: in «Nuovo invito» e «Modifica permessi», con
+  «Ha i suoi turni di lavoro», nuovo campo **«I suoi turni sono di»**: una persona nuova (ospite,
+  come prima) oppure una persona tra quelle visibili dall'invitato (per esempio la mamma). Con una
+  persona esistente la plancia «I miei turni» della web app usa i suoi modelli e i suoi turni, gli
+  stessi del pannello (anche i calendari di ogni modello); quello che salva dalla web app finisce
+  nei turni di quella persona, scritto come lo scrive il pannello. Non viene creata nessuna
+  persona ospite doppia.
+- **Per un invitato che ha già una persona ospite**: in «Modifica permessi» si passa alla persona
+  esistente; i modelli (quelli con lo stesso nome restano i suoi) e i turni già messi si spostano
+  su di lei (un giorno in cui ha già un turno tiene il suo) e la persona ospite viene tolta.
+- Regola zero: collegare una persona non dà altri impegni; di lei passano i turni (in qualunque
+  calendario) e il resto solo nei calendari scelti. Se l'invitato viene tolto, la persona
+  collegata, i suoi modelli e i suoi turni non si toccano.
+
 ## 0.10.1
 
 Stabile. Un solo ritocco, nessuna modifica incompatibile.

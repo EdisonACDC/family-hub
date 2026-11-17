@@ -452,6 +452,9 @@
       shareApproved: "Approvato.", shareDeclined: "Rifiutato.",
       shareTitle: "Titolo", shareDate: "Giorno", shareStart: "Inizio", shareEnd: "Fine",
       sharePerson: "Persona", shareCalendar: "Calendario",
+      shareShiftsPerson: "I suoi turni sono di", shareShiftsPersonNew: "Una persona nuova (ospite)",
+      shareShiftsPersonHint: "Scegli una persona di Family Hub per usare i suoi modelli e i suoi turni, gli stessi del pannello: quello che salva dalla web app finisce nei suoi turni. Deve essere tra le persone visibili qui sopra. Cambiando da una persona ospite a una persona di Family Hub, i turni già messi si spostano su di lei e la persona ospite viene tolta.",
+      err_invalid_shifts_person: "I turni devono essere di una persona tra quelle visibili dall'invitato.",
       err_invalid_persons: "Scegli almeno una persona.", err_invalid_categories: "Scegli almeno un calendario.",
       err_invalid: "Dati non validi.", err_not_pending: "Questo telefono è già stato confermato o rifiutato.",
       err_not_active: "Questo telefono non è attivo.", err_still_active: "Disattiva prima il telefono."
@@ -547,6 +550,9 @@
       shareApproved: "Angenommen.", shareDeclined: "Abgelehnt.",
       shareTitle: "Titel", shareDate: "Tag", shareStart: "Beginn", shareEnd: "Ende",
       sharePerson: "Person", shareCalendar: "Kalender",
+      shareShiftsPerson: "Seine Schichten gehören zu", shareShiftsPersonNew: "Einer neuen Person (Gast)",
+      shareShiftsPersonHint: "Wähle eine Person aus Family Hub, um ihre Schichtmodelle und Schichten zu nutzen, dieselben wie im Panel: Was die Web-App speichert, landet in ihren Schichten. Sie muss unter den oben sichtbaren Personen sein. Beim Wechsel von einer Gastperson zu einer Person aus Family Hub ziehen die bereits eingetragenen Schichten zu ihr um, und die Gastperson wird entfernt.",
+      err_invalid_shifts_person: "Die Schichten müssen zu einer Person gehören, die der Gast sieht.",
       err_invalid_persons: "Bitte mindestens eine Person wählen.", err_invalid_categories: "Bitte mindestens einen Kalender wählen.",
       err_invalid: "Ungültige Angaben.", err_not_pending: "Dieses Telefon wurde schon bestätigt oder abgelehnt.",
       err_not_active: "Dieses Telefon ist nicht aktiv.", err_still_active: "Bitte das Telefon zuerst ausschalten."
@@ -642,6 +648,9 @@
       shareApproved: "Approved.", shareDeclined: "Rejected.",
       shareTitle: "Title", shareDate: "Day", shareStart: "Start", shareEnd: "End",
       sharePerson: "Person", shareCalendar: "Calendar",
+      shareShiftsPerson: "Their shifts belong to", shareShiftsPersonNew: "A new person (guest)",
+      shareShiftsPersonHint: "Choose a Family Hub person to use their shift models and shifts, the same as in the panel: what the web app saves goes into their shifts. They must be among the persons visible above. Changing from a guest person to a Family Hub person moves the shifts already set onto them and removes the guest person.",
+      err_invalid_shifts_person: "The shifts must belong to a person the guest can see.",
       err_invalid_persons: "Choose at least one person.", err_invalid_categories: "Choose at least one calendar.",
       err_invalid: "Not valid.", err_not_pending: "This phone has already been confirmed or rejected.",
       err_not_active: "This phone is not active.", err_still_active: "Turn the phone off first."

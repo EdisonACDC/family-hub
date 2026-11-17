@@ -2324,6 +2324,8 @@
     personList().forEach(function (p) {
       persons.appendChild(checkRow(p.name, draft.persons.indexOf(p.id) !== -1, function (on) {
         draft.persons = on ? draft.persons.concat([p.id]) : draft.persons.filter(function (x) { return x !== p.id; });
+        if (draft.shifts_person && draft.persons.indexOf(draft.shifts_person) === -1) draft.shifts_person = "";
+        fillShiftsPerson();
       }));
     });
     box.appendChild(persons);
@@ -2362,6 +2364,21 @@
     box.appendChild(el("p", { class: "hint share-warning-text" }, I.f("shareFamilyEventsHint")));
     // A guest who still works: its own shifts, as a guest person with a colour, in a calendar.
     var shiftsBox = el("div", { class: "share-shifts", "data-field": "shifts-box" });
+    // Whose shifts: a guest person of its own (default), or a person of the family (her models
+    // and shifts, the panel's), among the persons this guest sees.
+    var whoseShifts = el("select", { "data-field": "shifts_person" });
+    function fillShiftsPerson() {
+      whoseShifts.textContent = "";
+      whoseShifts.appendChild(el("option", { value: "" }, I.f("shareShiftsPersonNew")));
+      personList().filter(function (p) { return draft.persons.indexOf(p.id) !== -1; }).forEach(function (p) {
+        whoseShifts.appendChild(el("option", { value: p.id }, p.name));
+      });
+      whoseShifts.value = draft.shifts_person || "";
+    }
+    whoseShifts.addEventListener("change", function () { draft.shifts_person = whoseShifts.value; });
+    fillShiftsPerson();
+    shiftsBox.appendChild(fieldRow(I.f("shareShiftsPerson"), whoseShifts));
+    shiftsBox.appendChild(el("p", { class: "hint" }, I.f("shareShiftsPersonHint")));
     shiftsBox.appendChild(fieldRow(I.f("shareShiftColor"), (function () {
       var input = el("input", { type: "color", "data-field": "shift_color" });
       input.value = draft.shift_color || "#8B5CF6";
@@ -2499,7 +2516,8 @@
         permission: draft.permission, approval: draft.approval, notify: draft.notify,
         family_events: draft.family_events, expires_days: draft.expires_days,
         has_shifts: draft.has_shifts, shift_color: draft.shift_color,
-        shifts_category: draft.shifts_category || undefined
+        shifts_category: draft.shifts_category || undefined,
+        shifts_person: draft.has_shifts ? draft.shifts_person || "" : ""
       }, featurePayload(draft)) }).then(function (answer) {
         state.newLink = answer.link;
         state.inviteDraft = null;
@@ -2724,7 +2742,7 @@
         }));
       } else if (device.status !== "pending") {
         actions.appendChild(button(I.f("shareRemove"), "btn", function () {
-          if (!device.person_id) {
+          if (!device.person_id || device.shifts_person) {
             askConfirm(I.f("shareRemoveAsk").replace("{name}", device.name), I.f("shareRemove")).then(function (yes) {
               if (yes) shareCall({ op: "share_device_remove", device_id: device.id }).catch(function () {});
             });
@@ -2766,7 +2784,7 @@
       permission: device.permission, approval: device.approval, notify: device.notify,
       family_events: !!device.family_events, notify_new: device.notify_new !== false,
       has_shifts: !!device.has_shifts, shift_color: device.shift_color || "#8B5CF6",
-      shifts_category: device.shifts_category || "",
+      shifts_category: device.shifts_category || "", shifts_person: device.shifts_person || "",
       own: device.reminder_offsets ? device.reminder_offsets.join(", ") : "",
       ownOn: !!device.reminder_offsets,
       quiet_start: device.quiet_start || "", quiet_end: device.quiet_end || "",
@@ -2790,6 +2808,7 @@
         family_events: draft.family_events, notify_new: draft.notify_new,
         has_shifts: draft.has_shifts, shift_color: draft.shift_color,
         shifts_category: draft.shifts_category || undefined,
+        shifts_person: draft.has_shifts ? draft.shifts_person || "" : "",
         reminder_offsets: draft.ownOn ? minutesFrom(draft.own) : null,
         quiet_start: draft.quiet_start, quiet_end: draft.quiet_end
       }, featurePayload(draft));

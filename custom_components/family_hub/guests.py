@@ -719,6 +719,15 @@ class GuestManager:
             raise GuestError("invalid", 422)
         if not _COLOR.match(shift_color) or shifts_category not in known_categories:
             raise GuestError("invalid", 422)
+        # Whose shifts they are: "" a guest person of its own, or a person of the family (who
+        # must be among the persons the guest sees: linking her gives no one else's appointments).
+        shifts_person = raw.get("shifts_person") or ""
+        if not isinstance(shifts_person, str):
+            raise GuestError("invalid", 422)
+        if not has_shifts:
+            shifts_person = ""
+        if shifts_person and (shifts_person not in known_persons or shifts_person not in persons):
+            raise GuestError("invalid_shifts_person", 422)
         # Mode, template, the functions it may use and the lists it may open.
         extra = gf.clean(raw, gf.family_lists(self.entry.options), list(self.externals()))
         if extra is None:
@@ -737,6 +746,7 @@ class GuestManager:
             "has_shifts": has_shifts,
             "shift_color": shift_color,
             "shifts_category": shifts_category,
+            "shifts_person": shifts_person,
         }
 
     async def async_create_invite(self, raw: dict[str, Any]) -> tuple[dict[str, Any], str]:
@@ -881,6 +891,7 @@ class GuestManager:
             "has_shifts": bool(invite.get("has_shifts", False)),
             "shift_color": invite.get("shift_color") or DEFAULT_SHIFT_COLOR,
             "shifts_category": invite.get("shifts_category") or "",
+            "shifts_person": invite.get("shifts_person") or "",
             **{key: invite[key] for key in gf.KEYS if key in invite},
             # "Nuovo telefono": the guest person (and its shifts) of the old phone.
             "person_id": invite.get("person_id"),
@@ -998,7 +1009,18 @@ class GuestManager:
         known = {str(p["id"]) for p in persons}
         if not device.get("has_shifts"):
             return
-        if device.get("person_id") in known:
+        target = str(device.get("shifts_person") or "")
+        current = device.get("person_id")
+        if target and target in known:
+            # The shifts are a person of the family's (her models, her calendar): no guest
+            # person. What the phone had as a guest person moves onto her.
+            device["person_id"] = target
+            if current and current != target and self._owns_person(current):
+                await self._merge_guest_person(str(current), target, device)
+            else:
+                await self.async_save()
+            return
+        if current in known and self._owns_person(current):
             await self._update_person(device, color=device.get("shift_color"))
             return
         person_id = f"guest_{uuid.uuid4().hex[:8]}"
@@ -1017,9 +1039,78 @@ class GuestManager:
         )
         await self._update_options(**{OPT_PERSONS: persons})
 
+    def _owns_person(self, person_id: Any) -> bool:
+        """A guest person made for a phone (Family Hub's own, marked by guest_device), as opposed
+        to a person of the family the adult linked: that one is never changed or removed here."""
+        person = self._persons().get(str(person_id or ""))
+        return person is not None and "guest_device" in person
+
+    async def _merge_guest_person(self, old_id: str, new_id: str, device: dict[str, Any]) -> None:
+        """The phone's guest person goes into a person of the family: its shift models (by name,
+        else added), the shifts it put on days (a day the person already has a shift on keeps hers)
+        and its appointments move onto her; then the guest person is removed."""
+        options = self.entry.options
+        persons = list(options.get(OPT_PERSONS, []))
+        all_shifts = dict(options.get(OPT_SHIFTS, {}))
+        mine = [dict(m) for m in all_shifts.get(new_id, [])]
+        by_name = {str(m["name"]).lower(): m["id"] for m in mine}
+        ids = {m["id"] for m in mine}
+        mapping: dict[str, str] = {}
+        for model in all_shifts.get(old_id, []):
+            key = str(model["name"]).lower()
+            if key in by_name:
+                mapping[model["id"]] = by_name[key]
+                continue
+            moved = dict(model)
+            if moved["id"] in ids:
+                moved["id"] = uuid.uuid4().hex[:8]
+            mine.append(moved)
+            ids.add(moved["id"])
+            by_name[key] = moved["id"]
+            mapping[model["id"]] = moved["id"]
+        all_shifts[new_id] = mine
+        all_shifts.pop(old_id, None)
+        taken = {
+            str(r["start"])[:10]
+            for r in self.events.events.values()
+            if r.get("shift_id") and new_id in (r.get("persons") or [])
+        }
+        changed = False
+        for uid in list(self.events.events):
+            record = self.events.events[uid]
+            people = record.get("persons") or []
+            if old_id not in people:
+                continue
+            if record.get("shift_id") and str(record["start"])[:10] in taken:
+                self.events.events.pop(uid, None)  # her own shift of that day wins
+                changed = True
+                continue
+            record["persons"] = list(dict.fromkeys(new_id if p == old_id else p for p in people))
+            if record.get("shift_id"):
+                record["shift_id"] = mapping.get(record["shift_id"], record["shift_id"])
+                names = {m["id"]: m["name"] for m in mine}
+                record["summary"] = names.get(record["shift_id"], record["summary"])
+            changed = True
+        for item in self.pending.values():
+            event = item["event"]
+            event["persons"] = list(
+                dict.fromkeys(new_id if p == old_id else p for p in event.get("persons") or [])
+            )
+        for entry in (*self.devices.values(), *self.invites.values()):
+            if old_id in (entry.get("persons") or []):
+                entry["persons"] = list(
+                    dict.fromkeys(new_id if p == old_id else p for p in entry["persons"])
+                )
+            if entry.get("person_id") == old_id:
+                entry["person_id"] = new_id
+        if changed:
+            await self.events.async_save()
+        persons = [p for p in persons if p["id"] != old_id]
+        await self._update_options(**{OPT_PERSONS: persons, OPT_SHIFTS: all_shifts})
+
     async def _update_person(self, device: dict[str, Any], **fields: Any) -> None:
         person_id = device.get("person_id")
-        if not person_id:
+        if not person_id or not self._owns_person(person_id):
             return
         persons = list(self.entry.options.get(OPT_PERSONS, []))
         changed = False
@@ -1088,9 +1179,20 @@ class GuestManager:
         if not isinstance(items, list) or len(items) > 12:
             raise GuestError("invalid", 422)
         category = device.get("shifts_category") or ""
+        # A person of the family keeps the calendar each of her models has (the panel's); the
+        # guest's own person has the one the invite chose.
+        kept: dict[Any, str] = {t["id"]: t["category"] for t in self.shift_types(person_id)}
+        linked = bool(device.get("shifts_person"))
         try:
             cleaned = clean_shifts(
-                [{**item, "category": category} for item in items if isinstance(item, dict)],
+                [
+                    {
+                        **item,
+                        "category": kept.get(item.get("id"), category) if linked else category,
+                    }
+                    for item in items
+                    if isinstance(item, dict)
+                ],
                 set(self._categories()),
             )
         except ShiftError as err:
@@ -1156,7 +1258,12 @@ class GuestManager:
                 end = datetime.combine(end_day, time.fromisoformat(shift["end"]), tzinfo=zone)
                 await self._calendar(shift["category"]).async_add_event(
                     # "Nonna · Mattina": in Family Hub's calendar, list and notifications.
-                    summary=f"{self._person_name(person_id, device)} · {shift['name']}",
+                    # A person of the family's shifts are written as the panel writes them.
+                    summary=(
+                        shift["name"]
+                        if device.get("shifts_person")
+                        else f"{self._person_name(person_id, device)} · {shift['name']}"
+                    ),
                     start=start,
                     end=end,
                     persons=[person_id],
@@ -1213,6 +1320,8 @@ class GuestManager:
         person_id = device.get("person_id")
         if not person_id or person_id not in self._persons():
             return
+        if not self._owns_person(person_id):
+            return  # a person of the family: her shifts and herself stay, whatever the phone does
         persons = list(self.entry.options.get(OPT_PERSONS, []))
         if keep_shifts:
             persons = [
@@ -1280,6 +1389,7 @@ class GuestManager:
                 "has_shifts",
                 "shift_color",
                 "shifts_category",
+                "shifts_person",
             )
         }
         scope.update(gf.describe(old))
@@ -1324,6 +1434,7 @@ class GuestManager:
                 "has_shifts",
                 "shift_color",
                 "shifts_category",
+                "shifts_person",
                 *gf.KEYS,
             )
         ):
@@ -1406,8 +1517,10 @@ class GuestManager:
             return False
         persons = record.get("persons") or []
         own = device.get("person_id")
-        if own and own in persons:
-            return True  # its own shifts and appointments, whatever the calendar
+        if own and own in persons and (record.get("shift_id") or not device.get("shifts_person")):
+            # Its own shifts and appointments, whatever the calendar. For a person of the family
+            # that was linked, only her shifts: the rest follows the calendars chosen.
+            return True
         if record.get("category") not in device["categories"]:
             return False
         if not persons:
@@ -2546,6 +2659,7 @@ class GuestManager:
                     "has_shifts": bool(invite.get("has_shifts", False)),
                     "shift_color": invite.get("shift_color") or DEFAULT_SHIFT_COLOR,
                     "shifts_category": invite.get("shifts_category") or "",
+                    "shifts_person": invite.get("shifts_person") or "",
                 }
                 | gf.describe(invite)
                 | {"status": status, "in_use": self._in_use(invite)}
@@ -2576,6 +2690,7 @@ class GuestManager:
                 "has_shifts": bool(device.get("has_shifts", False)),
                 "shift_color": device.get("shift_color") or DEFAULT_SHIFT_COLOR,
                 "shifts_category": device.get("shifts_category") or "",
+                "shifts_person": device.get("shifts_person") or "",
                 "person_id": device.get("person_id") or "",
                 "quiet_start": device.get("quiet_start"),
                 "quiet_end": device.get("quiet_end"),

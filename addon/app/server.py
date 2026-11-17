@@ -27,7 +27,6 @@ from .access import (
     ADULT,
     CHILD,
     GUEST,
-    GUEST_IDENTITY,
     PENDING_IDENTITY,
     Identity,
     can_change,
@@ -682,7 +681,9 @@ class Hub:
     async def admin_ids(self) -> set[str]:
         """Home Assistant users in the system-admin group."""
         users = await self.ha.call("config/auth/list")
-        return {u["id"] for u in users if "system-admin" in u.get("group_ids", [])}
+        return {
+            u["id"] for u in users if "system-admin" in u.get("group_ids", []) or u.get("is_owner")
+        }
 
     async def user_name(self, user_id: str | None) -> str:
         """The name of the Home Assistant user in front of the screen, for the guest notice."""
@@ -712,11 +713,14 @@ class Hub:
             persons = list(calendar.get("persons", []))
             shared = list(calendar.get("shared_users", []))
             linked = identify(user_id, persons, shared)
-            if linked.role != GUEST or linked.person_id is not None:
+            if linked.role == ADULT:
                 return linked
+            # An administrator of Home Assistant always has an adult's permissions here (the
+            # menu with Condivisione, the guide, the external calendars), whether or not it is
+            # linked to a person, and whatever role that person has.
             if user_id and user_id in await self.admin_ids():
-                return Identity(ADULT, None)
-            return GUEST_IDENTITY
+                return Identity(ADULT, linked.person_id)
+            return linked
         except HAError:
             return PENDING_IDENTITY
 
