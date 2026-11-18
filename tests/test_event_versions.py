@@ -199,3 +199,37 @@ async def answer_events(http: TestClient, headers: dict[str, str], item_id: str)
         "events"
     ]
     return next(e for e in listed if e["id"] == item_id)
+
+
+async def test_days_over_the_most_give_the_most(
+    hass: HomeAssistant,
+    client: TestClient,  # noqa: F811
+    hass_ws_client: Any,
+    family: MockConfigEntry,  # noqa: F811
+) -> None:
+    """0.10.4: asking for more days than the most (62) gives the most, never an empty list and
+    never more than the guest may see."""
+    _unlimited(hass)
+    _, token = await _device(hass, client, hass_ws_client)
+    for summary, offset in (("Dentista vicino", 3), ("Gita lontana", 70)):
+        await hass.services.async_call(
+            DOMAIN,
+            "add_event",
+            {
+                "category": "scuola",
+                "summary": summary,
+                "persons": ["sofia"],
+                "start": f"{_day(offset)} 10:00:00",
+                "end": f"{_day(offset)} 11:00:00",
+            },
+            blocking=True,
+        )
+    for days in (62, 63, 1000, 99999):
+        answer = await client.get(f"{API}events?from={_day(0)}&days={days}", headers=_auth(token))
+        assert answer.status == 200, days
+        titles = [e["title"] for e in (await answer.json())["events"]]
+        assert titles == ["Dentista vicino"], days
+    # Not a number, or less than one: still a bad request.
+    for days in ("0", "-3", "tanti"):
+        answer = await client.get(f"{API}events?from={_day(0)}&days={days}", headers=_auth(token))
+        assert answer.status == 422, days

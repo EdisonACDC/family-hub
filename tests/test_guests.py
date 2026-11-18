@@ -531,7 +531,6 @@ async def test_changed_parameters_do_not_widen_what_a_guest_sees(
     for query in (
         {"person": "mamma"},
         {"category": "lavoro"},
-        {"days": "1000"},
         {"days": "-1"},
         {"from": "ieri"},
         {"from": "2026-02-30"},
@@ -539,6 +538,10 @@ async def test_changed_parameters_do_not_widen_what_a_guest_sees(
         answer = await _list(client, token, **query)
         assert answer.status == 422, query
         assert await answer.json() == {"error": "invalid"}
+    # More days than the most: the most (62), never more than the guest may see.
+    answer = await _list(client, token, days="1000")
+    assert answer.status == 200
+    assert "Cena di lavoro" not in await answer.text()
     # Anything else of Home Assistant is not reachable with a device token.
     for path in ("/api/states", "/api/config", "/api/services"):
         assert (await client.get(path, headers=_auth(token))).status == 401

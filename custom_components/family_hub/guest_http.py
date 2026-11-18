@@ -23,7 +23,7 @@ from aiohttp import web
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.http import HomeAssistantView
 
-from .guests import GuestError, GuestHub, GuestManager, guest_hub
+from .guests import MAX_RANGE_DAYS, GuestError, GuestHub, GuestManager, guest_hub
 
 LOGGER = logging.getLogger(__name__)
 
@@ -280,6 +280,9 @@ class GuestEventsView(_GuestView):
                 days = int(request.query.get("days", "14"))
             except ValueError as err:
                 raise GuestError("invalid", 422) from err
+            # More days than the most it gives are the most it gives (never an empty list, never
+            # more than the guest may see: the same persons and calendars).
+            days = min(days, MAX_RANGE_DAYS)
             items = manager.list_events(device, start, days)
             # External calendars (school, Google, ICS): only those allowed to this phone.
             items += await manager.async_external_events(device, start, days)

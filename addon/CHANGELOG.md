@@ -1,5 +1,14 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.10.4
+
+Stabile. Un solo ritocco, nessuna modifica incompatibile.
+
+- **API degli invitati, eventi**: `GET /api/family_hub/guest/api/events` con `days` oltre il
+  massimo (62) dà il massimo invece di un errore: mai una lista vuota e mai di più di quello che
+  l'invitato può vedere (stesse persone e stessi calendari). `days` minore di 1 o non numerico
+  resta una richiesta non valida.
+
 ## 0.10.3
 
 Stabile. Nessuna modifica incompatibile.
