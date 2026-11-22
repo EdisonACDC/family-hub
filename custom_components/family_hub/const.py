@@ -123,6 +123,7 @@ ATTR_REMINDER_OFFSETS: Final = "reminder_offsets"
 ATTR_MINUTES: Final = "minutes"
 ATTR_SHIFT_ID: Final = "shift_id"
 # A repeat rule (iCalendar RRULE text), and which occurrences a change or delete reaches.
+ATTR_DATES: Final = "dates"
 ATTR_RRULE: Final = "rrule"
 ATTR_RECURRENCE_RANGE: Final = "recurrence_range"
 ATTR_VERSION: Final = "version"

@@ -1131,11 +1131,11 @@
   // every 2 weeks; every month on the same day, or on "the 2nd Tuesday"; every year. The end is never,
   // a date, or a number of times. Changing an event that repeats asks which occurrences it reaches.
 
-  var REPEAT_KINDS = ["never", "daily", "weekly", "biweekly", "monthly_day", "monthly_nth", "yearly"];
+  var REPEAT_KINDS = ["never", "daily", "weekly", "biweekly", "monthly_day", "monthly_nth", "yearly", "chosen"];
   var REPEAT_KEYS = {
     never: "repeatNever", daily: "repeatDaily", weekly: "repeatWeekly",
     biweekly: "repeatBiweekly", monthly_day: "repeatMonthDay", monthly_nth: "repeatMonthNth",
-    yearly: "repeatYearly"
+    yearly: "repeatYearly", chosen: "repeatChosen"
   };
   var REPEAT_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
   var REPEAT_ENDS = ["never", "until", "count"];
@@ -1193,6 +1193,11 @@
     return label;
   }
 
+  // The panel opened by a guest (its page has the class fh-invited, see full.css).
+  function invitedPanel() {
+    return document.documentElement.classList.contains("fh-invited");
+  }
+
   function currentStartDay() {
     return parseDate($("event-form").elements.date.value) || ymd(new Date());
   }
@@ -1201,6 +1206,10 @@
     var kind = $("repeat-kind");
     kind.textContent = "";
     REPEAT_KINDS.forEach(function (value) {
+      // Chosen dates are made with a new event, or changed in one that already has them.
+      if (value === "chosen" && state.editing && !state.editing.ev.chosen) return;
+      // A guest's web app repeats by chosen dates only (no weekly or monthly rules, no end).
+      if (invitedPanel() && value !== "never" && value !== "chosen") return;
       kind.appendChild(el("option", { value: value }, repeatKindLabel(value, currentStartDay())));
     });
     var end = $("repeat-end");
@@ -1239,9 +1248,13 @@
   function refreshRepeatVisibility() {
     var kind = $("repeat-kind").value;
     var end = $("repeat-end").value;
+    var dates = kind === "chosen";
+    var guest = invitedPanel();
     $("repeat-days").hidden = kind !== "weekly" && kind !== "biweekly";
-    $("repeat-until-row").hidden = end !== "until";
-    $("repeat-count-row").hidden = end !== "count";
+    $("repeat-end").closest("label").hidden = dates || guest;
+    $("repeat-until-row").hidden = guest || dates || end !== "until";
+    $("repeat-count-row").hidden = guest || dates || end !== "count";
+    refreshChosenBox();
   }
 
   // The rule of an event, read into the controls: its kind, days, end.
@@ -1276,15 +1289,18 @@
     $("repeat-count").value = parts.count || "4";
     repeatTouched = false;
     refreshRepeatVisibility();
-    $("event-scope").hidden = !(ev && ev.rrule);
+    $("event-repeat").hidden = !!(ev && ev.chosen);
+    $("event-scope").hidden = !(ev && (ev.rrule || ev.chosen));
     $("event-scope").querySelector("input[value='']").checked = true;
+    refreshChosenBox();
   }
 
   // The rule the controls describe, as RRULE text; "" for no repeat; null when the end date is not
   // a date.
   function buildRepeatRule() {
     var kind = $("repeat-kind").value;
-    if (kind === "never") return "";
+    // "never", and chosen dates (which send their dates, not a rule), have no rule.
+    if (kind === "never" || kind === "chosen") return "";
     var startDay = currentStartDay();
     var rule;
     if (kind === "daily") {
@@ -1318,6 +1334,197 @@
   function changeScope() {
     var box = $("event-scope").querySelector("input[name='scope']:checked");
     return box ? box.value : "";
+  }
+
+  // ---- Chosen dates: one event on dates picked by hand -----------------------------------
+  // The dates are one series. A tap on a day in the month adds it (with the main times) or takes it
+  // off. Each row has its own start, end and "all day". Editing "Tutti" reads every date of the
+  // series, and sends the rows back: the times of each date are its own.
+  var CHOSEN_MAX = 50;
+  var chosenRows = [];
+  var chosenMonth = null;
+
+  function chosenEditAll() {
+    return !!(state.editing && state.editing.ev && state.editing.ev.chosen) && changeScope() === "ALL";
+  }
+
+  // The main start and end of the form, as "HH:MM"; the defaults for a new date.
+  function chosenMainTimes() {
+    var form = $("event-form");
+    var start = parseTime(form.elements.start_time.value) || "09:00";
+    var end = parseTime(form.elements.end_time.value) || addOneHour(start);
+    return { start: start, end: end };
+  }
+
+  function chosenSort() {
+    chosenRows.sort(function (a, b) {
+      var x = a.day + " " + a.start;
+      var y = b.day + " " + b.start;
+      return x < y ? -1 : (x > y ? 1 : 0);
+    });
+  }
+
+  function chosenIndexOf(day) {
+    for (var i = 0; i < chosenRows.length; i++) if (chosenRows[i].day === day) return i;
+    return -1;
+  }
+
+  function chosenStartIfEmpty() {
+    if (chosenRows.length) return;
+    var times = chosenMainTimes();
+    chosenRows.push({ day: currentStartDay(), start: times.start, end: times.end, allDay: $("event-form").elements.all_day.checked });
+  }
+
+  function chosenToggle(day) {
+    var at = chosenIndexOf(day);
+    if (at !== -1) {
+      chosenRows.splice(at, 1);
+    } else {
+      if (chosenRows.length >= CHOSEN_MAX) {
+        showFormError(I.f("chosenTooMany"));
+        return;
+      }
+      var times = chosenMainTimes();
+      chosenRows.push({ day: day, start: times.start, end: times.end, allDay: $("event-form").elements.all_day.checked });
+      chosenSort();
+    }
+    renderChosen();
+  }
+
+  function chosenSameTime() {
+    var times = chosenMainTimes();
+    chosenRows.forEach(function (row) {
+      row.start = times.start;
+      row.end = times.end;
+    });
+    renderChosen();
+  }
+
+  // The dates as the service takes them, or null (with the message shown) when a row is not right.
+  function chosenPayload() {
+    if (!chosenRows.length) {
+      showFormError(I.f("chosenNone"));
+      return null;
+    }
+    for (var i = 0; i < chosenRows.length; i++) {
+      var row = chosenRows[i];
+      if (!row.allDay && row.end <= row.start) {
+        showFormError(I.f("chosenEndBefore").replace("{date}", showDate(row.day)));
+        return null;
+      }
+    }
+    return chosenRows.map(function (row) {
+      if (row.allDay) return { start: row.day, end: ymd(addDays(parseLocalDay(row.day), 1)) };
+      return { start: row.day + " " + row.start + ":00", end: row.day + " " + row.end + ":00" };
+    });
+  }
+
+  // Shown for a new event with "Date scelte", and for "Tutti" on one that has chosen dates.
+  function refreshChosenBox() {
+    var box = $("chosen-box");
+    if (!box) return;
+    var shown = chosenEditAll() || (!(state.editing && state.editing.ev && state.editing.ev.chosen) && $("repeat-kind").value === "chosen");
+    box.hidden = !shown;
+    // With "Tutti" the date and the times are per row, so the single ones are not shown.
+    var perDate = chosenEditAll();
+    var form = $("event-form");
+    form.elements.date.closest("label").hidden = perDate;
+    form.elements.start_time.closest(".row").hidden = perDate;
+    form.elements.all_day.closest("label").hidden = perDate;
+    $("date-info").hidden = perDate;
+    if (shown) renderChosen();
+  }
+
+  // The dates of an event that has them, read from the service (every date, not only the window).
+  function resetChosen(ev) {
+    chosenRows = [];
+    chosenMonth = null;
+    if (!ev || !ev.chosen) return;
+    request({ op: "chosen_dates", uid: ev.record_id }).then(function (list) {
+      if (!state.editing || state.editing.ev.record_id !== ev.record_id) return;
+      chosenRows = list.map(function (item) {
+        var allDay = isAllDay(item.start);
+        return {
+          day: dayKey(item.start),
+          start: allDay ? "" : timeOfHHMM(item.start),
+          end: allDay ? "" : timeOfHHMM(item.end),
+          allDay: allDay
+        };
+      });
+      chosenSort();
+      chosenMonth = chosenRows.length ? parseLocalDay(chosenRows[0].day) : null;
+      refreshChosenBox();
+    }).catch(function (err) {
+      showFormError(t("saveError") + errorText(err));
+    });
+  }
+
+  function renderChosen() {
+    var box = $("chosen-box");
+    box.textContent = "";
+    box.appendChild(el("legend", {}, I.f("repeatChosen")));
+    var month = chosenMonth || parseLocalDay(currentStartDay());
+    chosenMonth = new Date(month.getFullYear(), month.getMonth(), 1);
+    var head = el("div", { class: "month-nav" });
+    head.appendChild(button("←", "btn", function () { chosenMonth = new Date(chosenMonth.getFullYear(), chosenMonth.getMonth() - 1, 1); renderChosen(); }));
+    head.appendChild(el("span", { class: "month-title" }, chosenMonth.toLocaleDateString(I.lang, { month: "long", year: "numeric" })));
+    head.appendChild(button("→", "btn", function () { chosenMonth = new Date(chosenMonth.getFullYear(), chosenMonth.getMonth() + 1, 1); renderChosen(); }));
+    box.appendChild(head);
+    var grid = el("div", { class: "month-grid chosen-grid", role: "grid" });
+    orderedDays(t("days")).forEach(function (name) { grid.appendChild(el("div", { class: "wd" }, name)); });
+    var offset = weekdayOffset(chosenMonth);
+    for (var i = 0; i < offset; i++) grid.appendChild(el("div", { class: "blank" }));
+    var days = new Date(chosenMonth.getFullYear(), chosenMonth.getMonth() + 1, 0).getDate();
+    var today = ymd(new Date());
+    for (var d = 1; d <= days; d++) {
+      var key = ymd(new Date(chosenMonth.getFullYear(), chosenMonth.getMonth(), d));
+      var picked = chosenIndexOf(key) !== -1;
+      var cell = el("button", { type: "button", class: "day-cell" + (key === today ? " today" : "") + (picked ? " picked" : ""), "aria-pressed": picked ? "true" : "false" });
+      cell.appendChild(el("span", { class: "dnum" }, String(d)));
+      cell.addEventListener("click", function (day) { return function () { chosenToggle(day); }; }(key));
+      grid.appendChild(cell);
+    }
+    box.appendChild(grid);
+    box.appendChild(el("p", { class: "hint" }, I.f("chosenHint")));
+    if (!chosenRows.length) {
+      box.appendChild(el("p", { class: "hint" }, I.f("chosenNone")));
+    } else {
+      box.appendChild(button(I.f("chosenSameTime"), "btn", chosenSameTime));
+    }
+    chosenRows.forEach(function (row, index) { box.appendChild(chosenRowElement(row, index)); });
+  }
+
+  function chosenRowElement(row, index) {
+    var bad = !row.allDay && row.end <= row.start;
+    var line = el("div", { class: "chosen-row" + (bad ? " row-bad" : "") });
+    line.appendChild(el("span", { class: "chosen-day" }, showDate(row.day)));
+    var allDay = el("input", { type: "checkbox" });
+    allDay.checked = row.allDay;
+    allDay.addEventListener("change", function () { row.allDay = allDay.checked; renderChosen(); });
+    line.appendChild(el("label", { class: "chosen-allday" }, null));
+    line.lastChild.appendChild(allDay);
+    line.lastChild.appendChild(document.createTextNode(" " + I.f("chosenAllDay")));
+    if (!row.allDay) {
+      var start = el("input", { type: "text", inputmode: "numeric", class: "chosen-start", "aria-label": I.f("chosenStart"), placeholder: "09:00", autocomplete: "off" });
+      var end = el("input", { type: "text", inputmode: "numeric", class: "chosen-end", "aria-label": I.f("chosenEnd"), placeholder: "10:00", autocomplete: "off" });
+      start.value = showTime(row.start, state.timeFormat);
+      end.value = showTime(row.end, state.timeFormat);
+      start.addEventListener("change", function () {
+        row.start = parseTime(start.value) || row.start;
+        renderChosen();
+      });
+      end.addEventListener("change", function () {
+        row.end = parseTime(end.value) || row.end;
+        renderChosen();
+      });
+      line.appendChild(start);
+      line.appendChild(end);
+    }
+    var remove = button("×", "btn chosen-remove", function () { chosenRows.splice(index, 1); renderChosen(); });
+    remove.setAttribute("aria-label", I.f("chosenRemove"));
+    line.appendChild(remove);
+    if (bad) line.appendChild(el("p", { class: "error chosen-bad", role: "alert" }, I.f("chosenEndBefore").replace("{date}", showDate(row.day))));
+    return line;
   }
 
   // The choice for a delete: an ordinary event asks "yes or no"; a repeating one asks which
@@ -1372,6 +1579,7 @@
     // An appointment with no reminders of its own (the family's, or from the guests' web app
     // that does not send them) leaves the field empty.
     form.elements.reminders.value = editing && ev.reminder_offsets && ev.reminder_offsets !== "default" ? ev.reminder_offsets : "";
+    resetChosen(editing && ev.chosen ? ev : null);
     setRepeatControls(editing ? ev : null);
     if (editing) {
       var cat = state.calendars.filter(function (c) { return c.category_id === ev.category_id; })[0];
@@ -1574,7 +1782,11 @@
     }
     var allDay = form.elements.all_day.checked;
     var data = { summary: summary, category: category, persons: chosenEventPersons() };
-    if (allDay) {
+    // With "Tutti" on chosen dates the dates come from the rows (below), not from the date and times.
+    var perDate = chosenEditAll();
+    if (perDate) {
+      // The rows are sent as the dates.
+    } else if (allDay) {
       data.start = day;
       data.end = ymd(addDays(parseLocalDay(day), 1));
     } else {
@@ -1620,9 +1832,20 @@
       if (state.editing.ev.version) data.version = state.editing.ev.version;
       if (repeatTouched) data.rrule = rule;
       var scope = changeScope();
-      if (state.editing.ev.rrule && scope) data.recurrence_range = scope;
+      if ((state.editing.ev.rrule || state.editing.ev.chosen) && scope) data.recurrence_range = scope;
+      if (perDate) {
+        var listedEdit = chosenPayload();
+        if (!listedEdit) return;
+        data.dates = listedEdit;
+        delete data.start;
+        delete data.end;
+      }
     } else if (rule) {
       data.rrule = rule;
+    } else if ($("repeat-kind").value === "chosen") {
+      var listed = chosenPayload();
+      if (!listed) return;
+      data.dates = listed;
     }
     var editing = state.editing;
     var call;
@@ -2906,7 +3129,12 @@
       var card = el("div", { class: "share-card share-pending", "data-pending": item.id });
       if (state.highlight === item.id) card.classList.add("share-highlight");
       card.appendChild(el("strong", {}, item.title));
-      card.appendChild(el("p", {}, approvalWhen(item)));
+      // A series of chosen dates: every date is listed, all of them are confirmed together.
+      if (item.dates && item.dates.length) {
+        item.dates.forEach(function (d) { card.appendChild(el("p", {}, approvalWhen(d))); });
+      } else {
+        card.appendChild(el("p", {}, approvalWhen(item)));
+      }
       card.appendChild(el("p", { class: "hint" }, item.persons.map(personName).join(", ") + " · " + categoryName(item.category)));
       if (item.location) card.appendChild(el("p", { class: "hint" }, item.location));
       if (item.note) card.appendChild(el("p", { class: "card-text" }, item.note));
@@ -5446,9 +5674,11 @@
     $("event-repeat").addEventListener("change", function () {
       repeatTouched = true;
       ensureRepeatDay();
+      if ($("repeat-kind").value === "chosen") chosenStartIfEmpty();
       refreshRepeatVisibility();
     });
     $("event-repeat").addEventListener("input", function () { repeatTouched = true; });
+    $("event-scope").addEventListener("change", refreshChosenBox);
     $("event-form").elements.date.addEventListener("input", refreshRepeatLabels);
     $("scope-this").addEventListener("click", function () { resolveScope(""); });
     $("scope-future").addEventListener("click", function () { resolveScope("THISANDFUTURE"); });

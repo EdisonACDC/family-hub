@@ -1785,3 +1785,14 @@ html, body { overflow-x: hidden; max-width: 100%; }
 @media (min-width: 1100px) {
   .period-title { flex: 0 0 auto; overflow: visible; text-overflow: clip; }
 }
+
+/* Chosen dates (0.11.0b1): one event on dates picked in the month, each with its own times. */
+.chosen-box { margin: 8px 0; }
+.chosen-box .chosen-grid .day-cell.picked { background: var(--accent); color: var(--accent-text); }
+.chosen-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.chosen-day { flex: 1 1 100%; font-weight: 600; }
+.chosen-start, .chosen-end { width: 6.5em; }
+.chosen-allday { white-space: nowrap; }
+.chosen-remove { min-width: 2.2em; }
+.chosen-row.row-bad { color: #B91C1C; }
+.chosen-bad { flex-basis: 100%; margin: 2px 0 0; }

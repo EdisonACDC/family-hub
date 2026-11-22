@@ -190,7 +190,7 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.10.5"
+    integration_version = "0.11.0b1"
     ha_language = "it"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
@@ -265,6 +265,27 @@ class FakeHA:
         for sub_id, (ws, kind, _) in list(self._subs.items()):
             if kind == "entities":
                 await self._send_event(ws, sub_id, change)
+
+    def _replace_series_dates(self, data: dict[str, Any]) -> None:
+        """Chosen dates changed for "all": the dates given replace the ones of the series (each
+        with its own start and end), as the integration does."""
+        for events in self.events.values():
+            anchor = next((e for e in events if e["record_id"] == data["uid"]), None)
+            if anchor is None or not anchor.get("series"):
+                continue
+            series = anchor["series"]
+            events[:] = [e for e in events if e.get("series") != series]
+            for slot in data["dates"]:
+                record = copy.deepcopy(anchor)
+                record.update(
+                    record_id=uuid.uuid4().hex,
+                    version=uuid.uuid4().hex[:12],
+                    summary=data.get("summary", anchor["summary"]),
+                    start=slot["start"],
+                    end=slot.get("end", slot["start"]),
+                )
+                events.append(record)
+            return
 
     async def add_event(
         self, entity_id: str, summary: str, start: str, end: str, person_ids: str = ""
@@ -860,12 +881,17 @@ class FakeHA:
             )
             person_ids = ",".join(data.get("persons", []))
             shift_id = data.get("shift_id", "")
-            self.events.setdefault(entity, []).append(
-                stored_event(
-                    data["summary"], data["start"], data.get("end", data["start"]), person_ids
+            extra = {"shift_id": shift_id, "notify": notify_text(data)}
+            # Chosen dates (0.11.0b1): one event per date, each with its own start and end.
+            for slot in data.get("dates") or [
+                {"start": data["start"], "end": data.get("end", data["start"])}
+            ]:
+                self.events.setdefault(entity, []).append(
+                    stored_event(
+                        data["summary"], slot["start"], slot.get("end", slot["start"]), person_ids
+                    )
+                    | extra
                 )
-                | {"shift_id": shift_id, "notify": notify_text(data)}
-            )
             await self.push_entity_change(entity)
         if domain == DOMAIN and service in ("update_event", "delete_event") and "version" in data:
             current = next(
@@ -887,6 +913,8 @@ class FakeHA:
                     "service_validation_error",
                 )
                 return
+        if domain == DOMAIN and service == "update_event" and "dates" in data:
+            self._replace_series_dates(data)
         if domain == DOMAIN and service == "update_event":
             for events in self.events.values():
                 for event in events:

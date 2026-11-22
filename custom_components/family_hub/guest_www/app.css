@@ -211,3 +211,13 @@ html.mode-full { font-size: 16px; }
 #list-new { width: 100%; font: inherit; padding: 10px; margin-top: 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--card); color: var(--text); }
 .list-choice { display: flex; flex-direction: column; gap: 8px; }
 .waste-item { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 1.05rem; }
+
+/* Chosen dates (0.11.0b1): the month to tap the days, and the time of each day under it. */
+.chosen-wrap { margin: 8px 0; }
+.chosen-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.chosen-month { font-weight: 800; font-size: 1.15rem; text-transform: capitalize; }
+.chosen-grid .month-day.picked { background: var(--accent); color: var(--accent-text, #fff); }
+.chosen-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.chosen-row.row-bad { color: #B91C1C; }
+.chosen-when { flex: 1 1 100%; font-weight: 700; font-size: 1.15rem; }
+.chosen-row input[type="time"] { width: auto; flex: 1 1 8em; font-size: 1.25rem; }

@@ -33,7 +33,7 @@
       pending: "In attesa",
       addedBy: "aggiunto da {name}",
       add: "+ Aggiungi",
-      addTitle: "Nuovo appuntamento",
+      addTitle: "Nuovo appuntamento", chosenSwitch: "Date scelte", chosenNone: "Tocca i giorni nel calendario: scegli almeno una data.", chosenTooMany: "Massimo 50 date.", chosenEndBefore: "La fine di {date} deve essere dopo l'inizio.", chosenRemove: "Togli questa data", scopeTitle: "Modifica", scopeOne: "Solo questo", scopeFollowing: "Questo e i successivi", scopeAll: "Tutti", scopeAsk: "Quali date eliminare?", prevMonth: "Mese precedente", nextMonth: "Mese successivo",
       editTitle: "Modifica appuntamento",
       fTitle: "Che cosa",
       fPerson: "Per chi",
@@ -133,7 +133,7 @@ month: "Mese", lists: "🛒 Liste", waste: "🗑️ Rifiuti", everyone: "Tutti",
       pending: "Waiting",
       addedBy: "added by {name}",
       add: "+ Add",
-      addTitle: "New appointment",
+      addTitle: "New appointment", chosenSwitch: "Chosen dates", chosenNone: "Tap the days in the calendar: choose at least one date.", chosenTooMany: "No more than 50 dates.", chosenEndBefore: "The end of {date} must be after its start.", chosenRemove: "Remove this date", scopeTitle: "Edit", scopeOne: "Only this one", scopeFollowing: "This and the following", scopeAll: "All", scopeAsk: "Which dates to delete?", prevMonth: "Previous month", nextMonth: "Next month",
       editTitle: "Change appointment",
       fTitle: "What",
       fPerson: "For whom",
@@ -233,7 +233,7 @@ month: "Month", lists: "🛒 Lists", waste: "🗑️ Rubbish", everyone: "Everyo
       pending: "Wartet",
       addedBy: "eingetragen von {name}",
       add: "+ Eintragen",
-      addTitle: "Neuer Termin",
+      addTitle: "Neuer Termin", chosenSwitch: "Ausgewählte Termine", chosenNone: "Tippe die Tage im Kalender an: wähle mindestens einen Termin.", chosenTooMany: "Höchstens 50 Termine.", chosenEndBefore: "Das Ende von {date} muss nach dem Beginn liegen.", chosenRemove: "Diesen Termin entfernen", scopeTitle: "Bearbeiten", scopeOne: "Nur dieser Termin", scopeFollowing: "Dieser und die folgenden", scopeAll: "Alle", scopeAsk: "Welche Termine löschen?", prevMonth: "Vorheriger Monat", nextMonth: "Nächster Monat",
       editTitle: "Termin ändern",
       fTitle: "Was",
       fPerson: "Für wen",
@@ -1336,12 +1336,125 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
 
   function hhmm(date) { return pad(date.getHours()) + ":" + pad(date.getMinutes()); }
 
+  // ----- chosen dates (0.11.0b1) -------------------------------------------------------
+  // "Date scelte": one appointment on several days, each with its own times. A tap on a day in the
+  // month picks it or takes it off; the rows under the month hold the times of each day.
+  var CHOSEN_MAX = 50;
+
+  function chosenDayName(key) {
+    return fromKey(key).toLocaleDateString(state.lang, { weekday: "short", day: "numeric", month: "short" });
+  }
+
+  // The month with the arrows, and the rows (a day, a start and an end each) under it.
+  function chosenPicker(rows, defaults) {
+    var view = el("div", { class: "chosen-picker" });
+    var first = state.me && state.me.first_weekday === "sunday" ? 0 : 1;
+    var month = rows.length ? fromKey(rows[0].day) : today();
+    month = new Date(month.getFullYear(), month.getMonth(), 1);
+
+    function sortRows() {
+      rows.sort(function (a, b) {
+        var x = a.day + " " + a.start;
+        var y = b.day + " " + b.start;
+        return x < y ? -1 : (x > y ? 1 : 0);
+      });
+    }
+    function indexOf(key) {
+      for (var i = 0; i < rows.length; i++) if (rows[i].day === key) return i;
+      return -1;
+    }
+    function tap(key) {
+      var at = indexOf(key);
+      if (at !== -1) {
+        rows.splice(at, 1);
+      } else if (rows.length >= CHOSEN_MAX) {
+        sheetError(t("chosenTooMany"));
+        return;
+      } else {
+        var times = defaults();
+        rows.push({ day: key, start: times.start, end: times.end });
+        sortRows();
+      }
+      paint();
+    }
+    function paint() {
+      view.textContent = "";
+      view.appendChild(el("div", { class: "chosen-head" }, [
+        el("button", { type: "button", class: "btn", text: "←", "aria-label": t("prevMonth"),
+          onclick: function () { month = new Date(month.getFullYear(), month.getMonth() - 1, 1); paint(); } }),
+        el("span", { class: "chosen-month", text: month.toLocaleDateString(state.lang, { month: "long", year: "numeric" }) }),
+        el("button", { type: "button", class: "btn", text: "→", "aria-label": t("nextMonth"),
+          onclick: function () { month = new Date(month.getFullYear(), month.getMonth() + 1, 1); paint(); } })
+      ]));
+      var grid = el("div", { class: "month-grid chosen-grid", role: "grid" });
+      for (var i = 0; i < 7; i++) {
+        var name = new Date(2024, 0, (first === 0 ? 7 : 1) + i).toLocaleDateString(state.lang, { weekday: "short" });
+        grid.appendChild(el("div", { class: "month-wd", text: name }));
+      }
+      var offset = (month.getDay() - first + 7) % 7;
+      for (var b = 0; b < offset; b++) grid.appendChild(el("div", {}));
+      var days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+      var todayKey = dayKey(today());
+      for (var d = 1; d <= days; d++) {
+        var key = dayKey(new Date(month.getFullYear(), month.getMonth(), d));
+        var picked = indexOf(key) !== -1;
+        grid.appendChild(el("button", {
+          type: "button",
+          class: "month-day chosen-day" + (picked ? " picked" : "") + (key === todayKey ? " today" : ""),
+          "aria-pressed": picked ? "true" : "false",
+          onclick: (function (k) { return function () { tap(k); }; })(key)
+        }, [el("span", { class: "month-num", text: String(d) })]));
+      }
+      view.appendChild(grid);
+      rows.forEach(function (row, index) {
+        view.appendChild(el("div", { class: "chosen-row" + (row.end <= row.start ? " row-bad" : "") }, [
+          el("span", { class: "chosen-when", text: chosenDayName(row.day) }),
+          el("input", { type: "time", class: "chosen-start", "aria-label": t("fStart"), value: row.start,
+            onchange: function (e) { row.start = e.target.value; paint(); } }),
+          el("input", { type: "time", class: "chosen-end", "aria-label": t("fEnd"), value: row.end,
+            onchange: function (e) { row.end = e.target.value; paint(); } }),
+          el("button", { type: "button", class: "btn", text: "×", "aria-label": t("chosenRemove"),
+            onclick: function () { rows.splice(index, 1); paint(); } })
+        ]));
+      });
+      if (!rows.length) view.appendChild(el("p", { class: "hint", text: t("chosenNone") }));
+    }
+    paint();
+    return view;
+  }
+
+  // The rows as the web app takes them, or null (with the message shown) when one is not right.
+  function chosenPayload(rows) {
+    if (!rows.length) {
+      sheetError(t("chosenNone"));
+      return null;
+    }
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i].start || !rows[i].end || rows[i].end <= rows[i].start) {
+        sheetError(t("chosenEndBefore").replace("{date}", chosenDayName(rows[i].day)));
+        return null;
+      }
+    }
+    return rows.map(function (row) {
+      return { date: row.day, start: row.start, end: row.end, all_day: false };
+    });
+  }
+
+  // The dates of an appointment that has them, as rows (the times it has).
+  function chosenRowsOf(item) {
+    return (item && item.dates ? item.dates : []).filter(function (d) { return !d.all_day; }).map(function (d) {
+      return { day: d.start.slice(0, 10), start: d.start.slice(11, 16), end: d.end.slice(11, 16) };
+    });
+  }
+
   function openForm(item) {
     var persons = state.me.persons || [];
     var categories = state.me.categories || [];
     var start = item ? startDate(item) : null;
     var now = new Date();
     var defaultStart = pad(Math.min(now.getHours() + 1, 23)) + ":00";
+    var chosenEdit = !!(item && item.chosen);
+    var canChoose = !item && canAdd();
     var title = el("input", { type: "text", id: "f-title", maxlength: "80", value: item ? item.title : "",
       autocomplete: "off" });
     var personGroup = chips("person", persons, item ? (item.persons || [])[0] : (persons.length === 1 ? persons[0].id : ""));
@@ -1353,41 +1466,81 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
       value: item && !item.all_day ? hhmm(start) : defaultStart });
     var endInput = el("input", { type: "time", id: "f-end",
       value: item && !item.all_day ? hhmm(new Date(item.end)) : pad(Math.min(Number(defaultStart.slice(0, 2)) + 1, 23)) + ":" + (defaultStart.slice(0, 2) === "23" ? "59" : "00") });
+    var dateField = el("label", { class: "field" }, [el("span", { text: t("fDate") }), dateInput]);
+    var allDayLabel = el("label", { class: "check" }, [allDay, t("fAllDay")]);
     var times = el("div", { class: "row" }, [
       el("label", { class: "field" }, [el("span", { text: t("fStart") }), startInput]),
       el("label", { class: "field" }, [el("span", { text: t("fEnd") }), endInput])
     ]);
-    times.hidden = allDay.checked;
-    allDay.addEventListener("change", function () { times.hidden = allDay.checked; });
     var location = el("input", { type: "text", id: "f-location", maxlength: "100", value: item ? item.location : "" });
     var note = el("textarea", { id: "f-note", maxlength: "500" });
     note.value = item && item.note ? item.note : "";
+    // An appointment with chosen dates: "Solo questo", "Questo e i successivi" or "Tutti".
+    var scopeGroup = chosenEdit ? chips("scope", [
+      { id: "", name: t("scopeOne") },
+      { id: "THISANDFUTURE", name: t("scopeFollowing") },
+      { id: "ALL", name: t("scopeAll") }
+    ], "") : null;
+    var chosenSwitch = el("input", { type: "checkbox", id: "f-chosen" });
+    var switchRow = el("label", { class: "check" }, [chosenSwitch, t("chosenSwitch")]);
+    switchRow.hidden = !canChoose;
+    var rows = chosenRowsOf(item);
+    var picker = chosenPicker(rows, function () {
+      return { start: startInput.value || "09:00", end: endInput.value || "10:00" };
+    });
+    var chosenWrap = el("div", { class: "chosen-wrap" }, [picker]);
+    function layout() {
+      var scope = chosenEdit ? chosenChip(scopeGroup) : "";
+      var series = chosenEdit ? scope === "ALL" : chosenSwitch.checked;
+      chosenWrap.hidden = !series;
+      dateField.hidden = series;
+      allDayLabel.hidden = series;
+      // With "Tutti" each date keeps its own times, so the one time of the form is not shown.
+      times.hidden = (chosenEdit && scope === "ALL") || (!series && allDay.checked);
+    }
+    allDay.addEventListener("change", layout);
+    chosenSwitch.addEventListener("change", layout);
+    if (scopeGroup) scopeGroup.addEventListener("click", layout);
     var body = el("div", {}, [
       el("label", { class: "field" }, [el("span", { text: t("fTitle") }), title]),
       el("div", { class: "field" }, [el("span", { text: t("fPerson") }), personGroup]),
       el("div", { class: "field" }, [el("span", { text: t("fCalendar") }), categoryGroup]),
-      el("label", { class: "field" }, [el("span", { text: t("fDate") }), dateInput]),
-      el("label", { class: "check" }, [allDay, t("fAllDay")]),
+      scopeGroup ? el("div", { class: "field" }, [el("span", { text: t("scopeTitle") }), scopeGroup]) : null,
+      switchRow,
+      dateField,
+      allDayLabel,
       times,
+      chosenWrap,
       el("label", { class: "field" }, [el("span", { text: t("fLocation") }), location]),
       el("label", { class: "field" }, [el("span", { text: t("fNote") }), note])
     ]);
+    layout();
     var save = el("button", { type: "button", class: "btn btn-primary", id: "f-save", text: t("save") });
     save.addEventListener("click", function () {
+      var creating = canChoose && chosenSwitch.checked;
+      var scope = chosenEdit ? chosenChip(scopeGroup) : "";
+      var series = creating || (chosenEdit && scope === "ALL");
       var data = {
         title: title.value.trim(),
         person: chosenChip(personGroup),
         category: chosenChip(categoryGroup),
-        date: dateInput.value,
-        all_day: allDay.checked,
         location: location.value.trim(),
         note: note.value.trim()
       };
-      if (!data.all_day) { data.start = startInput.value; data.end = endInput.value; }
+      if (series) {
+        data.dates = chosenPayload(rows);
+        if (!data.dates) return;
+      } else {
+        data.date = dateInput.value;
+        data.all_day = allDay.checked;
+        if (!data.all_day) { data.start = startInput.value; data.end = endInput.value; }
+      }
+      if (chosenEdit) data.scope = scope;
       if (item && item.version) data.version = item.version;
       if (!data.title) { sheetError(t("errTitle")); return; }
-      if (!data.person || !data.category || !data.date) { sheetError(t("errSave")); return; }
-      if (!data.all_day && !(data.start && data.end && data.end > data.start)) { sheetError(t("errTime")); return; }
+      if (!data.person || !data.category) { sheetError(t("errSave")); return; }
+      if (!series && !data.date) { sheetError(t("errSave")); return; }
+      if (!series && !data.all_day && !(data.start && data.end && data.end > data.start)) { sheetError(t("errTime")); return; }
       save.disabled = true;
       var call = item ? api("PUT", "events/" + item.id, data) : api("POST", "events", data);
       call.then(function (answer) {
@@ -1409,8 +1562,25 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
   }
 
   function removeItem(item) {
+    if (item.chosen) {
+      // Which dates: this one, this and the following, or all of them.
+      openSheet(t("scopeAsk"), el("div", {}), [
+        el("button", { type: "button", class: "btn btn-danger", text: t("scopeOne"), onclick: function () { deleteEvent(item, ""); } }),
+        el("button", { type: "button", class: "btn btn-danger", text: t("scopeFollowing"), onclick: function () { deleteEvent(item, "THISANDFUTURE"); } }),
+        el("button", { type: "button", class: "btn btn-danger", text: t("scopeAll"), onclick: function () { deleteEvent(item, "ALL"); } }),
+        el("button", { type: "button", class: "btn", text: t("cancel"), onclick: closeSheet })
+      ]);
+      return;
+    }
     if (!window.confirm(t("removeAsk"))) return;
-    api("DELETE", "events/" + item.id + (item.version ? "?version=" + encodeURIComponent(item.version) : ""))
+    deleteEvent(item, "");
+  }
+
+  function deleteEvent(item, scope) {
+    var query = [];
+    if (item.version) query.push("version=" + encodeURIComponent(item.version));
+    if (scope) query.push("scope=" + encodeURIComponent(scope));
+    api("DELETE", "events/" + item.id + (query.length ? "?" + query.join("&") : ""))
       .then(function () {
         closeSheet();
         toast(t("removed"));

@@ -83,6 +83,7 @@ def test_bridge_never_relays_admin_requests() -> None:
         "shifts",
         "shifts_save",
         "shifts_apply",
+        "chosen_dates",
     }
     # Only the guests' API, never Home Assistant's own.
     assert re.findall(r'"/api/[^"]*"', bridge) == ['"/api/family_hub/guest/"']

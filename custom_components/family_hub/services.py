@@ -14,13 +14,14 @@ from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from .calendar import FamilyHubCalendar, deserialize_time, localize
+from .calendar import MAX_CHOSEN_DATES, FamilyHubCalendar, deserialize_time, localize
 from .const import (
     ATTR_ALEXA_TARGET,
     ATTR_ALEXA_VOLUME,
     ATTR_ALL_DAY_REMINDER,
     ATTR_CATEGORY,
     ATTR_CHANNELS,
+    ATTR_DATES,
     ATTR_DESCRIPTION,
     ATTR_END,
     ATTR_ENTRY_ID,
@@ -105,6 +106,10 @@ def _notify_of(data: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+# One chosen date of an appointment: its start, and its end (the start plus one hour, or one day).
+DATE_SLOT = vol.Schema({vol.Required("start"): TIME, vol.Optional("end"): TIME})
+DATES = vol.All(cv.ensure_list, [DATE_SLOT], vol.Length(min=1, max=MAX_CHOSEN_DATES))
+
 ADD_EVENT_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_ENTRY_ID): cv.string,
@@ -119,6 +124,7 @@ ADD_EVENT_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ALL_DAY_REMINDER): HH_MM,
         vol.Optional(ATTR_SHIFT_ID): cv.string,
         vol.Optional(ATTR_RRULE): cv.string,
+        vol.Optional(ATTR_DATES): DATES,
         vol.Optional(ATTR_PRIVATE): cv.boolean,
         **NOTIFY_FIELDS,
     }
@@ -129,6 +135,7 @@ UPDATE_EVENT_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ENTRY_ID): cv.string,
         vol.Required(ATTR_UID): cv.string,
         vol.Optional(ATTR_RRULE): cv.string,
+        vol.Optional(ATTR_DATES): DATES,
         vol.Optional(ATTR_RECURRENCE_RANGE): vol.In(["THISANDFUTURE", "ALL"]),
         vol.Optional(ATTR_VERSION): cv.string,
         vol.Optional(ATTR_PRIVATE): cv.boolean,
@@ -224,6 +231,15 @@ def _normalize(value: date | datetime) -> date | datetime:
     return localize(value)
 
 
+def _chosen(items: list[dict[str, Any]]) -> list[tuple[date | datetime, date | datetime]]:
+    """The chosen dates of a call: each start, with its end (or the default one)."""
+    slots: list[tuple[date | datetime, date | datetime]] = []
+    for item in items:
+        start = _normalize(item["start"])
+        slots.append((start, _normalize(item.get("end") or _default_end(start))))
+    return slots
+
+
 @callback
 def async_register_services(hass: HomeAssistant) -> None:
     """Register the Family Hub actions once per Home Assistant instance."""
@@ -248,6 +264,8 @@ def async_register_services(hass: HomeAssistant) -> None:
             notify=_notify_of(dict(call.data)),
             rrule=call.data.get(ATTR_RRULE),
             private=bool(call.data.get(ATTR_PRIVATE, False)),
+            # Chosen dates replace the start and end: each date has its own times.
+            dates=_chosen(call.data[ATTR_DATES]) if ATTR_DATES in call.data else None,
         )
 
     async def update_event(call: ServiceCall) -> None:
@@ -277,6 +295,7 @@ def async_register_services(hass: HomeAssistant) -> None:
             changes,
             recurrence_range=call.data.get(ATTR_RECURRENCE_RANGE),
             version=call.data.get(ATTR_VERSION),
+            dates=_chosen(call.data[ATTR_DATES]) if ATTR_DATES in call.data else None,
         )
 
     async def delete_event(call: ServiceCall) -> None:

@@ -216,8 +216,17 @@
       calendar: categoryName(item.category),
       added_by: item.added_by || "",
       mine: !!item.mine,
-      private: false
+      private: false,
+      chosen: !!item.chosen
     };
+  }
+
+  // The dates of a series of chosen dates, as the panel reads them (the ones this phone may see).
+  function chosenDates(uid) {
+    var item = known[uid];
+    return (item && item.dates ? item.dates : []).map(function (d) {
+      return { record_id: d.id, start: d.start, end: d.end };
+    });
   }
 
   function wasteEvents(days) {
@@ -277,6 +286,20 @@
       body.start = start.slice(11, 16);
       body.end = end.slice(11, 16);
     }
+    if (data.dates) {
+      // Chosen dates: each one with its own times. The web app takes the dates instead of one day.
+      delete body.date;
+      delete body.start;
+      delete body.end;
+      delete body.all_day;
+      body.dates = data.dates.map(function (d) {
+        var text = String(d.start);
+        if (text.length === 10) return { date: text, all_day: true };
+        return { date: text.slice(0, 10), start: text.slice(11, 16), end: String(d.end).slice(11, 16), all_day: false };
+      });
+    }
+    // "Solo questo", "Questo e i successivi" or "Tutti" for a series of chosen dates.
+    if (current && data.recurrence_range !== undefined) body.scope = data.recurrence_range || "";
     return body;
   }
 
@@ -297,7 +320,10 @@
     if (name === "delete_event") {
       var read = known[data.uid];
       var version = data.version || (read && read.version) || "";
-      return api("DELETE", "events/" + encodeURIComponent(data.uid) + (version ? "?version=" + encodeURIComponent(version) : ""))
+      var query = [];
+      if (version) query.push("version=" + encodeURIComponent(version));
+      if (data.recurrence_range) query.push("scope=" + encodeURIComponent(data.recurrence_range));
+      return api("DELETE", "events/" + encodeURIComponent(data.uid) + (query.length ? "?" + query.join("&") : ""))
         .then(function () { forget(); return null; });
     }
     return refuse();
@@ -342,6 +368,7 @@
             forecast: w.forecast || [] };
         });
       case "service": return service(payload.service, payload.data);
+      case "chosen_dates": return Promise.resolve(chosenDates(payload.uid));
       case "todo_lists": return todoLists();
       case "todo_items":
         return api("GET", "lists/" + encodeURIComponent(payload.entity_id)).then(todoItems);

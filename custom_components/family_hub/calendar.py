@@ -70,6 +70,10 @@ class FamilyHubEvent(CalendarEvent):
     added_by: str = ""
     # Never shown to guests (see guests.py).
     private: bool = False
+    # One of the chosen dates of an appointment (see the "dates" option of add_event).
+    chosen: bool = False
+    # The series the event belongs to (the dates of one chosen-dates appointment share it).
+    series: str = ""
     # What the appointment is now (see storage.event_version): sent back with a change.
     version: str = ""
 
@@ -81,9 +85,36 @@ SUPPORTED_FEATURES = (
 )
 
 
+MAX_CHOSEN_DATES = 50
+
+
 def is_all_day(value: date | datetime) -> bool:
     """Return True for a plain date (all-day event)."""
     return not isinstance(value, datetime)
+
+
+def chosen_slots(
+    slots: list[tuple[date | datetime, date | datetime]],
+) -> list[tuple[date | datetime, date | datetime]]:
+    """The chosen dates of an appointment, in time order: each start once (a repeated one is
+    dropped), each with its own end. Raises ServiceValidationError when none is left, when there
+    are more than MAX_CHOSEN_DATES, or when an end is not after its start."""
+    found: dict[str, tuple[date | datetime, date | datetime]] = {}
+    for start, end in slots:
+        start, end = localize(start), localize(end)
+        validate_range(start, end)
+        found.setdefault(_slot_key(start), (start, end))
+    if not found:
+        raise ServiceValidationError("dates_empty")
+    if len(found) > MAX_CHOSEN_DATES:
+        raise ServiceValidationError("dates_too_many")
+    return sorted(found.values(), key=lambda slot: as_datetime(slot[0]))
+
+
+def _slot_key(value: date | datetime) -> str:
+    """The stored text of a start, the same for a record and for a chosen date."""
+    all_day = is_all_day(value)
+    return _stored(value if all_day else as_datetime(value), all_day)
 
 
 def localize(value: date | datetime) -> date | datetime:
@@ -254,6 +285,8 @@ class FamilyHubCalendar(CalendarEntity):
             notify=notify_text(record.get("notify")),
             added_by=_added_by(record),
             private=bool(record.get("private", False)),
+            chosen=bool(record.get("chosen", False)),
+            series=str(record.get("series") or ""),
             version=event_version(record),
             uid=record["uid"],
             summary=record["summary"],
@@ -327,6 +360,7 @@ class FamilyHubCalendar(CalendarEntity):
         recurrence_id: str | None = None,
         recurrence_range: str | None = None,
         version: str | None = None,
+        dates: list[tuple[date | datetime, date | datetime]] | None = None,
     ) -> None:
         """Update an event; keys missing from ``event`` keep their value. With ``version`` (the
         one that was read) the change is refused when the event has changed since.
@@ -335,9 +369,17 @@ class FamilyHubCalendar(CalendarEntity):
         ones after it (they become a series of their own from here); ALL changes every occurrence;
         no range changes this occurrence only. A new ``rrule`` writes the occurrences again from the
         occurrence that was edited.
+
+        For a series of chosen dates, ALL changes the fields of every date; ``dates`` (with ALL)
+        replaces the list of dates, each with its own start and end.
         """
         record = self._get_own_record(uid)
         self._check_version(record, version)
+        if dates is not None or (record.get("chosen") and recurrence_range == "ALL"):
+            await self._async_update_chosen(record, event, recurrence_range, dates)
+            return
+        if record.get("chosen") and event.get("rrule"):
+            raise ServiceValidationError("dates_no_rrule")
         affected = self._affected(record, recurrence_range)
         all_day = bool(record["all_day"])
         new_start = _given(event, "dtstart", "start")
@@ -527,12 +569,18 @@ class FamilyHubCalendar(CalendarEntity):
         rrule: str | None = None,
         added_by: dict[str, Any] | None = None,
         private: bool = False,
+        dates: list[tuple[date | datetime, date | datetime]] | None = None,
     ) -> str:
         """Store a new event (or every occurrence of a repeat rule) and return the first uid.
-        ``added_by`` is set for an appointment from the guest web app (see guests.py)."""
-        start = localize(start)
-        end = localize(end)
-        validate_range(start, end)
+        ``added_by`` is set for an appointment from the guest web app (see guests.py).
+        ``dates`` (start and end of each) makes a series of chosen dates instead: ``start`` and
+        ``end`` are then not used, and no ``rrule`` may be given."""
+        if dates is not None and rrule:
+            raise ServiceValidationError("dates_no_rrule")
+        if dates is None:
+            start = localize(start)
+            end = localize(end)
+            validate_range(start, end)
         rule = recurrence.validate(rrule) if rrule else None
         values: dict[str, Any] = {
             "summary": summary,
@@ -551,9 +599,97 @@ class FamilyHubCalendar(CalendarEntity):
                 "device": str(added_by.get("device") or ""),
                 "name": str(added_by.get("name") or ""),
             }
+        if dates is not None:
+            series = uuid.uuid4().hex
+            chosen = [self._store_chosen(values, series, s, e) for s, e in chosen_slots(dates)]
+            await self._async_save_and_refresh()
+            return chosen[0]
         uid = self._insert_series(values, rule, start, end)
         await self._async_save_and_refresh()
         return uid
+
+    # ----- series of chosen dates ---------------------------------------
+
+    def _store_chosen(
+        self,
+        values: dict[str, Any],
+        series: str,
+        start: date | datetime,
+        end: date | datetime,
+    ) -> str:
+        """Store one chosen date: a record of its own with its own start and end. The series has
+        no rule, so the rule extension leaves it alone; every date is already written."""
+        all_day = is_all_day(start)
+        uid = uuid.uuid4().hex
+        self._store.events[uid] = {
+            **values,
+            "uid": uid,
+            "category": self.category_id,
+            "start": _slot_key(start),
+            "end": _slot_key(end),
+            "all_day": all_day,
+            "series": series,
+            "rrule": "",
+            "written": "",
+            "complete": True,
+            "chosen": True,
+        }
+        return uid
+
+    async def _async_update_chosen(
+        self,
+        record: dict[str, Any],
+        event: dict[str, Any],
+        recurrence_range: str | None,
+        dates: list[tuple[date | datetime, date | datetime]] | None,
+    ) -> None:
+        """A change to a series of chosen dates. ALL changes the fields of every date; the dates,
+        and the times of each one, change only through ``dates``."""
+        if not record.get("chosen"):
+            raise ServiceValidationError("dates_only_for_chosen_dates")
+        if recurrence_range != "ALL":
+            raise ServiceValidationError("dates_need_all_occurrences")
+        if event.get("rrule"):
+            raise ServiceValidationError("dates_no_rrule")
+        if (
+            _given(event, "dtstart", "start") is not None
+            or _given(event, "dtend", "end") is not None
+        ):
+            raise ServiceValidationError("dates_times_per_date")
+        if dates is None:
+            for item in self._series_records(str(record["series"])):
+                _apply_fields(item, event)
+        else:
+            self._replace_chosen(record, event, chosen_slots(dates))
+        await self._async_save_and_refresh()
+
+    def _replace_chosen(
+        self,
+        record: dict[str, Any],
+        event: dict[str, Any],
+        slots: list[tuple[date | datetime, date | datetime]],
+    ) -> None:
+        """The dates of the series become ``slots``. A date kept keeps its record (its end is the
+        one given); a date left out is removed; a new date is added with the series' fields."""
+        series = str(record["series"])
+        wanted = {_slot_key(start): (start, end) for start, end in slots}
+        kept: set[str] = set()
+        for item in self._series_records(series):
+            key = _slot_key(_when(item))
+            if key not in wanted:
+                self._store.events.pop(item["uid"], None)
+                continue
+            kept.add(key)
+            _apply_fields(item, event)
+            new_end = _slot_key(wanted[key][1])
+            if new_end != item["end"]:
+                item["reminders_off"] = False
+            item["end"] = new_end
+        values = _values(record)
+        _apply_fields(values, event)
+        for key, (start, end) in wanted.items():
+            if key not in kept:
+                self._store_chosen(values, series, start, end)
 
 
 # The values an occurrence keeps from its event (the rest belongs to the occurrence itself).

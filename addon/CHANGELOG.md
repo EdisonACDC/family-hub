@@ -1,5 +1,30 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.11.0b1
+
+Beta. Un evento su più date scelte a mano, ognuna con il suo orario.
+
+- **Date scelte**: nel modulo Nuovo evento, in «Si ripete» scegli «Date scelte». Un tocco sul
+  giorno nel calendario lo sceglie, un altro lo toglie (fino a 50 date, anche passate). Ogni
+  data ha il suo inizio, la sua fine e «Tutto il giorno». «Stesso orario per tutte» copia
+  l'orario principale su tutte le righe. Una fine prima dell'inizio è segnata sulla sua riga e
+  non si salva.
+- **Modifica**: «Solo questo» cambia una sola data. «Tutti» cambia titolo, persone, calendario,
+  descrizione, luogo e promemoria di tutte le date; gli orari restano quelli di ogni data, e nel
+  modulo si possono aggiungere o togliere date.
+- **Web app degli invitati**: «Date scelte» c'è anche lì, nella modalità Completa (come il
+  pannello) e in quella Semplice (caratteri grandi: il calendario per toccare le date, sotto le
+  date con il loro orario). Chi ha il permesso di aggiungere appuntamenti crea una serie di date;
+  il genitore la conferma tutta insieme, con le date elencate. «Solo questo», «Questo e i
+  successivi» e «Tutti» valgono come per gli altri appuntamenti. Un invitato senza permesso non
+  vede l'opzione, e il server la rifiuta lo stesso. Le date private non arrivano agli invitati.
+  Per gli invitati «Si ripete» offre solo «Mai» e «Date scelte».
+- **Promemoria, viste e invitati**: ogni data è un evento a sé, quindi promemoria, vista
+  Settimana, Mese ed Elenco, filtri per persona e web app degli invitati funzionano come per gli
+  altri eventi.
+- **Servizi**: `family_hub.add_event` e `family_hub.update_event` accettano `dates`, una lista di
+  `{start, end}`. Non si può usare insieme a una ripetizione (`rrule`).
+
 ## 0.10.5
 
 Stabile. Riassume la 0.10.5b1: nessuna modifica incompatibile.
