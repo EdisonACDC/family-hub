@@ -55,9 +55,13 @@ def test_a_name_is_not_broken_inside_a_word_and_the_dots_have_their_own_line(
         with _device(browser, width, height) as page:
             _open(page, stack_full)
             _view(page, "week")
-            name = page.locator(".event.allday .allday-name", has_text="Grandma")
-            expect(name.first).to_be_visible(timeout=5000)
-            el = name.first
+            # The visible row of the birthday that has the person dots (the week may also keep
+            # hidden copies of the same row).
+            row = page.locator(".event.allday:visible", has_text="Grandma").filter(
+                has=page.locator(".person-dots")
+            )
+            expect(row.first).to_be_visible(timeout=5000)
+            el = row.first.locator(".allday-name")
             assert el.evaluate(WORDS_SPLIT_JS) == [], f"broken inside a word at {width}px"
             dots = el.locator("xpath=..").locator(".person-dots")
             name_box = el.bounding_box()
