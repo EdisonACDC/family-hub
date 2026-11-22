@@ -34,7 +34,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/demo.gif" width="320" alt="Family Hub sul tablet da parete">
+  <img src="docs/images/demo.gif" width="720" alt="Family Hub sul tablet da parete">
 </p>
 
 <p align="center">
@@ -55,6 +55,12 @@
 - **Calendari esterni** (ICS): vacanze scolastiche, festività, rifiuti del comune. Sola lettura.
 
 ## Installazione
+
+<p align="center">
+  <img src="docs/images/setup.gif" width="720" alt="Installazione di Family Hub e guida iniziale">
+  <br>
+  <sub>Tutta l'installazione e la configurazione, passo per passo: <a href="docs/videos/install-and-setup.mp4"><b>guarda il video (2:30)</b></a>.</sub>
+</p>
 
 1. **Installa l'integrazione.** In HACS apri **⋮ → Repository personalizzati**, aggiungi `https://github.com/EdisonACDC/family-hub` come **Integrazione**, installa **Family Hub**, poi riavvia Home Assistant. Aggiungila da **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**.
 2. **Installa l'add-on.** Usa il pulsante qui sopra, oppure vai su **Impostazioni → Add-on → Add-on Store → ⋮ → Repository** e incolla `https://github.com/EdisonACDC/family-hub`. Apri **Family Hub UI**, premi **Installa**, poi **Avvia**.

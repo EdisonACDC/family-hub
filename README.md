@@ -33,7 +33,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/demo.gif" width="320" alt="Family Hub on a wall tablet">
+  <img src="docs/images/demo.gif" width="720" alt="Family Hub on a wall tablet">
 </p>
 
 <p align="center">
@@ -59,6 +59,12 @@
 - **External calendars** (ICS): school holidays, public holidays, bins from your municipality. Read-only.
 
 ## Installation
+
+<p align="center">
+  <img src="docs/images/setup.gif" width="720" alt="Installing Family Hub and going through the setup guide">
+  <br>
+  <sub>The whole install and setup, step by step: <a href="docs/videos/install-and-setup.mp4"><b>watch the video (2:30)</b></a>.</sub>
+</p>
 
 1. **Install the integration.** In HACS, open **⋮ → Custom repositories**, add
    `https://github.com/EdisonACDC/family-hub` as an **Integration**, install **Family Hub**, then restart
