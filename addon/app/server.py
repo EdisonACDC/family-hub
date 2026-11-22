@@ -865,7 +865,7 @@ class Hub:
                     # The guest who added it from the web app ("Nonna"), or "".
                     "added_by": raw.get("added_by") or "",
                     # Never shown to guests.
-                    "private": bool(raw.get("private")),
+                    "private": _flag(raw.get("private")),
                 }
             )
         return visible
@@ -1209,6 +1209,14 @@ def readable_name(entity_id: str) -> str:
 
 def _owners(raw: dict[str, Any]) -> list[str]:
     return [p for p in str(raw.get("person_ids", "")).split(",") if p]
+
+
+def _flag(value: Any) -> bool:
+    """A yes or no from a calendar event. Home Assistant writes a boolean as text in an event
+    ("True" or "False"), and bool("False") is True: so the text is read as what it says."""
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "1")
+    return bool(value)
 
 
 # ---- web layer ----

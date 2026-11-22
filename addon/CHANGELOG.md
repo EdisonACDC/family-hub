@@ -1,5 +1,15 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.10.6
+
+Stabile. Correzione alla 0.10.5; nessuna modifica incompatibile.
+
+- **Appuntamenti privati**: un appuntamento modificato dal pannello poteva diventare privato, e
+  sparire agli invitati. Sulla scheda compariva il lucchetto su ogni evento, e il modulo di modifica
+  si apriva con «Privato» acceso. Ora «Privato» resta spento finché non lo accendi tu. Se un
+  appuntamento è diventato privato per questo errore, aprilo e togli «Privato»: la correzione non
+  cambia da sola ciò che è già salvato, perché non si può sapere quali privati sono voluti.
+
 ## 0.10.5
 
 Stabile. Riassume la 0.10.5b1: nessuna modifica incompatibile.
