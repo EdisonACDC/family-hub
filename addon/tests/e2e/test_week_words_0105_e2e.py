@@ -10,6 +10,7 @@ import pytest
 from playwright.sync_api import Browser, expect
 
 from tests.e2e.conftest import Stack
+from tests.e2e.settle import settle
 from tests.e2e.test_layout_071_e2e import _open, _view
 from tests.e2e.test_tablet import _device
 from tests.fake_ha import FAMILY, PERSONS, stored_event
@@ -37,6 +38,19 @@ WORDS_SPLIT_JS = """
 """
 
 
+MEASURE_JS = """
+() => {
+  const row = [...document.querySelectorAll('.event.allday')].find(r =>
+    r.offsetParent !== null && r.textContent.includes('Grandma')
+    && r.querySelector('.person-dots'));
+  if (!row) return null;
+  const n = row.querySelector('.allday-name').getBoundingClientRect();
+  const d = row.querySelector('.person-dots').getBoundingClientRect();
+  return { nameBottom: n.bottom, dotsTop: d.top };
+}
+"""
+
+
 def _seed_birthday(stack: Stack) -> None:
     today = date.today()
     everyone = ",".join(p["id"] for p in PERSONS)
@@ -55,19 +69,18 @@ def test_a_name_is_not_broken_inside_a_word_and_the_dots_have_their_own_line(
         with _device(browser, width, height) as page:
             _open(page, stack_full)
             _view(page, "week")
-            # The visible row of the birthday that has the person dots (the week may also keep
-            # hidden copies of the same row).
+            # The week may be drawn again after the data arrives: wait for the drawing to settle,
+            # then measure the name and the dots of the same visible row in one step.
             row = page.locator(".event.allday:visible", has_text="Grandma").filter(
                 has=page.locator(".person-dots")
             )
             expect(row.first).to_be_visible(timeout=5000)
+            settle(page)
             el = row.first.locator(".allday-name")
             assert el.evaluate(WORDS_SPLIT_JS) == [], f"broken inside a word at {width}px"
-            dots = el.locator("xpath=..").locator(".person-dots")
-            name_box = el.bounding_box()
-            dots_box = dots.bounding_box()
-            assert name_box and dots_box, "the person dots are not drawn"
-            assert dots_box["y"] >= name_box["y"] + name_box["height"] - 2, (
+            measure = page.evaluate(MEASURE_JS)
+            assert measure, "the person dots are not drawn"
+            assert measure["dotsTop"] >= measure["nameBottom"] - 2, (
                 f"the dots share the line of the name at {width}px"
             )
     finally:
