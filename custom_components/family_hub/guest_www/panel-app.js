@@ -1524,7 +1524,8 @@
     // times and the switch take a second line (CSS). With "Tutto il giorno" the times are not shown.
     var bad = !row.allDay && row.end <= row.start;
     var line = el("div", { class: "chosen-row" + (row.allDay ? " all-day" : "") + (bad ? " row-bad" : "") });
-    line.appendChild(el("span", { class: "chosen-day" }, showDate(row.day)));
+    // The day is short ("22/12"): the form's date already has the year, and one line must fit.
+    line.appendChild(el("span", { class: "chosen-day" }, parseLocalDay(row.day).toLocaleDateString(I.lang, { day: "numeric", month: "numeric" })));
     if (!row.allDay) {
       var start = el("input", { type: "text", inputmode: "numeric", class: "chosen-start", "aria-label": I.f("chosenStart"), placeholder: "09:00", autocomplete: "off" });
       var end = el("input", { type: "text", inputmode: "numeric", class: "chosen-end", "aria-label": I.f("chosenEnd"), placeholder: "10:00", autocomplete: "off" });
@@ -4918,6 +4919,14 @@
       state.listWaste = on;
       renderWeek();
     }));
+    // Adults only: the appointments marked "Privato", to check them and take the mark off where it
+    // is not wanted. Nothing is changed by the list itself.
+    if (state.role === "adult") {
+      head.appendChild(switchRow(f("listPrivateOnly"), !!state.listPrivate, function (on) {
+        state.listPrivate = on;
+        renderWeek();
+      }));
+    }
     week.appendChild(head);
     var body = el("div", { class: "list-scroll", id: "list-scroll", tabindex: "0" });
     week.appendChild(body);
@@ -4929,7 +4938,7 @@
     var count = 0;
     keys.forEach(function (key) {
       var items = forPerson(byDay[key]).filter(function (it) {
-        return state.listWaste || !(it.ev.waste || it.type === "rifiuti");
+        return (state.listWaste || !(it.ev.waste || it.type === "rifiuti")) && (!state.listPrivate || !!it.ev.private);
       });
       if (!items.length) return;
       var day = parseLocalDay(key);

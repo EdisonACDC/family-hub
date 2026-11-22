@@ -65,6 +65,21 @@ def notify_text(data: dict[str, Any]) -> str:
     )
 
 
+def ha_serialized(event: dict[str, Any]) -> dict[str, Any]:
+    """An event as Home Assistant sends it on the calendar subscription. Its serializer
+    (event_dict_factory) writes every value that is not a date as text, so a boolean arrives as
+    "True" or "False", and a None is left out. Only all_day stays a real boolean."""
+    out: dict[str, Any] = {}
+    for key, value in event.items():
+        if value is None:
+            continue
+        if key == "all_day" or isinstance(value, str):
+            out[key] = value
+        else:
+            out[key] = str(value)
+    return out
+
+
 def stored_event(
     summary: str, start: str, end: str, person_ids: str = "", record_id: str | None = None
 ) -> dict[str, Any]:
@@ -80,6 +95,10 @@ def stored_event(
         "version": uuid.uuid4().hex[:12],
         "shift_id": "",
         "notify": "",
+        # The integration always sends these (as False or "" when they are not set).
+        "private": False,
+        "chosen": False,
+        "series": "",
     }
 
 
@@ -190,7 +209,7 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.11.0b2"
+    integration_version = "0.11.0b3"
     ha_language = "it"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
@@ -498,7 +517,7 @@ class FakeHA:
             # Like Home Assistant: only events that start within the requested days.
             first, last = msg["start"][:10], msg["end"][:10]
             events = [
-                copy.deepcopy(e)
+                ha_serialized(e)
                 for e in self.events.get(msg["entity_id"], [])
                 if first <= e["start"][:10] < last
             ]

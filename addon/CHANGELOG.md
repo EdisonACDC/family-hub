@@ -1,5 +1,22 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.11.0b3
+
+Beta. Correzioni dopo la prova della 0.11.0b2, e la correzione «Privato» della 0.10.6; nessuna
+modifica incompatibile.
+
+- **Appuntamenti privati**: come nella 0.10.6, Home Assistant scrive «False» come testo, e il
+  pannello non lo legge più come «sì». Ogni appuntamento non privato non mostra più il lucchetto,
+  non si apre con «Privato» acceso e non diventa privato al salvataggio. Un appuntamento che
+  risulta privato per questo errore si corregge aprendolo e togliendo «Privato».
+- **Date scelte**: un appuntamento normale non mostra più «Date scelte» né la scelta delle date
+  (Solo questo, Questo e i successivi, Tutti). Ancora su «Questo e i successivi»: le date rimaste
+  restano date singole, senza ripetizione.
+- **Elenco**: per gli adulti c'è «Solo privati», che mostra solo gli appuntamenti privati, per
+  controllarli. Non cambia nulla da solo.
+- **Date scelte, orario**: l'ora di ogni data (per esempio «09:00») è sempre per intero, sul pannello
+  e sul telefono.
+
 ## 0.11.0b2
 
 Beta. Correzioni dopo la prova della 0.11.0b1; nessuna modifica incompatibile.
@@ -38,7 +55,16 @@ Beta. Un evento su più date scelte a mano, ognuna con il suo orario.
   altri eventi.
 - **Servizi**: `family_hub.add_event` e `family_hub.update_event` accettano `dates`, una lista di
   `{start, end}`. Non si può usare insieme a una ripetizione (`rrule`).
+## 0.10.6
 
+Stabile. Correzione alla 0.10.5; nessuna modifica incompatibile.
+
+- **Appuntamenti privati**: un appuntamento modificato dal pannello poteva diventare privato, e
+  sparire agli invitati. Sulla scheda compariva il lucchetto su ogni evento, e il modulo di modifica
+  si apriva con «Privato» acceso. Ora «Privato» resta spento finché non lo accendi tu. Se un
+  appuntamento è diventato privato per questo errore, aprilo e togli «Privato»: la correzione non
+  cambia da sola ciò che è già salvato, perché non si può sapere quali privati sono voluti.
+>
 ## 0.10.5
 
 Stabile. Riassume la 0.10.5b1: nessuna modifica incompatibile.

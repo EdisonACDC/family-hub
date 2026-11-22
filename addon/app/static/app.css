@@ -1798,15 +1798,20 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .chosen-day { font-weight: 600; white-space: nowrap; }
 .chosen-field { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; }
 .chosen-field > span { flex: none; font-size: 14px; color: var(--muted); }
-.chosen-start, .chosen-end { width: 100%; min-width: 0; box-sizing: border-box; }
-.chosen-allday { display: inline-flex; align-items: center; gap: 10px; margin: 0; min-width: 0; justify-self: start; }
+/* A time is "09:00" in full: the field is never narrower than that (0.11.0b3). The selector is
+   specific on purpose: the form's own input rules would otherwise set min-width back to 0. */
+#chosen-box .chosen-start, #chosen-box .chosen-end {
+  width: 100%; min-width: 4.6em; box-sizing: border-box; padding-left: 6px; padding-right: 6px;
+  font-size: 16px; font-weight: 500;
+}
+.chosen-allday { display: inline-flex; align-items: center; gap: 8px; margin: 0; min-width: 0; justify-self: start; font-size: 14px; }
 .chosen-allday > span { white-space: nowrap; }
 .chosen-row.all-day .chosen-allday { justify-self: start; }
 .chosen-remove { min-width: 2.2em; }
 .chosen-bad { grid-column: 1 / -1; margin: 0; }
 .chosen-row.row-bad { color: #B91C1C; }
 @media (min-width: 600px) {
-  .chosen-row { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto; }
+  .chosen-row { grid-template-columns: auto minmax(8.5em, 1fr) minmax(8.5em, 1fr) auto auto; }
 }
 @media (max-width: 599px) {
   .chosen-row:not(.all-day) .chosen-allday { grid-column: 1 / 3; }

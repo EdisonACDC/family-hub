@@ -861,13 +861,13 @@ class Hub:
                     # The repeat rule (RRULE); "" for an event that does not repeat.
                     "rrule": raw.get("rrule") or "",
                     # One of the chosen dates of an appointment (see chosen_dates).
-                    "chosen": bool(raw.get("chosen")),
+                    "chosen": _flag(raw.get("chosen")),
                     "category_id": calendar.get("category_id", ""),
                     "calendar": calendar.get("name", ""),
                     # The guest who added it from the web app ("Nonna"), or "".
                     "added_by": raw.get("added_by") or "",
                     # Never shown to guests.
-                    "private": bool(raw.get("private")),
+                    "private": _flag(raw.get("private")),
                 }
             )
         return visible
@@ -882,7 +882,7 @@ class Hub:
             mine = next((raw for raw in raws if raw.get("record_id") == uid), None)
             if mine is None:
                 continue
-            if not mine.get("chosen"):
+            if not _flag(mine.get("chosen")):
                 raise ValueError("not_chosen_dates")
             if not can_change(identity, _owners(mine)):
                 raise PermissionError("chosen_dates")
@@ -893,7 +893,7 @@ class Hub:
                     "end": raw.get("end", ""),
                 }
                 for raw in raws
-                if raw.get("chosen") and raw.get("series") == mine.get("series")
+                if _flag(raw.get("chosen")) and raw.get("series") == mine.get("series")
             ]
         raise LookupError(uid)
 
@@ -1239,6 +1239,14 @@ def readable_name(entity_id: str) -> str:
 
 def _owners(raw: dict[str, Any]) -> list[str]:
     return [p for p in str(raw.get("person_ids", "")).split(",") if p]
+
+
+def _flag(value: Any) -> bool:
+    """A yes or no from a calendar event. Home Assistant writes a boolean as text in an event
+    ("True" or "False"), and bool("False") is True: so the text is read as what it says."""
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "1")
+    return bool(value)
 
 
 # ---- web layer ----
