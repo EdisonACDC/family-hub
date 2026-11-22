@@ -734,8 +734,18 @@ async def test_me_has_the_family_theme(
 # ----- notifications and reminders --------------------------------------------------------------
 
 
+@pytest.fixture
+def clock_at_noon(freezer: Any) -> None:
+    # Noon in the test's time zone: outside the family's quiet hours (22:00 to 07:00).
+    freezer.move_to("2026-11-23 12:00:00-08:00")
+
+
 async def test_reminders_without_notifications(
-    hass: HomeAssistant, client: TestClient, hass_ws_client: Any, family: MockConfigEntry
+    clock_at_noon: None,
+    hass: HomeAssistant,
+    client: TestClient,
+    hass_ws_client: Any,
+    family: MockConfigEntry,
 ) -> None:
     _, headers = await _phone(
         client, hass_ws_client, template="custom", notify=False, features={"reminders": True}
@@ -915,3 +925,39 @@ def test_upgrade_keeps_notify_off() -> None:
     assert gf.upgrade(item) is True
     assert item["features"]["reminders"] is False and item["template"] == "grandparents"
     assert gf.upgrade(item) is False
+
+
+@pytest.fixture
+def clock_at_night(freezer: Any) -> None:
+    # 23:00 in the test's time zone: inside the family's quiet hours, so no push goes out.
+    freezer.move_to("2026-11-23 23:00:00-08:00")
+
+
+async def test_reminders_for_guests_are_quiet_at_night(
+    clock_at_night: None,
+    hass: HomeAssistant,
+    client: TestClient,
+    hass_ws_client: Any,
+    family: MockConfigEntry,
+) -> None:
+    _, headers = await _phone(
+        client, hass_ws_client, template="custom", notify=False, features={"reminders": True}
+    )
+    assert (
+        await client.post(f"{API}push", json={"subscription": SUBSCRIPTION}, headers=headers)
+    ).status == 200
+    manager = family.runtime_data.guests
+    assert manager is not None
+    record = {
+        "uid": "r2",
+        "summary": "Gita",
+        "persons": ["sofia"],
+        "category": "scuola",
+        "start": _today(),
+        "end": _today(),
+        "all_day": True,
+    }
+    with patch.object(webpush, "async_send", return_value=webpush.SENT) as send:
+        await manager.async_on_reminder(record, "Domani: Gita")
+        await hass.async_block_till_done()
+        assert send.call_count == 0

@@ -7,6 +7,7 @@ from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
 
+import pytest
 from aiohttp.test_utils import TestClient
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -73,7 +74,14 @@ async def test_answered_on_the_tablet_the_only_phone_is_cleared_too(
     assert calls[-1].data["data"]["tag"] == f"family_hub_guest_{device_id}"
 
 
+@pytest.fixture
+def clock_at_noon(freezer: Any) -> None:
+    # Noon in the test's time zone: outside the family's quiet hours (22:00 to 07:00).
+    freezer.move_to("2026-11-23 12:00:00-08:00")
+
+
 async def test_a_reminder_opens_its_event(
+    clock_at_noon: None,
     hass: HomeAssistant,
     client: TestClient,  # noqa: F811
     hass_ws_client: Any,
