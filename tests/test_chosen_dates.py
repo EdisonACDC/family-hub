@@ -236,3 +236,22 @@ async def test_each_date_shows_in_the_calendar_in_its_own_week(hass: HomeAssista
     events = await _events(hass)
     assert [e["start"][:10] for e in events] == ["2026-11-14", "2026-12-22"]
     assert all(e["summary"] == "Recita di Natale" for e in events)
+
+
+async def test_this_date_and_the_following_are_deleted_and_the_dates_before_are_kept(
+    hass: HomeAssistant,
+) -> None:
+    await _setup(hass)
+    third = {"start": "2027-01-06 09:00:00", "end": "2027-01-06 09:30:00"}
+    await _create(hass, [MORNING, EVENING, third])
+    second = _chosen(hass)[1]
+    await hass.services.async_call(
+        DOMAIN,
+        "delete_event",
+        {"uid": second["uid"], "recurrence_range": "THISANDFUTURE"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    # Only the date before stays; the dates are not made into a repeat (no rule is written).
+    assert [r["start"] for r in _chosen(hass)] == ["2026-11-14T10:00:00+01:00"]
+    assert all(r["rrule"] == "" for r in _chosen(hass))

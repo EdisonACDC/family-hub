@@ -190,7 +190,7 @@ WASTE_KINDS = {
 
 class FakeHA:
     # The integration version the fake answers with; a test changes it to make a mismatch.
-    integration_version = "0.11.0b1"
+    integration_version = "0.11.0b2"
     ha_language = "it"
     # Set to False to act as if the integration is not installed (the command is unknown).
     integration_installed = True
@@ -265,6 +265,25 @@ class FakeHA:
         for sub_id, (ws, kind, _) in list(self._subs.items()):
             if kind == "entities":
                 await self._send_event(ws, sub_id, change)
+
+    def _delete_scope(self, data: dict[str, Any]) -> None:
+        """Delete one event; for a series of dates the range says which: "ALL" the whole series,
+        "THISANDFUTURE" this date and the ones after it, as the integration does."""
+        scope = data.get("recurrence_range") or ""
+        target = next(
+            (e for events in self.events.values() for e in events if e["record_id"] == data["uid"]),
+            None,
+        )
+        gone = {data["uid"]}
+        if target is not None and target.get("series") and scope in ("ALL", "THISANDFUTURE"):
+            for events in self.events.values():
+                for e in events:
+                    if e.get("series") != target["series"]:
+                        continue
+                    if scope == "ALL" or e["start"] >= target["start"]:
+                        gone.add(e["record_id"])
+        for events in self.events.values():
+            events[:] = [e for e in events if e["record_id"] not in gone]
 
     def _replace_series_dates(self, data: dict[str, Any]) -> None:
         """Chosen dates changed for "all": the dates given replace the ones of the series (each
@@ -928,8 +947,7 @@ class FakeHA:
         if domain == "todo":
             await self._todo(data)
         if domain == DOMAIN and service == "delete_event":
-            for events in self.events.values():
-                events[:] = [e for e in events if e["record_id"] != data["uid"]]
+            self._delete_scope(data)
             await self.push_entity_change(FAMILY)
         await self._reply(ws, msg["id"], True, {"context": {}, "response": None})
 

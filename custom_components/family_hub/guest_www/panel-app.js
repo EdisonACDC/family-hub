@@ -1435,6 +1435,23 @@
     if (shown) renderChosen();
   }
 
+  // The card of a series of chosen dates: "Date scelte: 17/11, 19/11 (2 date)". The first five
+  // dates are named, the others counted ("+N"). Every date is read from the service.
+  function chosenCardLine(item) {
+    var line = el("p", { class: "hint card-repeat card-chosen" });
+    request({ op: "chosen_dates", uid: item.ev.record_id }).then(function (list) {
+      if (state.cardItem !== item) return;
+      var keys = list.map(function (d) { return dayKey(d.start); }).sort();
+      var names = keys.map(function (key) {
+        return parseLocalDay(key).toLocaleDateString(I.lang, { day: "numeric", month: "numeric" });
+      });
+      var text = I.f("chosenCard") + ": " + names.slice(0, 5).join(", ");
+      if (names.length > 5) text += " " + I.f("chosenMore").replace("{n}", String(names.length - 5));
+      line.textContent = text + " (" + I.f("chosenCount").replace("{n}", String(names.length)) + ")";
+    }).catch(function () { line.hidden = true; });
+    return line;
+  }
+
   // The dates of an event that has them, read from the service (every date, not only the window).
   function resetChosen(ev) {
     chosenRows = [];
@@ -1494,16 +1511,20 @@
     chosenRows.forEach(function (row, index) { box.appendChild(chosenRowElement(row, index)); });
   }
 
+  // A label with its text first and the control after it (the control is inside the label).
+  function labelled(className, text, control) {
+    var label = el("label", { class: className }, null);
+    label.appendChild(el("span", {}, text));
+    label.appendChild(control);
+    return label;
+  }
+
   function chosenRowElement(row, index) {
+    // One line per date: the day, Inizio, Fine, the switch "Tutto il giorno" and ×. On a phone the
+    // times and the switch take a second line (CSS). With "Tutto il giorno" the times are not shown.
     var bad = !row.allDay && row.end <= row.start;
-    var line = el("div", { class: "chosen-row" + (bad ? " row-bad" : "") });
+    var line = el("div", { class: "chosen-row" + (row.allDay ? " all-day" : "") + (bad ? " row-bad" : "") });
     line.appendChild(el("span", { class: "chosen-day" }, showDate(row.day)));
-    var allDay = el("input", { type: "checkbox" });
-    allDay.checked = row.allDay;
-    allDay.addEventListener("change", function () { row.allDay = allDay.checked; renderChosen(); });
-    line.appendChild(el("label", { class: "chosen-allday" }, null));
-    line.lastChild.appendChild(allDay);
-    line.lastChild.appendChild(document.createTextNode(" " + I.f("chosenAllDay")));
     if (!row.allDay) {
       var start = el("input", { type: "text", inputmode: "numeric", class: "chosen-start", "aria-label": I.f("chosenStart"), placeholder: "09:00", autocomplete: "off" });
       var end = el("input", { type: "text", inputmode: "numeric", class: "chosen-end", "aria-label": I.f("chosenEnd"), placeholder: "10:00", autocomplete: "off" });
@@ -1517,9 +1538,15 @@
         row.end = parseTime(end.value) || row.end;
         renderChosen();
       });
-      line.appendChild(start);
-      line.appendChild(end);
+      line.appendChild(labelled("chosen-field", I.f("chosenStart"), start));
+      line.appendChild(labelled("chosen-field", I.f("chosenEnd"), end));
     }
+    // The same switch as the rest of the form ("switch" rows), with the text on its left.
+    var allDay = el("input", { type: "checkbox", role: "switch" });
+    allDay.checked = row.allDay;
+    allDay.setAttribute("aria-checked", row.allDay ? "true" : "false");
+    allDay.addEventListener("change", function () { row.allDay = allDay.checked; renderChosen(); });
+    line.appendChild(labelled("switch chosen-allday", I.f("chosenAllDay"), allDay));
     var remove = button("×", "btn chosen-remove", function () { chosenRows.splice(index, 1); renderChosen(); });
     remove.setAttribute("aria-label", I.f("chosenRemove"));
     line.appendChild(remove);
@@ -1530,7 +1557,8 @@
   // The choice for a delete: an ordinary event asks "yes or no"; a repeating one asks which
   // occurrences. Resolves to the range ("" for this one), or null when cancelled.
   function chooseDeleteScope(ev) {
-    if (!ev.rrule) {
+    // A repeating event and a series of chosen dates both ask which occurrences (dates) go.
+    if (!ev.rrule && !ev.chosen) {
       return askConfirm(I.f("cardDeleteAsk").replace("{name}", ev.summary), I.f("cardDelete"))
         .then(function (yes) { return yes ? "" : null; });
     }
@@ -1936,6 +1964,7 @@
     }
     if (ev.external) box.appendChild(el("p", { class: "hint" }, I.f("cardExternal")));
     if (ev.rrule) box.appendChild(el("p", { class: "hint card-repeat" }, repeatSummary(ev.rrule)));
+    else if (ev.chosen) box.appendChild(chosenCardLine(item));
     else if (ev.shift_id) box.appendChild(el("p", { class: "hint" }, I.f("cardShift")));
     var foot = $("card-foot");
     foot.textContent = "";

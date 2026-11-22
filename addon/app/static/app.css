@@ -1789,10 +1789,27 @@ html, body { overflow-x: hidden; max-width: 100%; }
 /* Chosen dates (0.11.0b1): one event on dates picked in the month, each with its own times. */
 .chosen-box { margin: 8px 0; }
 .chosen-box .chosen-grid .day-cell.picked { background: var(--accent); color: var(--accent-text); }
-.chosen-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--line); }
-.chosen-day { flex: 1 1 100%; font-weight: 600; }
-.chosen-start, .chosen-end { width: 6.5em; }
-.chosen-allday { white-space: nowrap; }
+/* One date per line: day | Inizio | Fine | "Tutto il giorno" | ×. With "Tutto il giorno" the times are
+   not shown. On a phone (under 600 px) the switch and the × take the second line. */
+.chosen-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 6px 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.chosen-row.all-day { grid-template-columns: auto minmax(0, 1fr) auto; }
+/* The form stacks a label's text above its control; in a row the text sits beside it. */
+.chosen-row > label { padding: 0; margin: 0; min-height: 0; flex-direction: row; align-items: center; }
+.chosen-day { font-weight: 600; white-space: nowrap; }
+.chosen-field { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; }
+.chosen-field > span { flex: none; font-size: 14px; color: var(--muted); }
+.chosen-start, .chosen-end { width: 100%; min-width: 0; box-sizing: border-box; }
+.chosen-allday { display: inline-flex; align-items: center; gap: 10px; margin: 0; min-width: 0; justify-self: start; }
+.chosen-allday > span { white-space: nowrap; }
+.chosen-row.all-day .chosen-allday { justify-self: start; }
 .chosen-remove { min-width: 2.2em; }
+.chosen-bad { grid-column: 1 / -1; margin: 0; }
 .chosen-row.row-bad { color: #B91C1C; }
+@media (min-width: 600px) {
+  .chosen-row { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto; }
+}
+@media (max-width: 599px) {
+  .chosen-row:not(.all-day) .chosen-allday { grid-column: 1 / 3; }
+  .chosen-row:not(.all-day) .chosen-remove { grid-column: 3; justify-self: end; }
+}
 .chosen-bad { flex-basis: 100%; margin: 2px 0 0; }

@@ -426,8 +426,9 @@ class FamilyHubCalendar(CalendarEntity):
         series = record.get("series")
         for item in self._affected(record, recurrence_range):
             self._store.events.pop(item["uid"], None)
-        if series and recurrence_range == "THISANDFUTURE":
+        if series and recurrence_range == "THISANDFUTURE" and not record.get("chosen"):
             # The occurrences left keep their rule, saying how many they are or where they end.
+            # The dates of chosen dates have no rule: the dates left are simply kept.
             left = self._series_records(str(series))
             if left:
                 rule = recurrence.ended_rule(str(left[0]["rrule"]), len(left), _when(left[-1]))

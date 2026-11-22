@@ -1,5 +1,19 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.11.0b2
+
+Beta. Correzioni dopo la prova della 0.11.0b1; nessuna modifica incompatibile.
+
+- **Elimina**: su una serie di date scelte la cancellazione chiede «Solo questo», «Questo e i
+  successivi» o «Tutti», come per gli appuntamenti che si ripetono. Vale per il pannello e per la
+  web app degli invitati, in modalità Semplice e Completa. «Questo e i successivi» lascia le date
+  prima di quella scelta, senza trasformarle in una ripetizione.
+- **Scheda evento**: una serie di date mostra le sue date, per esempio «Date scelte: 17/11, 19/11
+  (2 date)». Con più di cinque date elenca le prime cinque e aggiunge «+N».
+- **Righe delle date**: ogni data sta su una riga sola (data, Inizio, Fine, «Tutto il giorno», ×).
+  Sul telefono interruttore e × vanno sulla riga sotto. Con «Tutto il giorno» gli orari di quella
+  data non si vedono.
+
 ## 0.11.0b1
 
 Beta. Un evento su più date scelte a mano, ognuna con il suo orario.

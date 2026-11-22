@@ -248,3 +248,76 @@ async def test_full_mode_chosen_dates_and_all_on_a_phone(
             assert [r["start"][11:16] for r in changed] == ["10:00", "18:00"]
         finally:
             await browser.close()
+
+
+async def test_simple_mode_delete_all_dates_of_a_series(
+    hass: HomeAssistant, hass_client_no_auth: Any, hass_ws_client: Any, socket_enabled: Any
+) -> None:
+    admin, link, base = await _setup(hass, hass_client_no_auth, hass_ws_client, "simple")
+    today = dt_util.now().date()
+    first, second = _dates(today)
+    async with playwright_api.async_playwright() as p:
+        try:
+            browser = await p.chromium.launch(headless=True)
+        except Exception as err:  # noqa: BLE001
+            pytest.skip(f"Chromium for Playwright is not installed: {err}")
+        try:
+            page, _ = await _open_phone(hass, browser, base, link, admin)
+            await page.wait_for_selector("#add-button:not([hidden])", timeout=TIMEOUT)
+            await page.click("#add-button")
+            await page.check("#f-chosen")
+            await page.fill("#f-title", TITLE)
+            await _create_two_dates(
+                page, "#sheet .chosen-picker", (".chosen-day", ".month-num"), today, first, second
+            )
+            await page.click("#f-save")
+            await page.wait_for_selector("#sheet", state="hidden", timeout=TIMEOUT)
+            await hass.async_block_till_done()
+            assert len(_family_series(hass)) == 2
+            # "Elimina" on the appointment asks which dates: "Tutti" takes every one of them.
+            await page.click(f".event:has-text('{TITLE}') >> nth=0")
+            await page.click("#sheet button:has-text('Elimina')")
+            await page.click("#sheet button:has-text('Tutti')")
+            await page.wait_for_selector("#sheet", state="hidden", timeout=TIMEOUT)
+            await hass.async_block_till_done()
+            assert _family_series(hass) == []
+        finally:
+            await browser.close()
+
+
+async def test_full_mode_delete_this_and_the_following_dates(
+    hass: HomeAssistant, hass_client_no_auth: Any, hass_ws_client: Any, socket_enabled: Any
+) -> None:
+    admin, link, base = await _setup(hass, hass_client_no_auth, hass_ws_client, "full")
+    today = dt_util.now().date()
+    first, second = _dates(today)
+    async with playwright_api.async_playwright() as p:
+        try:
+            browser = await p.chromium.launch(headless=True)
+        except Exception as err:  # noqa: BLE001
+            pytest.skip(f"Chromium for Playwright is not installed: {err}")
+        try:
+            page, _ = await _open_phone(hass, browser, base, link, admin)
+            await page.wait_for_url("**/full.html", timeout=TIMEOUT)
+            await page.click("#add-btn")
+            await page.locator("#event-persons label", has_text="Sofia").first.click()
+            await page.fill("#event-form input[name='summary']", TITLE)
+            await page.select_option("#repeat-kind", "chosen")
+            await page.locator("#chosen-box .day-cell[aria-pressed='true']").first.click()
+            await _create_two_dates(
+                page, "#chosen-box", (".day-cell", ".dnum"), today, first, second
+            )
+            await page.click("#event-form .dialog-foot .btn-primary")
+            await page.wait_for_selector("#event-overlay", state="hidden", timeout=TIMEOUT)
+            await hass.async_block_till_done()
+            assert len(_family_series(hass)) == 2
+            # Delete from the card: "Questo e i successivi" from the first date takes both.
+            await page.click(f"#week .event:has-text('{TITLE}') >> nth=0")
+            await page.click("#card-foot button:has-text('Elimina')")
+            await page.wait_for_selector("#scope-overlay", state="visible", timeout=TIMEOUT)
+            await page.click("#scope-future")
+            await page.wait_for_selector("#card-overlay", state="hidden", timeout=TIMEOUT)
+            await hass.async_block_till_done()
+            assert _family_series(hass) == []
+        finally:
+            await browser.close()
