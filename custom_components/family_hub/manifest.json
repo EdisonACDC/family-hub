@@ -1,6 +1,7 @@
 {
   "domain": "family_hub",
   "name": "Family Hub",
+  "categories": ["productivity_information.calendars_todos"],
   "codeowners": ["@EdisonACDC"],
   "config_flow": true,
   "dependencies": [],
