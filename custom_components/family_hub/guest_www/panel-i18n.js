@@ -4,7 +4,7 @@
 
   var STEPS = {
     it: [
-      ["Famiglia", "Nome della famiglia, lingua, primo giorno della settimana e Paese o Land per festività e vacanze.", "Esempio: «Famiglia Esempio», italiano, lunedì, Italia."],
+      ["Famiglia", "Nome della famiglia, lingua, primo giorno della settimana e Paese o Land per festività e vacanze.", "Esempio: «Famiglia Rossi», italiano, lunedì, Italia."],
       ["Persone", "Aggiungi ogni membro: nome, colore, ruolo (adulto, bambino, ospite) e, se vuoi, il telefono con l'app Companion e l'altoparlante Echo.", "Esempio: «Sofia», bambina, colore arancio, Echo in cucina."],
       ["Calendari", "Per ogni persona e categoria (Famiglia, Scuola, Dottore, Compleanni…) scegli un calendario nuovo o uno esistente.", "Esempio: «Scuola» con calendario nuovo."],
       ["Promemoria", "Scegli quando avvisare (per esempio 30 e 10 minuti prima), su quali canali e gli orari di silenzio.", "Esempio: 30 e 10 minuti prima, silenzio dalle 22:00 alle 07:00."],
@@ -20,7 +20,7 @@
       ["Bildschirm", "Das Wand-Tablet zeigt die Woche und Erinnerungen als Fenster. Hell oder dunkel folgt Home Assistant.", "Beispiel: dieses Tablet ist «Wand», Design automatisch."]
     ],
     en: [
-      ["Family", "Family name, language, first day of the week and country or region for holidays and school breaks.", "Example: «Esempio family», English, Monday, Germany."],
+      ["Family", "Family name, language, first day of the week and country or region for holidays and school breaks.", "Example: «The Smith family», English, Monday, Germany."],
       ["People", "Add each member: name, colour, role (adult, child, guest) and, if you want, their phone and Echo speaker.", "Example: «Sofia», child, orange, Echo in the kitchen."],
       ["Calendars", "For each person and category (Family, School, Doctor, Birthdays…) pick a new calendar or an existing one.", "Example: «School» with a new calendar."],
       ["Reminders", "Choose when to remind (for example 30 and 10 minutes before), on which channels and quiet hours.", "Example: 30 and 10 minutes before, quiet from 22:00 to 07:00."],
