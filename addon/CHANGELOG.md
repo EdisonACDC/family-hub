@@ -1,5 +1,16 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.10.5b1
+
+Beta. Tre correzioni trovate registrando la demo; nessuna modifica incompatibile.
+
+- **Guida**: l'esempio del passo «Famiglia» è scritto per ogni lingua: «Famiglia Rossi» in
+  italiano, «Familie Müller» in tedesco, «The Smith family» in inglese.
+- **Vista settimana**: un nome non si spezza più dentro una parola; le parole troppo lunghe si
+  sillabano dove la lingua lo permette. I pallini delle persone vanno su una riga propria.
+- **Periodo in alto**: resta su una riga sola da 600 px in su, nelle viste Settimana, Mese ed
+  Elenco. Sul telefono può ancora andare a capo.
+
 ## 0.10.4
 
 Stabile. Un solo ritocco, nessuna modifica incompatibile.
