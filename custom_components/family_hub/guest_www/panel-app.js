@@ -1037,6 +1037,10 @@
         var key = ymd(new Date(month.getFullYear(), month.getMonth(), d));
         var cell = el("button", { type: "button", class: "day-cell" + (key === today ? " today" : ""), "aria-pressed": key === dayKey(current) ? "true" : "false" });
         cell.appendChild(el("span", { class: "dnum" }, String(d)));
+        if (!dayAllowed(key)) {
+          cell.disabled = true;
+          cell.classList.add("day-off");
+        }
         var dots = el("span", { class: "day-dots", "aria-hidden": "true" });
         (dayCache[key] || []).slice(0, 4).forEach(function (item) {
           var dot = el("span", { class: "day-dot" });
@@ -1337,11 +1341,24 @@
   }
 
   // ---- Chosen dates: one event on dates picked by hand -----------------------------------
+  // A guest (the invited, in the full web app) may pick only the days the server accepts: from
+  // yesterday on, and up to two years ahead (guests.py: PAST_DAYS, FUTURE_DAYS). Adults: any day.
+  var GUEST_PAST_DAYS = 1;
+  var GUEST_FUTURE_DAYS = 731;
+  function dayAllowed(key) {
+    if (!invitedPanel()) return true;
+    var today = parseLocalDay(ymd(new Date()));
+    var day = parseLocalDay(key);
+    return day >= addDays(today, -GUEST_PAST_DAYS) && day <= addDays(today, GUEST_FUTURE_DAYS);
+  }
+
   // The dates are one series. A tap on a day in the month adds it (with the main times) or takes it
   // off. Each row has its own start, end and "all day". Editing "Tutti" reads every date of the
   // series, and sends the rows back: the times of each date are its own.
   var CHOSEN_MAX = 50;
   var chosenRows = [];
+  // The form's message "the end must be after the start" is taken away as soon as no row is wrong.
+  var chosenFormError = false;
   var chosenMonth = null;
 
   function chosenEditAll() {
@@ -1408,7 +1425,12 @@
     }
     for (var i = 0; i < chosenRows.length; i++) {
       var row = chosenRows[i];
+      if (!dayAllowed(row.day)) {
+        showFormError(I.f("errDateRange"));
+        return null;
+      }
       if (!row.allDay && row.end <= row.start) {
+        chosenFormError = true;
         showFormError(I.f("chosenEndBefore").replace("{date}", showDate(row.day)));
         return null;
       }
@@ -1478,6 +1500,11 @@
 
   function renderChosen() {
     var box = $("chosen-box");
+    var anyBad = chosenRows.some(function (row) { return !row.allDay && row.end <= row.start; });
+    if (chosenFormError && !anyBad) {
+      $("event-error").hidden = true;
+      chosenFormError = false;
+    }
     box.textContent = "";
     box.appendChild(el("legend", {}, I.f("repeatChosen")));
     var month = chosenMonth || parseLocalDay(currentStartDay());
@@ -1498,6 +1525,10 @@
       var picked = chosenIndexOf(key) !== -1;
       var cell = el("button", { type: "button", class: "day-cell" + (key === today ? " today" : "") + (picked ? " picked" : ""), "aria-pressed": picked ? "true" : "false" });
       cell.appendChild(el("span", { class: "dnum" }, String(d)));
+      if (!dayAllowed(key)) {
+        cell.disabled = true;
+        cell.classList.add("day-off");
+      }
       cell.addEventListener("click", function (day) { return function () { chosenToggle(day); }; }(key));
       grid.appendChild(cell);
     }
@@ -1807,6 +1838,10 @@
     var day = parseDate(form.elements.date.value);
     if (!day) {
       showFormError(I.f("badDate"));
+      return;
+    }
+    if (!dayAllowed(day)) {
+      showFormError(I.f("errDateRange"));
       return;
     }
     var allDay = form.elements.all_day.checked;

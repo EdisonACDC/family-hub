@@ -33,7 +33,7 @@
       pending: "In attesa",
       addedBy: "aggiunto da {name}",
       add: "+ Aggiungi",
-      addTitle: "Nuovo appuntamento", chosenSwitch: "Date scelte", chosenNone: "Tocca i giorni nel calendario: scegli almeno una data.", chosenTooMany: "Massimo 50 date.", chosenEndBefore: "La fine di {date} deve essere dopo l'inizio.", chosenRemove: "Togli questa data", scopeTitle: "Modifica", scopeOne: "Solo questo", scopeFollowing: "Questo e i successivi", scopeAll: "Tutti", scopeAsk: "Quali date eliminare?", prevMonth: "Mese precedente", nextMonth: "Mese successivo",
+      addTitle: "Nuovo appuntamento", chosenSwitch: "Date scelte", chosenNone: "Tocca i giorni nel calendario: scegli almeno una data.", chosenTooMany: "Massimo 50 date.", chosenEndBefore: "La fine di {date} deve essere dopo l'inizio.", chosenRemove: "Togli questa data", errDateRange: "Puoi scegliere solo da ieri in poi, e fino a due anni avanti.", chosenCard: "Date scelte", chosenMore: "+{n}", chosenCount: "{n} date", scopeTitle: "Modifica", scopeOne: "Solo questo", scopeFollowing: "Questo e i successivi", scopeAll: "Tutti", scopeAsk: "Quali date eliminare?", prevMonth: "Mese precedente", nextMonth: "Mese successivo",
       editTitle: "Modifica appuntamento",
       fTitle: "Che cosa",
       fPerson: "Per chi",
@@ -133,7 +133,7 @@ month: "Mese", lists: "🛒 Liste", waste: "🗑️ Rifiuti", everyone: "Tutti",
       pending: "Waiting",
       addedBy: "added by {name}",
       add: "+ Add",
-      addTitle: "New appointment", chosenSwitch: "Chosen dates", chosenNone: "Tap the days in the calendar: choose at least one date.", chosenTooMany: "No more than 50 dates.", chosenEndBefore: "The end of {date} must be after its start.", chosenRemove: "Remove this date", scopeTitle: "Edit", scopeOne: "Only this one", scopeFollowing: "This and the following", scopeAll: "All", scopeAsk: "Which dates to delete?", prevMonth: "Previous month", nextMonth: "Next month",
+      addTitle: "New appointment", chosenSwitch: "Chosen dates", chosenNone: "Tap the days in the calendar: choose at least one date.", chosenTooMany: "No more than 50 dates.", chosenEndBefore: "The end of {date} must be after its start.", chosenRemove: "Remove this date", errDateRange: "You can choose only from yesterday on, and up to two years ahead.", chosenCard: "Chosen dates", chosenMore: "+{n}", chosenCount: "{n} dates", scopeTitle: "Edit", scopeOne: "Only this one", scopeFollowing: "This and the following", scopeAll: "All", scopeAsk: "Which dates to delete?", prevMonth: "Previous month", nextMonth: "Next month",
       editTitle: "Change appointment",
       fTitle: "What",
       fPerson: "For whom",
@@ -233,7 +233,7 @@ month: "Month", lists: "🛒 Lists", waste: "🗑️ Rubbish", everyone: "Everyo
       pending: "Wartet",
       addedBy: "eingetragen von {name}",
       add: "+ Eintragen",
-      addTitle: "Neuer Termin", chosenSwitch: "Ausgewählte Termine", chosenNone: "Tippe die Tage im Kalender an: wähle mindestens einen Termin.", chosenTooMany: "Höchstens 50 Termine.", chosenEndBefore: "Das Ende von {date} muss nach dem Beginn liegen.", chosenRemove: "Diesen Termin entfernen", scopeTitle: "Bearbeiten", scopeOne: "Nur dieser Termin", scopeFollowing: "Dieser und die folgenden", scopeAll: "Alle", scopeAsk: "Welche Termine löschen?", prevMonth: "Vorheriger Monat", nextMonth: "Nächster Monat",
+      addTitle: "Neuer Termin", chosenSwitch: "Ausgewählte Termine", chosenNone: "Tippe die Tage im Kalender an: wähle mindestens einen Termin.", chosenTooMany: "Höchstens 50 Termine.", chosenEndBefore: "Das Ende von {date} muss nach dem Beginn liegen.", chosenRemove: "Diesen Termin entfernen", errDateRange: "Du kannst nur ab gestern wählen, und höchstens zwei Jahre voraus.", chosenCard: "Gewählte Termine", chosenMore: "+{n}", chosenCount: "{n} Termine", scopeTitle: "Bearbeiten", scopeOne: "Nur dieser Termin", scopeFollowing: "Dieser und die folgenden", scopeAll: "Alle", scopeAsk: "Welche Termine löschen?", prevMonth: "Vorheriger Monat", nextMonth: "Nächster Monat",
       editTitle: "Termin ändern",
       fTitle: "Was",
       fPerson: "Für wen",
@@ -478,6 +478,15 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
   }
   function addDays(d, n) { var c = new Date(d.getTime()); c.setDate(c.getDate() + n); return c; }
   function today() { var d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+  // The days a guest may choose: from yesterday on, and up to two years ahead (guests.py).
+  var GUEST_PAST_DAYS = 1;
+  var GUEST_FUTURE_DAYS = 731;
+  function firstAllowed() { return addDays(today(), -GUEST_PAST_DAYS); }
+  function lastAllowed() { return addDays(today(), GUEST_FUTURE_DAYS); }
+  function dayAllowed(key) {
+    var day = fromKey(key);
+    return !isNaN(day) && day >= firstAllowed() && day <= lastAllowed();
+  }
 
   function clock(date) {
     var twelve = state.me && state.me.time_format === "12h";
@@ -1288,6 +1297,16 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
     $("sheet-error").hidden = false;
   }
 
+  // "Date scelte: 15/12, 22/12 (2 date)", as in the panel: the first five dates, then "+N".
+  function chosenLine(item) {
+    var names = item.dates.map(function (d) { return dayKey(startDate(d)); }).sort().map(function (key) {
+      return fromKey(key).toLocaleDateString(state.lang, { day: "numeric", month: "numeric" });
+    });
+    var text = t("chosenCard") + ": " + names.slice(0, 5).join(", ");
+    if (names.length > 5) text += " " + t("chosenMore", { n: String(names.length - 5) });
+    return text + " (" + t("chosenCount", { n: String(names.length) }) + ")";
+  }
+
   function openDetail(item) {
     var category = categoryOf(item.category);
     var day = new Intl.DateTimeFormat(state.lang, { weekday: "long", day: "numeric", month: "long" })
@@ -1299,6 +1318,7 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
       category ? el("p", { text: "🗂️ " + category.name }) : null,
       item.location ? el("p", { text: "📍 " + item.location }) : null,
       item.note ? el("p", { text: "📝 " + item.note }) : null,
+      item.chosen && item.dates && item.dates.length ? el("p", { class: "event-meta chosen-line", text: chosenLine(item) }) : null,
       item.added_by ? el("p", { class: "event-meta", text: t("addedBy", { name: item.added_by }) }) : null
     ]);
     var actions = [];
@@ -1398,12 +1418,18 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
       for (var d = 1; d <= days; d++) {
         var key = dayKey(new Date(month.getFullYear(), month.getMonth(), d));
         var picked = indexOf(key) !== -1;
-        grid.appendChild(el("button", {
+        var dayButton = el("button", {
           type: "button",
           class: "month-day chosen-day" + (picked ? " picked" : "") + (key === todayKey ? " today" : ""),
           "aria-pressed": picked ? "true" : "false",
           onclick: (function (k) { return function () { tap(k); }; })(key)
-        }, [el("span", { class: "month-num", text: String(d) })]));
+        }, [el("span", { class: "month-num", text: String(d) })]);
+        // A day the server would refuse (before yesterday, or too far ahead) is greyed and not tapped.
+        if (!dayAllowed(key)) {
+          dayButton.disabled = true;
+          dayButton.classList.add("day-off");
+        }
+        grid.appendChild(dayButton);
       }
       view.appendChild(grid);
       rows.forEach(function (row, index) {
@@ -1430,6 +1456,10 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
       return null;
     }
     for (var i = 0; i < rows.length; i++) {
+      if (!dayAllowed(rows[i].day)) {
+        sheetError(t("errDateRange"));
+        return null;
+      }
       if (!rows[i].start || !rows[i].end || rows[i].end <= rows[i].start) {
         sheetError(t("chosenEndBefore").replace("{date}", chosenDayName(rows[i].day)));
         return null;
@@ -1459,7 +1489,8 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
       autocomplete: "off" });
     var personGroup = chips("person", persons, item ? (item.persons || [])[0] : (persons.length === 1 ? persons[0].id : ""));
     var categoryGroup = chips("category", categories, item ? item.category : (categories.length === 1 ? categories[0].id : ""));
-    var dateInput = el("input", { type: "date", id: "f-date", value: dayKey(start || today()) });
+    var dateInput = el("input", { type: "date", id: "f-date", value: dayKey(start || today()),
+      min: dayKey(firstAllowed()), max: dayKey(lastAllowed()) });
     var allDay = el("input", { type: "checkbox", id: "f-allday" });
     allDay.checked = !!(item && item.all_day);
     var startInput = el("input", { type: "time", id: "f-start",
@@ -1540,6 +1571,7 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
       if (!data.title) { sheetError(t("errTitle")); return; }
       if (!data.person || !data.category) { sheetError(t("errSave")); return; }
       if (!series && !data.date) { sheetError(t("errSave")); return; }
+      if (!series && !dayAllowed(data.date)) { sheetError(t("errDateRange")); return; }
       if (!series && !data.all_day && !(data.start && data.end && data.end > data.start)) { sheetError(t("errTime")); return; }
       save.disabled = true;
       var call = item ? api("PUT", "events/" + item.id, data) : api("POST", "events", data);
@@ -1552,6 +1584,7 @@ month: "Monat", lists: "🛒 Listen", waste: "🗑️ Müll", everyone: "Alle",
         save.disabled = false;
         if (err.status === 403 && /disabled|rejected|unknown/.test(err.code)) { closeSheet(); accessOff(); return; }
         if (err.code === "event_changed") { sheetError(t("errChanged")); loadEvents(); return; }
+        if (err.code === "date_range") { sheetError(t("errDateRange")); return; }
         sheetError(err.status === 403 ? t("errForbidden") : err.status === 429 ? t("errSlow") : t("errSave"));
       });
     });

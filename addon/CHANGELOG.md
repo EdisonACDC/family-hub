@@ -1,5 +1,20 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.11.0b4
+
+Beta. Ultime correzioni prima della prova; nessuna modifica incompatibile.
+
+- **Web app degli invitati, date**: i giorni che il server non accetta (prima di ieri, e oltre due
+  anni) sono grigi e non si possono toccare, nel calendario di «Date scelte» e nel campo «Giorno».
+  Se il server rifiuta comunque una data, il messaggio dice quali date sono permesse («Puoi
+  scegliere solo da ieri in poi, e fino a due anni avanti») invece di «Dati non validi».
+- **Modalità Semplice, scheda**: un appuntamento con date scelte mostra le sue date, come nel
+  pannello: «Date scelte: 15/12, 22/12 (2 date)».
+- **Modalità Semplice, calendario**: il titolo del mese («Novembre 2026») sta su una riga.
+- **Pannello, date scelte**: il messaggio «La fine deve essere dopo l'inizio» sparisce appena la
+  riga diventa valida, senza aspettare il salvataggio. L'interruttore «Tutto il giorno» ha uno
+  spazio prima della ×.
+
 ## 0.11.0b3
 
 Beta. Correzioni dopo la prova della 0.11.0b2, e la correzione «Privato» della 0.10.6; nessuna

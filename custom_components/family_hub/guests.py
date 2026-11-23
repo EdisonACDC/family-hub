@@ -549,7 +549,8 @@ def clean_event(
     if not any_date and not (
         today - timedelta(days=PAST_DAYS) <= day <= today + timedelta(days=FUTURE_DAYS)
     ):
-        raise GuestError("invalid", 422)
+        # Its own code, so the web app can say which days are allowed (not just "invalid").
+        raise GuestError("date_range", 422)
     all_day = raw.get("all_day", False)
     if not isinstance(all_day, bool):
         raise GuestError("invalid", 422)

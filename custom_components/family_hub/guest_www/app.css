@@ -215,7 +215,9 @@ html.mode-full { font-size: 16px; }
 /* Chosen dates (0.11.0b1): the month to tap the days, and the time of each day under it. */
 .chosen-wrap { margin: 8px 0; }
 .chosen-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.chosen-month { font-weight: 800; font-size: 1.15rem; text-transform: capitalize; }
+.chosen-month { font-weight: 800; font-size: 1.15rem; text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* A day the family does not allow for a guest: greyed, and not tapped (0.11.0b4). */
+.month-day.day-off, .month-day:disabled { opacity: .35; cursor: default; }
 .chosen-grid .month-day.picked { background: var(--accent); color: var(--accent-text, #fff); }
 .chosen-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
 .chosen-row.row-bad { color: #B91C1C; }

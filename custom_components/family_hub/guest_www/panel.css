@@ -1804,7 +1804,9 @@ html, body { overflow-x: hidden; max-width: 100%; }
   width: 100%; min-width: 4.6em; box-sizing: border-box; padding-left: 6px; padding-right: 6px;
   font-size: 16px; font-weight: 500;
 }
-.chosen-allday { display: inline-flex; align-items: center; gap: 8px; margin: 0; min-width: 0; justify-self: start; font-size: 14px; }
+.chosen-allday { display: inline-flex; align-items: center; gap: 8px; margin: 0 12px 0 0; min-width: 0; justify-self: start; font-size: 14px; }
+/* A day the family does not allow (a guest's past or too far days): greyed, not tapped. */
+.day-cell.day-off, .day-cell:disabled { opacity: .35; cursor: default; }
 .chosen-allday > span { white-space: nowrap; }
 .chosen-row.all-day .chosen-allday { justify-self: start; }
 .chosen-remove { min-width: 2.2em; }
