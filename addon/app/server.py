@@ -860,6 +860,8 @@ class Hub:
                     "notify": raw.get("notify") or "",
                     # The repeat rule (RRULE); "" for an event that does not repeat.
                     "rrule": raw.get("rrule") or "",
+                    # One of the chosen dates of an appointment (see chosen_dates).
+                    "chosen": _flag(raw.get("chosen")),
                     "category_id": calendar.get("category_id", ""),
                     "calendar": calendar.get("name", ""),
                     # The guest who added it from the web app ("Nonna"), or "".
@@ -869,6 +871,31 @@ class Hub:
                 }
             )
         return visible
+
+    async def chosen_dates(self, identity: Identity, uid: str) -> list[dict[str, Any]]:
+        """Every date of the series of chosen dates this event belongs to (for an edit of all)."""
+        now = datetime.now()
+        start = (now - timedelta(days=365 * LOOKUP_YEARS)).strftime("%Y-%m-%d 00:00:00")
+        end = (now + timedelta(days=365 * LOOKUP_YEARS)).strftime("%Y-%m-%d 00:00:00")
+        for calendar in await self.family_calendars():
+            raws = await self._events_of(calendar["entity_id"], start, end)
+            mine = next((raw for raw in raws if raw.get("record_id") == uid), None)
+            if mine is None:
+                continue
+            if not _flag(mine.get("chosen")):
+                raise ValueError("not_chosen_dates")
+            if not can_change(identity, _owners(mine)):
+                raise PermissionError("chosen_dates")
+            return [
+                {
+                    "record_id": raw.get("record_id", ""),
+                    "start": raw.get("start", ""),
+                    "end": raw.get("end", ""),
+                }
+                for raw in raws
+                if _flag(raw.get("chosen")) and raw.get("series") == mine.get("series")
+            ]
+        raise LookupError(uid)
 
     async def owner_ids(self, uid: str) -> list[str] | None:
         """The persons of one event, or None if the event does not exist."""
@@ -896,6 +923,9 @@ class Hub:
                 return {"ok": True, "result": await self.calendars()}
             if op == "status":
                 return {"ok": True, "result": await self.status()}
+            if op == "chosen_dates":
+                uid = str(request.get("uid") or "")
+                return {"ok": True, "result": await self.chosen_dates(identity, uid)}
             if op == "events":
                 start, end = str(request["start"]), str(request["end"])
                 return {"ok": True, "result": await self.events(start, end, identity)}

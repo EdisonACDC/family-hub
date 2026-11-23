@@ -33,6 +33,6 @@ def test_different_versions_are_different(first: str, second: str) -> None:
     assert not same_version(first, second)
 
 
-def test_the_add_on_version_is_a_beta_with_the_expected_tag() -> None:
-    assert ADDON_VERSION == "0.10.6"
-    assert same_version(ADDON_VERSION, "v0.10.6")
+def test_the_add_on_version_is_the_stable_0_11_0_with_its_tag() -> None:
+    assert ADDON_VERSION == "0.11.0"
+    assert same_version(ADDON_VERSION, "v0.11.0")

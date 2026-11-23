@@ -1,8 +1,6 @@
 /* "Completa" for an invited guest: the panel's own style (panel.css) with only this on top.
  * The parts of the event form that a guest cannot use are not shown (the guests' API takes one
  * person, one day, no repeats, no reminders or channels of its own). */
-html.fh-invited #event-repeat,
-html.fh-invited #event-scope,
 html.fh-invited #event-private-row,
 html.fh-invited #event-private-hint,
 html.fh-invited #event-notify,

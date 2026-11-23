@@ -1,5 +1,102 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.11.0
+
+Stabile. Riassume le beta 0.11.0b1–b4; nessuna modifica incompatibile.
+
+- **Date scelte**: nel modulo Nuovo evento, in «Si ripete» scegli «Date scelte». Un tocco sul
+  giorno nel calendario lo sceglie, un altro lo toglie (fino a 50 date, anche passate). Ogni
+  data ha il suo inizio, la sua fine e «Tutto il giorno»: un appuntamento su più date, con un
+  orario per ogni data. «Stesso orario per tutte» copia l'orario principale su tutte le righe.
+- **Pannello e web app degli invitati**: le date scelte funzionano in entrambi, anche in
+  modalità Semplice. Chi ha il permesso di aggiungere appuntamenti crea una serie di date, e il
+  genitore la conferma. Le date che l'invitato non può scegliere (prima di ieri, oltre due anni)
+  sono grigie, e il server le rifiuta con un messaggio chiaro.
+- **Modifica ed eliminazione**: «Solo questo», «Questo e i successivi» e «Tutti» valgono anche
+  per le date scelte, nel pannello e nella web app. «Tutti» cambia titolo, persone, calendario,
+  descrizione, luogo e promemoria di tutte le date; gli orari restano quelli di ogni data.
+- **Scheda evento**: una serie di date mostra le sue date, per esempio «Date scelte: 17/11, 19/11
+  (2 date)». Con più di cinque date elenca le prime cinque e aggiunge «+N».
+- **Appuntamenti privati**: Home Assistant scrive i valori sì/no come testo («True», «False»), e
+  il pannello li legge correttamente. Un appuntamento normale non risulta più privato né mostra
+  la scelta delle date. Come nella 0.10.6, un appuntamento diventato privato per l'errore
+  precedente si corregge aprendolo e togliendo «Privato».
+- **Elenco**: per gli adulti c'è «Solo privati», che mostra solo gli appuntamenti privati, per
+  controllarli. Non cambia nulla da solo.
+- **Servizi**: `family_hub.add_event` e `family_hub.update_event` accettano `dates`, una lista di
+  `{start, end}`. Non si può usare insieme a una ripetizione (`rrule`).
+
+## 0.11.0b4
+
+Beta. Ultime correzioni prima della prova; nessuna modifica incompatibile.
+
+- **Web app degli invitati, date**: i giorni che il server non accetta (prima di ieri, e oltre due
+  anni) sono grigi e non si possono toccare, nel calendario di «Date scelte» e nel campo «Giorno».
+  Se il server rifiuta comunque una data, il messaggio dice quali date sono permesse («Puoi
+  scegliere solo da ieri in poi, e fino a due anni avanti») invece di «Dati non validi».
+- **Modalità Semplice, scheda**: un appuntamento con date scelte mostra le sue date, come nel
+  pannello: «Date scelte: 15/12, 22/12 (2 date)».
+- **Modalità Semplice, calendario**: il titolo del mese («Novembre 2026») sta su una riga.
+- **Pannello, date scelte**: il messaggio «La fine deve essere dopo l'inizio» sparisce appena la
+  riga diventa valida, senza aspettare il salvataggio. L'interruttore «Tutto il giorno» ha uno
+  spazio prima della ×.
+
+## 0.11.0b3
+
+Beta. Correzioni dopo la prova della 0.11.0b2, e la correzione «Privato» della 0.10.6; nessuna
+modifica incompatibile.
+
+- **Appuntamenti privati**: come nella 0.10.6, Home Assistant scrive «False» come testo, e il
+  pannello non lo legge più come «sì». Ogni appuntamento non privato non mostra più il lucchetto,
+  non si apre con «Privato» acceso e non diventa privato al salvataggio. Un appuntamento che
+  risulta privato per questo errore si corregge aprendolo e togliendo «Privato».
+- **Date scelte**: un appuntamento normale non mostra più «Date scelte» né la scelta delle date
+  (Solo questo, Questo e i successivi, Tutti). Ancora su «Questo e i successivi»: le date rimaste
+  restano date singole, senza ripetizione.
+- **Elenco**: per gli adulti c'è «Solo privati», che mostra solo gli appuntamenti privati, per
+  controllarli. Non cambia nulla da solo.
+- **Date scelte, orario**: l'ora di ogni data (per esempio «09:00») è sempre per intero, sul pannello
+  e sul telefono.
+
+## 0.11.0b2
+
+Beta. Correzioni dopo la prova della 0.11.0b1; nessuna modifica incompatibile.
+
+- **Elimina**: su una serie di date scelte la cancellazione chiede «Solo questo», «Questo e i
+  successivi» o «Tutti», come per gli appuntamenti che si ripetono. Vale per il pannello e per la
+  web app degli invitati, in modalità Semplice e Completa. «Questo e i successivi» lascia le date
+  prima di quella scelta, senza trasformarle in una ripetizione.
+- **Scheda evento**: una serie di date mostra le sue date, per esempio «Date scelte: 17/11, 19/11
+  (2 date)». Con più di cinque date elenca le prime cinque e aggiunge «+N».
+- **Righe delle date**: ogni data sta su una riga sola (data, Inizio, Fine, «Tutto il giorno», ×).
+  Sul telefono interruttore e × vanno sulla riga sotto. Con «Tutto il giorno» gli orari di quella
+  data non si vedono.
+
+## 0.11.0b1
+
+Beta. Un evento su più date scelte a mano, ognuna con il suo orario.
+
+- **Date scelte**: nel modulo Nuovo evento, in «Si ripete» scegli «Date scelte». Un tocco sul
+  giorno nel calendario lo sceglie, un altro lo toglie (fino a 50 date, anche passate). Ogni
+  data ha il suo inizio, la sua fine e «Tutto il giorno». «Stesso orario per tutte» copia
+  l'orario principale su tutte le righe. Una fine prima dell'inizio è segnata sulla sua riga e
+  non si salva.
+- **Modifica**: «Solo questo» cambia una sola data. «Tutti» cambia titolo, persone, calendario,
+  descrizione, luogo e promemoria di tutte le date; gli orari restano quelli di ogni data, e nel
+  modulo si possono aggiungere o togliere date.
+- **Web app degli invitati**: «Date scelte» c'è anche lì, nella modalità Completa (come il
+  pannello) e in quella Semplice (caratteri grandi: il calendario per toccare le date, sotto le
+  date con il loro orario). Chi ha il permesso di aggiungere appuntamenti crea una serie di date;
+  il genitore la conferma tutta insieme, con le date elencate. «Solo questo», «Questo e i
+  successivi» e «Tutti» valgono come per gli altri appuntamenti. Un invitato senza permesso non
+  vede l'opzione, e il server la rifiuta lo stesso. Le date private non arrivano agli invitati.
+  Per gli invitati «Si ripete» offre solo «Mai» e «Date scelte».
+- **Promemoria, viste e invitati**: ogni data è un evento a sé, quindi promemoria, vista
+  Settimana, Mese ed Elenco, filtri per persona e web app degli invitati funzionano come per gli
+  altri eventi.
+- **Servizi**: `family_hub.add_event` e `family_hub.update_event` accettano `dates`, una lista di
+  `{start, end}`. Non si può usare insieme a una ripetizione (`rrule`).
+
 ## 0.10.6
 
 Stabile. Correzione alla 0.10.5; nessuna modifica incompatibile.
@@ -9,7 +106,7 @@ Stabile. Correzione alla 0.10.5; nessuna modifica incompatibile.
   si apriva con «Privato» acceso. Ora «Privato» resta spento finché non lo accendi tu. Se un
   appuntamento è diventato privato per questo errore, aprilo e togli «Privato»: la correzione non
   cambia da sola ciò che è già salvato, perché non si può sapere quali privati sono voluti.
-
+>
 ## 0.10.5
 
 Stabile. Riassume la 0.10.5b1: nessuna modifica incompatibile.

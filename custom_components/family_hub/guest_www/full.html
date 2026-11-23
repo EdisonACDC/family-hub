@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>Family Hub</title>
-  <meta name="fh-version" content="0.10.6">
+  <meta name="fh-version" content="0.11.0">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#2563EB">
   <link rel="manifest" href="/api/family_hub/guest/manifest.json">
   <link rel="icon" href="/api/family_hub/guest/icon-192.png">
   <link rel="apple-touch-icon" href="/api/family_hub/guest/apple-touch-icon.png">
-  <link rel="stylesheet" href="/api/family_hub/guest/panel.css?v=0.10.6">
-  <link rel="stylesheet" href="/api/family_hub/guest/full.css?v=0.10.6">
+  <link rel="stylesheet" href="/api/family_hub/guest/panel.css?v=0.11.0">
+  <link rel="stylesheet" href="/api/family_hub/guest/full.css?v=0.11.0">
 </head>
 <body>
   <!-- Tablet and PC: one top bar (time | views, <- Oggi ->, period | weather, Liste, Menu, + Nuovo)
@@ -143,6 +143,7 @@
           <label class="scope-option"><input type="radio" name="scope" value="THISANDFUTURE"><span>Questo e i successivi</span></label>
           <label class="scope-option"><input type="radio" name="scope" value="ALL"><span>Tutti</span></label>
         </fieldset>
+        <fieldset class="card chosen-box" id="chosen-box" hidden></fieldset>
         <label>Promemoria (minuti prima, separati da virgola) <input name="reminders" inputmode="numeric" placeholder="30, 10"></label>
         <p class="hint" id="event-reminders-hint">Vuoto: quelli di famiglia.</p>
         <p class="error" id="event-error" role="alert" hidden></p>
@@ -347,9 +348,9 @@
     </section>
   </div>
 
-  <script src="/api/family_hub/guest/panel-i18n.js?v=0.10.6"></script>
-  <script src="/api/family_hub/guest/panel-mdi.js?v=0.10.6"></script>
-  <script src="/api/family_hub/guest/bridge.js?v=0.10.6"></script>
-  <script src="/api/family_hub/guest/panel-app.js?v=0.10.6"></script>
+  <script src="/api/family_hub/guest/panel-i18n.js?v=0.11.0"></script>
+  <script src="/api/family_hub/guest/panel-mdi.js?v=0.11.0"></script>
+  <script src="/api/family_hub/guest/bridge.js?v=0.11.0"></script>
+  <script src="/api/family_hub/guest/panel-app.js?v=0.11.0"></script>
 </body>
 </html>

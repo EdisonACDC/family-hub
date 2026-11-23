@@ -338,7 +338,10 @@ async def test_full_mode_is_the_panel(
                 # A new appointment of its own, then changed from its card.
                 await page.click("#add-btn")
                 await page.wait_for_selector("#event-overlay:not([hidden])")
-                assert await page.locator("#event-repeat").is_hidden()
+                # A guest repeats by chosen dates only: no weekly rule, no end.
+                options = await page.locator("#repeat-kind option").all_text_contents()
+                assert options == ["Mai", "Date scelte"], options
+                assert await page.locator("#repeat-end").is_hidden()
                 await page.fill("#event-form input[name='summary']", "Merenda")
                 await page.fill("#event-form input[name='date']", tomorrow.strftime("%d/%m/%Y"))
                 await page.fill("#event-form input[name='start_time']", "10:00")

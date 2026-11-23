@@ -450,6 +450,76 @@ _VERSION = re.compile(r"^[0-9a-f]{6,40}$")
 EVENT_KEYS = {"title", "person", "category", "date", "all_day", "start", "end", "location", "note"}
 
 
+MAX_CHOSEN = 50
+
+
+def _slot_value(item: dict[str, Any]) -> tuple[date | datetime, date | datetime]:
+    """A checked chosen date (see clean_event) as the calendar takes it."""
+    if item["all_day"]:
+        return date.fromisoformat(item["start"]), date.fromisoformat(item["end"])
+    return datetime.fromisoformat(item["start"]), datetime.fromisoformat(item["end"])
+
+
+def _times(event: dict[str, Any]) -> dict[str, Any]:
+    """The start and end of a checked appointment, as the calendar's change takes them."""
+    if event["all_day"]:
+        return {
+            "dtstart": date.fromisoformat(event["start"]),
+            "dtend": date.fromisoformat(event["end"]),
+        }
+    return {
+        "dtstart": datetime.fromisoformat(event["start"]),
+        "dtend": datetime.fromisoformat(event["end"]),
+    }
+
+
+def clean_chosen(
+    raw: dict[str, Any],
+    persons: list[str],
+    categories: list[str],
+    today: date,
+    *,
+    any_date: bool = False,
+) -> dict[str, Any]:
+    """An appointment on chosen dates: the fields of one appointment, and "dates" (up to 50), each
+    with its own date, and its own start and end. Each date is checked as one appointment is. The
+    result has the first date's start, end and all_day, and the list in time order (no repeats)."""
+    if set(raw) - (EVENT_KEYS | {"dates"}) or set(raw) & {"date", "start", "end", "all_day"}:
+        raise GuestError("invalid", 422)
+    items = raw["dates"]
+    if not isinstance(items, list) or not 1 <= len(items) <= MAX_CHOSEN:
+        raise GuestError("invalid", 422)
+    common: dict[str, Any] = {
+        key: raw[key] for key in ("title", "person", "category", "location", "note") if key in raw
+    }
+    checked: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if (
+            not isinstance(item, dict)
+            or "date" not in item
+            or set(item) - {"date", "start", "end", "all_day"}
+        ):
+            raise GuestError("invalid", 422)
+        one: dict[str, Any] = {
+            **common,
+            "date": item["date"],
+            "all_day": item.get("all_day", False),
+        }
+        if "start" in item:
+            one["start"] = item["start"]
+        if "end" in item:
+            one["end"] = item["end"]
+        event = clean_event(one, persons, categories, today, any_date=any_date)
+        checked.setdefault(event["start"], event)
+    slots = sorted(checked.values(), key=lambda event: event["start"])
+    result = dict(slots[0])
+    result["dates"] = [
+        {"start": event["start"], "end": event["end"], "all_day": event["all_day"]}
+        for event in slots
+    ]
+    return result
+
+
 def clean_event(
     raw: Any,
     persons: list[str],
@@ -461,8 +531,11 @@ def clean_event(
     """An appointment sent by the web app, checked field by field. Anything else is refused.
 
     The result is a stored appointment (see EventStore) without uid and category times in the
-    local zone: summary, category, persons, start, end, all_day, location, description.
+    local zone: summary, category, persons, start, end, all_day, location, description. With
+    "dates" (chosen dates, see clean_chosen) the result also has the list of dates.
     """
+    if isinstance(raw, dict) and "dates" in raw:
+        return clean_chosen(raw, persons, categories, today, any_date=any_date)
     if not isinstance(raw, dict) or set(raw) - EVENT_KEYS:
         raise GuestError("invalid", 422)
     title = _text(raw.get("title"), MAX_TITLE, required=True)
@@ -476,7 +549,8 @@ def clean_event(
     if not any_date and not (
         today - timedelta(days=PAST_DAYS) <= day <= today + timedelta(days=FUTURE_DAYS)
     ):
-        raise GuestError("invalid", 422)
+        # Its own code, so the web app can say which days are allowed (not just "invalid").
+        raise GuestError("date_range", 422)
     all_day = raw.get("all_day", False)
     if not isinstance(all_day, bool):
         raise GuestError("invalid", 422)
@@ -1567,7 +1641,78 @@ class GuestManager:
         own = device.get("person_id")
         if record.get("shift_id") and own and own in (record.get("persons") or []):
             item["shift_id"] = str(record["shift_id"])
+        if record.get("chosen"):
+            item["chosen"] = True
+            item["dates"] = self._dates_seen(record, device)
+        elif status == "pending" and record.get("dates"):
+            item["chosen"] = True
+            item["dates"] = [
+                {"id": "", "start": d["start"], "end": d["end"], "all_day": d["all_day"]}
+                for d in record["dates"]
+            ]
         return item
+
+    def _dates_seen(self, record: dict[str, Any], device: dict[str, Any]) -> list[dict[str, Any]]:
+        """The dates of a series of chosen dates that this device may see (never a private one)."""
+        found = [
+            r
+            for r in self.events.events.values()
+            if r.get("series")
+            and r.get("series") == record.get("series")
+            and self.visible(r, device)
+        ]
+        found.sort(key=_start_of)
+        return [
+            {"id": r["uid"], "start": r["start"], "end": r["end"], "all_day": bool(r["all_day"])}
+            for r in found
+        ]
+
+    def _affected(
+        self, record: dict[str, Any], scope: str, device: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """The dates a change or a delete reaches: ALL every date of the series, THISANDFUTURE
+        this one and the later ones. A guest changes only its own: one date that is not its own
+        refuses the whole change."""
+        items = sorted(
+            (
+                r
+                for r in self.events.events.values()
+                if r.get("series") and r.get("series") == record.get("series")
+            ),
+            key=_start_of,
+        )
+        if scope == "THISANDFUTURE":
+            items = [r for r in items if _start_of(r) >= _start_of(record)]
+        if not all(self._mine(r, device) for r in items):
+            raise GuestError("forbidden", 403)
+        return items
+
+    async def _update_series(
+        self, record: dict[str, Any], device: dict[str, Any], scope: str, event: dict[str, Any]
+    ) -> None:
+        """Change a series of chosen dates from the web app. ALL: the fields of every date, and the
+        dates if they are sent (each keeps its own times). THISANDFUTURE: this date and the later
+        ones, with the times sent."""
+        self._affected(record, scope, device)
+        change: dict[str, Any] = {
+            "summary": event["summary"],
+            "location": event["location"],
+            "description": event["description"],
+            "persons": event["persons"],
+        }
+        slots = None
+        if scope == "ALL":
+            if "dates" in event:
+                slots = [_slot_value(item) for item in event["dates"]]
+        else:
+            change.update(_times(event))
+        self._changing = device["id"]
+        try:
+            await self._calendar(record["category"]).async_update_event(
+                record["uid"], change, recurrence_range=scope, dates=slots
+            )
+        finally:
+            self._changing = None
 
     def me(self, device: dict[str, Any]) -> dict[str, Any]:
         persons = self._persons()
@@ -1961,6 +2106,22 @@ class GuestManager:
 
     async def _write(self, event: dict[str, Any], added_by: dict[str, Any], who: str | None) -> str:
         calendar = self._calendar(event["category"])
+        if event.get("dates"):
+            slots = [_slot_value(item) for item in event["dates"]]
+            self._changing = who
+            try:
+                return await calendar.async_add_event(
+                    summary=event["summary"],
+                    start=slots[0][0],
+                    end=slots[0][1],
+                    description=event.get("description") or None,
+                    location=event.get("location") or None,
+                    persons=list(event["persons"]),
+                    added_by=added_by,
+                    dates=slots,
+                )
+            finally:
+                self._changing = None
         all_day = event["all_day"]
         start: date | datetime
         end: date | datetime
@@ -2010,7 +2171,18 @@ class GuestManager:
             if not isinstance(version, str) or not _VERSION.match(version):
                 raise GuestError("invalid", 422)
             raw = {k: v for k, v in raw.items() if k != "version"}
+        scope = ""
+        if isinstance(raw, dict) and "scope" in raw:
+            scope = raw["scope"]
+            if scope not in ("", "THISANDFUTURE", "ALL"):
+                raise GuestError("invalid", 422)
+            raw = {k: v for k, v in raw.items() if k != "scope"}
         event = clean_event(raw, device["persons"], device["categories"], self._today())
+        series = kind == "event" and bool(current.get("chosen"))
+        if scope and not series:
+            raise GuestError("invalid", 422)
+        if "dates" in event and (kind == "event" and (scope != "ALL" or not series)):
+            raise GuestError("invalid", 422)
         if kind == "event":
             self._check_version(current, version)
         if kind == "pending":
@@ -2021,7 +2193,12 @@ class GuestManager:
                 {"uid": item_id, **self.pending[item_id]["event"]}, device, status="pending"
             )
         added_by = dict(current.get("added_by") or {})
-        if event["category"] != current["category"]:
+        if scope:
+            if event["category"] != current["category"]:
+                raise GuestError("invalid", 422)
+            uid = item_id
+            await self._update_series(current, device, scope, event)
+        elif event["category"] != current["category"]:
             # Another calendar: the appointment moves there with a new id.
             await self._delete_record(current, device["id"])
             uid = await self._write(event, added_by, device["id"])
@@ -2064,18 +2241,37 @@ class GuestManager:
             raise GuestError("event_changed", 409)
 
     async def async_guest_delete(
-        self, device: dict[str, Any], item_id: str, version: str | None = None
+        self,
+        device: dict[str, Any],
+        item_id: str,
+        version: str | None = None,
+        scope: str = "",
     ) -> None:
         self.check_feature(device, gf.CALENDAR)
         if device["permission"] != EDIT_OWN:
             raise GuestError("forbidden", 403)
         if version is not None and not _VERSION.match(version):
             raise GuestError("invalid", 422)
+        if scope not in ("", "THISANDFUTURE", "ALL"):
+            raise GuestError("invalid", 422)
         kind, current = self._own(device, item_id)
         if kind == "event":
             self._check_version(current, version)
         if kind == "pending":
+            if scope:
+                raise GuestError("invalid", 422)
             del self.pending[item_id]
+        elif scope:
+            if not current.get("chosen"):
+                raise GuestError("invalid", 422)
+            self._affected(current, scope, device)
+            self._changing = device["id"]
+            try:
+                await self._calendar(current["category"]).async_delete_event(
+                    current["uid"], recurrence_range=scope
+                )
+            finally:
+                self._changing = None
         else:
             await self._delete_record(current, device["id"])
         self._record("event_deleted", device["name"], str(current.get("summary", "")))
@@ -2108,6 +2304,9 @@ class GuestManager:
                     self._today(),
                     any_date=True,
                 )
+                # A series of chosen dates keeps its dates: the adult changes all of them.
+                if event.get("dates") and "dates" not in cleaned:
+                    cleaned = {**cleaned, "dates": event["dates"]}
                 event = {**cleaned, "added_by": event.get("added_by")}
             uid = await self._write(event, dict(event.get("added_by") or {}), None)
         del self.pending[item_id]
@@ -2745,6 +2944,8 @@ class GuestManager:
                     "persons": event["persons"],
                     "location": event.get("location", ""),
                     "note": event.get("description", ""),
+                    # A series of chosen dates: the adult confirms all of them, and sees each one.
+                    "dates": list(event.get("dates") or []),
                 }
             )
         if any(d["status"] == PENDING for d in self.devices.values()):

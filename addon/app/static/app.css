@@ -1785,3 +1785,38 @@ html, body { overflow-x: hidden; max-width: 100%; }
 @media (min-width: 1100px) {
   .period-title { flex: 0 0 auto; overflow: visible; text-overflow: clip; }
 }
+
+/* Chosen dates (0.11.0b1): one event on dates picked in the month, each with its own times. */
+.chosen-box { margin: 8px 0; }
+.chosen-box .chosen-grid .day-cell.picked { background: var(--accent); color: var(--accent-text); }
+/* One date per line: day | Inizio | Fine | "Tutto il giorno" | ×. With "Tutto il giorno" the times are
+   not shown. On a phone (under 600 px) the switch and the × take the second line. */
+.chosen-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 6px 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.chosen-row.all-day { grid-template-columns: auto minmax(0, 1fr) auto; }
+/* The form stacks a label's text above its control; in a row the text sits beside it. */
+.chosen-row > label { padding: 0; margin: 0; min-height: 0; flex-direction: row; align-items: center; }
+.chosen-day { font-weight: 600; white-space: nowrap; }
+.chosen-field { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; }
+.chosen-field > span { flex: none; font-size: 14px; color: var(--muted); }
+/* A time is "09:00" in full: the field is never narrower than that (0.11.0b3). The selector is
+   specific on purpose: the form's own input rules would otherwise set min-width back to 0. */
+#chosen-box .chosen-start, #chosen-box .chosen-end {
+  width: 100%; min-width: 4.6em; box-sizing: border-box; padding-left: 6px; padding-right: 6px;
+  font-size: 16px; font-weight: 500;
+}
+.chosen-allday { display: inline-flex; align-items: center; gap: 8px; margin: 0 12px 0 0; min-width: 0; justify-self: start; font-size: 14px; }
+/* A day the family does not allow (a guest's past or too far days): greyed, not tapped. */
+.day-cell.day-off, .day-cell:disabled { opacity: .35; cursor: default; }
+.chosen-allday > span { white-space: nowrap; }
+.chosen-row.all-day .chosen-allday { justify-self: start; }
+.chosen-remove { min-width: 2.2em; }
+.chosen-bad { grid-column: 1 / -1; margin: 0; }
+.chosen-row.row-bad { color: #B91C1C; }
+@media (min-width: 600px) {
+  .chosen-row { grid-template-columns: auto minmax(8.5em, 1fr) minmax(8.5em, 1fr) auto auto; }
+}
+@media (max-width: 599px) {
+  .chosen-row:not(.all-day) .chosen-allday { grid-column: 1 / 3; }
+  .chosen-row:not(.all-day) .chosen-remove { grid-column: 3; justify-self: end; }
+}
+.chosen-bad { flex-basis: 100%; margin: 2px 0 0; }

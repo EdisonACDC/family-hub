@@ -41,6 +41,11 @@ add_event:
       example: [30, 10]
       selector:
         object:
+    dates:
+      description: Chosen dates instead of a repeat rule (no rrule with it). A list of {start, end}, one per date, up to 50; each date has its own times. Start and end are then used from this list, not from start and end.
+      example: [{"start": "2026-11-14 18:00:00", "end": "2026-11-14 19:00:00"}, {"start": "2026-12-22 18:00:00", "end": "2026-12-22 19:00:00"}]
+      selector:
+        object:
     private:
       description: A private appointment is never shown to guests (invites), whoever it is for.
       selector:
@@ -77,6 +82,11 @@ update_event:
       selector:
         object:
     reminder_offsets:
+      selector:
+        object:
+    dates:
+      description: Chosen dates instead of a repeat rule (no rrule with it). A list of {start, end}, one per date, up to 50; each date has its own times. With "Tutti" (scope ALL) on a series of chosen dates, this list replaces the dates; each date keeps its own times.
+      example: [{"start": "2026-11-14 18:00:00", "end": "2026-11-14 19:00:00"}, {"start": "2026-12-22 18:00:00", "end": "2026-12-22 19:00:00"}]
       selector:
         object:
 
