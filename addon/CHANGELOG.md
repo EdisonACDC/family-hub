@@ -1,5 +1,15 @@
 # Changelog: Family Hub UI (add-on)
 
+## 0.11.1
+
+Stabile. Correzione alla 0.11.0; nessuna modifica incompatibile.
+
+- **Icone**: rimosse le icone dark identiche a quelle normali, richiesto da hassfest (il controllo
+  di HACS). Restano i loghi dark, che sono diversi. Un test impedisce di rimettere un'icona
+  identica o un file di icona sconosciuto.
+- **Controlli**: il job hassfest del workflow Validate usa ora la stessa immagine e lo stesso
+  controllo di hacs/default.
+
 ## 0.11.0
 
 Stabile. Riassume le beta 0.11.0b1–b4; nessuna modifica incompatibile.

@@ -19,9 +19,17 @@ jobs:
           category: integration
 
   hassfest:
+    # The same check as hacs/default: the latest hassfest image, and a brand warning fails the job.
     name: hassfest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: hassfest validation
-        uses: home-assistant/actions/hassfest@master
+        run: |
+          set -o pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/custom_components/family_hub":/github/workspace/custom_components/family_hub \
+            ghcr.io/home-assistant/hassfest:latest | tee /tmp/hassfest.log
+          if grep -F "[WARNING] [BRAND_IMAGES]" /tmp/hassfest.log; then
+            exit 1
+          fi

@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 
+import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from tests.e2e.conftest import Stack
@@ -14,13 +15,13 @@ from tests.e2e.test_tablet import _device
 
 
 def _pickup_day() -> str:
-    """The Tuesday of the week shown from today: the pickup is in that week and this month.
-    The test fake takes the pickups of Tuesdays only. Near a month's end, the Tuesday before."""
+    """The next Tuesday, still to come and in this month: a pickup is written on Tuesdays, and it
+    shows in the week shown from today. Late in a month there is no such Tuesday: skipped."""
     today = date.today()
-    forward = today + timedelta(days=(1 - today.weekday()) % 7)
-    if forward.month == today.month:
-        return forward.isoformat()
-    return (today - timedelta(days=(today.weekday() - 1) % 7)).isoformat()
+    tuesday = today + timedelta(days=(1 - today.weekday()) % 7 or 7)
+    if tuesday.month != today.month:
+        pytest.skip("No Tuesday still to come in this month")
+    return tuesday.isoformat()
 
 
 def _create_organico(page: Page, day: str) -> None:

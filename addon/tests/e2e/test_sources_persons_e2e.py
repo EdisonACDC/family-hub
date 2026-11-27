@@ -5,6 +5,7 @@ more than one calendar is shown once, with a dot for each other calendar."""
 from __future__ import annotations
 
 import copy
+from calendar import monthrange
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, timedelta
@@ -20,8 +21,11 @@ OLD = "calendar.mamma"
 
 
 def _day() -> date:
+    """Today, so that it is in the week shown from today; yesterday on the month's last day, so
+    that the next day is still in this month."""
     today = date.today()
-    return today if today.day < 25 else today - timedelta(days=3)
+    last = monthrange(today.year, today.month)[1]
+    return today if today.day < last else today - timedelta(days=1)
 
 
 @contextmanager
